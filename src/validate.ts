@@ -81,7 +81,7 @@ export function validateNav(theme: ThemeConfig, routes: Set<string>): void {
   const navLinks: string[] = []
   walkNav(theme.nav, navLinks)
   for (const link of navLinks) {
-    if (link.startsWith('/') && !routes.has(link)) bad.push(`nav: ${link}`)
+    if (link.startsWith('/') && !routes.has(link)) bad.push(`nav entries point at no route: ${link}`)
   }
 
   for (const [key, groups] of Object.entries(theme.sidebar)) {
@@ -95,7 +95,9 @@ export function validateNav(theme: ThemeConfig, routes: Set<string>): void {
     const seen = new Set<string>()
     const duplicates = new Set<string>()
     for (const link of links) {
-      if (link.startsWith('/') && !routes.has(link)) bad.push(`sidebar "${key}": ${link}`)
+      if (link.startsWith('/') && !routes.has(link)) {
+        bad.push(`sidebar "${key}" entries point at no route: ${link}`)
+      }
       if (seen.has(link)) duplicates.add(link)
       seen.add(link)
     }

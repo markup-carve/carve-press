@@ -1,0 +1,123 @@
+import { describe, it, expect } from 'vitest'
+import { mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { resolve } from 'node:path'
+import { buildSite, loadConfig } from '../src/build.js'
+
+const SITE = resolve(import.meta.dirname, 'fixtures/site')
+
+async function build(over: object = {}) {
+  const outDir = await mkdtemp(resolve(tmpdir(), 'cp-out-'))
+  const result = await buildSite({
+    root: SITE,
+    config: {
+      title: 'Fixture',
+      srcDir: SITE,
+      outDir,
+      themeConfig: {
+        sidebar: {
+          '/': [
+            {
+              text: 'G',
+              items: [
+                { text: 'Home', link: '/' },
+                { text: 'Start', link: '/start' },
+              ],
+            },
+          ],
+        },
+      },
+      ...over,
+    },
+  })
+  return { result, outDir }
+}
+
+describe('buildSite', () => {
+  it('writes an HTML file per route', async () => {
+    const { result, outDir } = await build()
+    expect(result.routes.sort()).toEqual(['/', '/draft', '/guide/', '/guide/deep', '/start'])
+    expect((await readdir(outDir)).sort()).toContain('start')
+    const html = await readFile(resolve(outDir, 'start/index.html'), 'utf8')
+    expect(html).toContain('<h1>Start ')
+    expect(html).toContain('<title>Start | Fixture</title>')
+  })
+
+  it('emits the index page at the output root', async () => {
+    const { outDir } = await build()
+    const html = await readFile(resolve(outDir, 'index.html'), 'utf8')
+    expect(html).toContain('<h1>Home ')
+  })
+
+  it('resolves prev/next from the sidebar', async () => {
+    const { outDir } = await build()
+    const html = await readFile(resolve(outDir, 'start/index.html'), 'utf8')
+    expect(html).toContain('rel="prev"')
+  })
+
+  it('fires build events in order', async () => {
+    const seen: string[] = []
+    await build({
+      extensions: [
+        {
+          name: 'spy',
+          setup(bus: { on: (e: string, h: () => void, owner?: string) => void }) {
+            for (const event of [
+              'buildStarted',
+              'contentDiscovered',
+              'rendererCreated',
+              'pageRendered',
+              'pageWritten',
+              'buildCompleted',
+            ]) {
+              bus.on(event, () => void seen.push(event), 'spy')
+            }
+          },
+        },
+      ],
+    })
+    expect(seen[0]).toBe('buildStarted')
+    expect(seen[1]).toBe('contentDiscovered')
+    expect(seen[2]).toBe('rendererCreated')
+    expect(seen.at(-1)).toBe('buildCompleted')
+    expect(seen.filter((e) => e === 'pageRendered')).toHaveLength(5)
+  })
+
+  it('lets a contentDiscovered handler filter pages', async () => {
+    const { result } = await build({
+      extensions: [
+        {
+          name: 'drop-draft',
+          setup(bus: { on: (e: string, h: (p: { pages: { route: string }[] }) => void) => void }) {
+            bus.on('contentDiscovered', (p) => {
+              p.pages = p.pages.filter((page) => page.route !== '/draft')
+            })
+          },
+        },
+      ],
+    })
+    expect(result.routes).not.toContain('/draft')
+  })
+
+  it('fails the build on a dead internal link', async () => {
+    await expect(
+      build({
+        themeConfig: { sidebar: {} },
+        srcDir: resolve(import.meta.dirname, 'fixtures/dead-link'),
+      }),
+    ).rejects.toThrow(/dead internal link/)
+  })
+
+  it('fails the build on a sidebar entry pointing nowhere', async () => {
+    await expect(
+      build({ themeConfig: { sidebar: { '/': [{ text: 'G', items: [{ text: 'X', link: '/gone' }] }] } } }),
+    ).rejects.toThrow(/point at no route/)
+  })
+
+  it('does not swallow an error from an existing config candidate', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-config-'))
+    await writeFile(resolve(root, 'carve-press.config.ts'), 'throw new Error("config boom")\n')
+    await writeFile(resolve(root, 'carve-press.config.js'), 'export default { title: "ok" }\n')
+    await expect(loadConfig(root)).rejects.toThrow(/config boom/)
+  })
+})
