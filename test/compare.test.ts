@@ -106,4 +106,48 @@ describe('compareExtension executable-content warning', () => {
     expect(warn).toHaveBeenCalledTimes(1)
     warn.mockRestore()
   })
+
+  it('names the offending block and includes an excerpt of the content', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const localExt = compareExtension()
+    carveToHtml(compareBlock('<script>alert("hello from the excerpt")</script>'), {
+      extensions: [localExt],
+    })
+    const message = warn.mock.calls[0]?.[0] as string
+    expect(message).toContain('compare-1')
+    expect(message).toContain('alert("hello from the excerpt")')
+    warn.mockRestore()
+  })
+
+  it.each([
+    ['<script> tag', '<script>alert(1)</script>'],
+    ['<script src=...> tag', '<script src="x.js"></script>'],
+    ['<iframe> tag', '<iframe src="x"></iframe>'],
+    ['<object> tag', '<object data="x"></object>'],
+    ['<embed> tag', '<embed src="x">'],
+    ['onerror= attribute', '<img src="x" onerror="alert(1)">'],
+    ['onclick= attribute', '<button onclick="x()">go</button>'],
+    ['onclick with a space before =', '<div onclick ="x()">go</div>'],
+    ['javascript: URL', '<a href="javascript:alert(1)">click</a>'],
+  ])('warns for %s', (_label, htmlContent) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const localExt = compareExtension()
+    carveToHtml(compareBlock(htmlContent), { extensions: [localExt] })
+    expect(warn).toHaveBeenCalledTimes(1)
+    warn.mockRestore()
+  })
+
+  it.each([
+    ['a data-onset attribute', '<div data-onset="x">hi</div>'],
+    ['a data-once attribute', '<div data-once="true">hi</div>'],
+    ['a data-online attribute', '<span data-online="yes">hi</span>'],
+    ['an aria-oncomplete attribute', '<div aria-oncomplete="x">hi</div>'],
+    ['a <scriptural> tag', '<scriptural>text</scriptural>'],
+  ])('does not warn for %s (false positive)', (_label, htmlContent) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const localExt = compareExtension()
+    carveToHtml(compareBlock(htmlContent), { extensions: [localExt] })
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
 })
