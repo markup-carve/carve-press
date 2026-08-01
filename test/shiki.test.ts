@@ -135,3 +135,34 @@ describe('plain-text fence languages', () => {
     warn.mockRestore()
   })
 })
+
+describe('code-group highlighting', () => {
+  it('highlights a registered-language fence inside a code group', async () => {
+    const config = resolveConfig({
+      title: 'Carve',
+      shiki: { langs: ['js'] },
+    })
+    const extensions = await buildExtensionStack(config, config.shiki)
+    const html = carveToHtml('::: code-group\n```js\nconst x = 1\n```\n:::\n', { extensions })
+    const panel = html.match(/<div class="code-group-panel">[\s\S]*?<\/div>/)?.[0] ?? ''
+    expect(panel).toContain('shiki')
+    expect(panel).toContain('<span')
+    expect(panel).not.toContain('<pre><code class="language-js">')
+  })
+
+  it('renders an unregistered language inside a code group plain and warns', async () => {
+    const config = resolveConfig({
+      title: 'Carve',
+      shiki: { langs: ['js'] },
+    })
+    const extensions = await buildExtensionStack(config, config.shiki)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const html = carveToHtml('::: code-group\n```brainfuck\n+++\n```\n:::\n', { extensions })
+    const panel = html.match(/<div class="code-group-panel">[\s\S]*?<\/div>/)?.[0] ?? ''
+    expect(panel).toContain('+++')
+    expect(panel).toContain('<pre><code class="language-brainfuck">')
+    expect(panel).not.toContain('shiki')
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('brainfuck'))
+    warn.mockRestore()
+  })
+})

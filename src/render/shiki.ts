@@ -9,6 +9,8 @@ export interface ShikiOptions {
   themes: { light: string; dark: string }
 }
 
+export type ShikiHighlightCallback = (code: string, lang: string | undefined) => string
+
 const require = createRequire(import.meta.url)
 const carveGrammar = JSON.parse(
   readFileSync(require.resolve('@markup-carve/carve-grammars/textmate/carve.tmLanguage.json'), 'utf8'),
@@ -33,6 +35,14 @@ function languageRegistrations(langs: string[]): (string | LanguageRegistration)
   return registrations
 }
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function escapeAttr(s: string): string {
+  return escapeHtml(s).replace(/"/g, '&quot;')
+}
+
 /**
  * Render an unhighlighted `<pre>`, matching the core renderer's own
  * `code_block` shape: fence attrs (and a quoted header, which the parser
@@ -49,6 +59,16 @@ function plainBlock(
 ): string {
   const cls = lang !== undefined && lang !== '' ? ` class="language-${ctx.escapeAttr(lang)}"` : ''
   return `<pre${ctx.renderAttrs(attrs)}><code${cls}>${ctx.escapeHtml(content)}\n</code></pre>`
+}
+
+function plainHighlightedBlock(content: string, lang: string | undefined): string {
+  const cls = lang !== undefined && lang !== '' ? ` class="language-${escapeAttr(lang)}"` : ''
+  return `<pre><code${cls}>${escapeHtml(content)}\n</code></pre>`
+}
+
+function isShikiBlock(html: string): boolean {
+  const openTag = /^<pre(?:\s[^>]*)?>/.exec(html)?.[0] ?? ''
+  return /(^| )class="[^"]*\bshiki\b/.test(openTag)
 }
 
 /**
@@ -101,7 +121,7 @@ function mergeAttrsIntoPre(html: string, attrs: Attrs | undefined, ctx: BlockExt
  * inline `color`, the dark one in `--shiki-dark`, and the site stylesheet flips
  * between them. That gives dark-mode code with no second render.
  */
-export async function createShikiExtension(opts: ShikiOptions): Promise<CarveExtension> {
+export async function createShikiHighlighter(opts: ShikiOptions): Promise<ShikiHighlightCallback> {
   const highlighter: Highlighter = await createHighlighter({
     langs: languageRegistrations(opts.langs),
     themes: [opts.themes.light, opts.themes.dark],
@@ -109,6 +129,32 @@ export async function createShikiExtension(opts: ShikiOptions): Promise<CarveExt
   const loaded = new Set(highlighter.getLoadedLanguages())
   const warned = new Set<string>()
 
+  return (content, lang) => {
+    if (lang === undefined || lang === '') return plainHighlightedBlock(content, lang)
+    // A plain-text fence is already what the author asked for. Shiki never
+    // reports these from getLoadedLanguages(), so without this they fall
+    // into the branch below and warn about a language nobody needs to add.
+    if (PLAIN_TEXT_LANGS.has(lang)) return plainHighlightedBlock(content, lang)
+    if (!loaded.has(lang)) {
+      // Warn once per language: a 42-page site would otherwise print the
+      // same line hundreds of times and bury it.
+      if (!warned.has(lang)) {
+        warned.add(lang)
+        console.warn(
+          `carve-press: fence language "${lang}" is not registered with Shiki; rendering it plain. Add it to config.shiki.langs.`,
+        )
+      }
+      return plainHighlightedBlock(content, lang)
+    }
+    return highlighter.codeToHtml(content, {
+      lang,
+      themes: { light: opts.themes.light, dark: opts.themes.dark },
+      defaultColor: 'light',
+    })
+  }
+}
+
+export function createShikiExtensionFromHighlighter(highlight: ShikiHighlightCallback): CarveExtension {
   return {
     name: 'shiki',
     blockRenderers: {
@@ -116,29 +162,16 @@ export async function createShikiExtension(opts: ShikiOptions): Promise<CarveExt
         const lang = (node as { lang?: string }).lang
         const content = (node as { content: string }).content
         const attrs = (node as { attrs?: Attrs }).attrs
-        if (lang === undefined || lang === '') return plainBlock(lang, content, attrs, ctx)
-        // A plain-text fence is already what the author asked for. Shiki never
-        // reports these from getLoadedLanguages(), so without this they fall
-        // into the branch below and warn about a language nobody needs to add.
-        if (PLAIN_TEXT_LANGS.has(lang)) return plainBlock(lang, content, attrs, ctx)
-        if (!loaded.has(lang)) {
-          // Warn once per language: a 42-page site would otherwise print the
-          // same line hundreds of times and bury it.
-          if (!warned.has(lang)) {
-            warned.add(lang)
-            console.warn(
-              `carve-press: fence language "${lang}" is not registered with Shiki; rendering it plain. Add it to config.shiki.langs.`,
-            )
-          }
+        const html = highlight(content, lang)
+        if (!isShikiBlock(html)) {
           return plainBlock(lang, content, attrs, ctx)
         }
-        const html = highlighter.codeToHtml(content, {
-          lang,
-          themes: { light: opts.themes.light, dark: opts.themes.dark },
-          defaultColor: 'light',
-        })
         return mergeAttrsIntoPre(html, attrs, ctx)
       },
     },
   }
+}
+
+export async function createShikiExtension(opts: ShikiOptions): Promise<CarveExtension> {
+  return createShikiExtensionFromHighlighter(await createShikiHighlighter(opts))
 }

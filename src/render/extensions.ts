@@ -1,6 +1,6 @@
 import { codeGroup, headingPermalinks, type CarveExtension } from '@markup-carve/carve'
 import type { CarvePressConfig } from '../config.js'
-import { createShikiExtension, type ShikiOptions } from './shiki.js'
+import { createShikiExtensionFromHighlighter, createShikiHighlighter, type ShikiOptions } from './shiki.js'
 import { compareExtension } from './compare.js'
 
 /**
@@ -11,10 +11,11 @@ export async function buildExtensionStack(
   config: CarvePressConfig,
   shiki: ShikiOptions,
 ): Promise<CarveExtension[]> {
+  const highlighter = await createShikiHighlighter(shiki)
   return [
-    await createShikiExtension(shiki),
+    createShikiExtensionFromHighlighter(highlighter),
     compareExtension(),
-    codeGroup(),
+    codeGroup({ highlighter }),
     headingPermalinks(),
     ...config.carve.extensions,
   ]
