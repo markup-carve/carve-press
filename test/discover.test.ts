@@ -16,10 +16,19 @@ describe('discoverPages', () => {
     ])
   })
 
-  it('returns pages in a deterministic order', async () => {
-    const a = await discoverPages(SITE, [])
-    const b = await discoverPages(SITE, [])
-    expect(a.map((p) => p.relPath)).toEqual(b.map((p) => p.relPath))
+  it('returns pages sorted by relPath, not by readdir order', async () => {
+    // Pinning the exact order matters: calling discoverPages twice and comparing
+    // the two results would pass even with the sort deleted, because readdir
+    // returns the same order twice on an unchanged directory. Only an absolute
+    // expectation can fail when the sort goes away.
+    const pages = await discoverPages(SITE, [])
+    expect(pages.map((p) => p.relPath)).toEqual([
+      'draft.crv',
+      'guide/deep.crv',
+      'guide/index.crv',
+      'index.crv',
+      'start.crv',
+    ])
   })
 
   it('parses frontmatter and keeps the body separate', async () => {
@@ -53,5 +62,21 @@ describe('discoverPages', () => {
     await mkdir(resolve(dir, 'foo'))
     await writeFile(resolve(dir, 'foo/index.crv'), '---\ntitle: B\n---\n')
     await expect(discoverPages(dir, [])).rejects.toThrow(/duplicate route/)
+  })
+
+  it('reports an unreadable directory as a BuildError, not a raw stack trace', async () => {
+    const { mkdtemp, mkdir, chmod, writeFile } = await import('node:fs/promises')
+    const { tmpdir } = await import('node:os')
+    const dir = await mkdtemp(resolve(tmpdir(), 'cp-perm-'))
+    await writeFile(resolve(dir, 'ok.crv'), '---\ntitle: A\n---\n')
+    const locked = resolve(dir, 'locked')
+    await mkdir(locked)
+    await chmod(locked, 0o000)
+    try {
+      await expect(discoverPages(dir, [])).rejects.toThrow(/cannot read content directory/)
+    } finally {
+      // Restore the mode so the temp dir can be cleaned up by the OS.
+      await chmod(locked, 0o755)
+    }
   })
 })

@@ -30,7 +30,16 @@ function globToRegExp(glob: string): RegExp {
 }
 
 async function walk(dir: string, base: string, found: string[]): Promise<void> {
-  const entries = await readdir(dir, { withFileTypes: true })
+  let entries
+  try {
+    entries = await readdir(dir, { withFileTypes: true })
+  } catch (error) {
+    // A locked directory would otherwise reach the user as a raw EACCES with a
+    // Node-internal stack trace. There is no line or column to report for a
+    // directory, so BuildError carries the path in its details instead.
+    const reason = error instanceof Error ? error.message : String(error)
+    throw new BuildError(`cannot read content directory ${dir}`, [reason])
+  }
   for (const entry of entries) {
     const full = resolve(dir, entry.name)
     if (entry.isDirectory()) {
