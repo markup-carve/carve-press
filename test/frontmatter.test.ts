@@ -40,8 +40,11 @@ describe('splitFrontmatter', () => {
     expect(r.data).toEqual({ title: 'X' })
   })
 
-  it('throws on a nested key rather than misparsing it', () => {
-    expect(() => splitFrontmatter('---\nnav:\n  - a\n---\n')).toThrow(/nested/)
+  it('preserves a nested key as an opaque raw string', () => {
+    const r = splitFrontmatter('---\nnav:\n  - a\n---\nBody\n')
+    expect(r.data).toEqual({ nav: 'nav:\n  - a' })
+    expect(r.body).toBe('Body\n')
+    expect(r.bodyStartLine).toBe(5)
   })
 
   it('reads an empty value as an empty string, not a nested value', () => {
@@ -51,7 +54,17 @@ describe('splitFrontmatter', () => {
     expect(r.data).toEqual({ title: 'X', subtitle: '', layout: 'post' })
   })
 
-  it('still throws on a genuinely nested value', () => {
-    expect(() => splitFrontmatter('---\nnav:\n  - a\n---\n')).toThrow(/nested/)
+  it('reads scalars correctly alongside a nested block', () => {
+    const r = splitFrontmatter(
+      '---\ntitle: Home\ndescription: Docs\nhero:\n  name: Carve\n  image:\n    src: /logo.svg\n---\n# Body\n',
+    )
+    expect(r.data.title).toBe('Home')
+    expect(r.data.description).toBe('Docs')
+    expect(r.data.hero).toBe('hero:\n  name: Carve\n  image:\n    src: /logo.svg')
+    expect(r.bodyStartLine).toBe(9)
+  })
+
+  it('still throws on a malformed top-level line', () => {
+    expect(() => splitFrontmatter('---\nnav\n---\n')).toThrow(/expected "key: value"/)
   })
 })

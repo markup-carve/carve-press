@@ -28,9 +28,8 @@ function coerce(raw: string): unknown {
 /**
  * Split leading frontmatter off a Carve document.
  *
- * Only flat `key: value` scalars are supported. A nested key is an error rather
- * than a silent drop: a page that quietly loses metadata is the failure mode
- * this whole pipeline is built to avoid.
+ * Flat `key: value` scalars are parsed. Nested values are preserved as opaque
+ * strings because CarvePress only interprets a small metadata subset.
  */
 export function splitFrontmatter(source: string, srcPath = '<input>'): FrontmatterSplit {
   const lines = source.split('\n')
@@ -45,7 +44,7 @@ export function splitFrontmatter(source: string, srcPath = '<input>'): Frontmatt
     const line = lines[i]!
     if (line.trim() === '' || line.trimStart().startsWith('#')) continue
     if (/^\s/.test(line)) {
-      throw new SourceError(srcPath, i + 1, 1, 'frontmatter: nested values are not supported')
+      throw new SourceError(srcPath, i + 1, 1, `frontmatter: expected "key: value", got "${line}"`)
     }
     const sep = line.indexOf(':')
     if (sep === -1) {
@@ -53,6 +52,15 @@ export function splitFrontmatter(source: string, srcPath = '<input>'): Frontmatt
     }
     const key = line.slice(0, sep).trim()
     const value = line.slice(sep + 1)
+    if (i + 1 < close && /^\s/.test(lines[i + 1]!)) {
+      const raw = [line]
+      while (i + 1 < close && (lines[i + 1]!.trim() === '' || /^\s/.test(lines[i + 1]!))) {
+        i++
+        raw.push(lines[i]!)
+      }
+      data[key] = raw.join('\n')
+      continue
+    }
     data[key] = coerce(value)
   }
 

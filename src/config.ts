@@ -43,6 +43,11 @@ export interface SiteExtension {
   setup(bus: BuildEventBus): void
 }
 
+export interface ShikiConfig {
+  langs: string[]
+  themes: { light: string; dark: string }
+}
+
 export interface CarvePressConfig {
   title: string
   description?: string
@@ -55,13 +60,39 @@ export interface CarvePressConfig {
   head: HeadTag[]
   themeConfig: ThemeConfig
   carve: { extensions: CarveExtension[]; profile?: string }
+  shiki: ShikiConfig
   extensions: SiteExtension[]
 }
 
-export type UserConfig = Partial<Omit<CarvePressConfig, 'title' | 'themeConfig' | 'carve'>> & {
+export type UserConfig = Partial<Omit<CarvePressConfig, 'title' | 'themeConfig' | 'carve' | 'shiki'>> & {
   title: string
   themeConfig?: Partial<ThemeConfig>
   carve?: Partial<CarvePressConfig['carve']>
+  shiki?: Partial<Omit<ShikiConfig, 'themes'>> & { themes?: Partial<ShikiConfig['themes']> }
+}
+
+const DEFAULT_SHIKI: ShikiConfig = {
+  langs: [
+    'carve',
+    'html',
+    'bash',
+    'php',
+    'ts',
+    'js',
+    'go',
+    'python',
+    'rust',
+    'json',
+    'yaml',
+    'toml',
+    'md',
+    'txt',
+    'diff',
+    'css',
+    'sql',
+    'xml',
+  ],
+  themes: { light: 'github-light', dark: 'github-dark' },
 }
 
 /** Identity function; exists so a config file gets type checking and completion. */
@@ -103,6 +134,13 @@ export function resolveConfig(user: UserConfig): CarvePressConfig {
     carve: {
       extensions: user.carve?.extensions ?? [],
       profile: user.carve?.profile,
+    },
+    shiki: {
+      langs: user.shiki?.langs ?? DEFAULT_SHIKI.langs,
+      themes: {
+        light: user.shiki?.themes?.light ?? DEFAULT_SHIKI.themes.light,
+        dark: user.shiki?.themes?.dark ?? DEFAULT_SHIKI.themes.dark,
+      },
     },
     extensions: user.extensions ?? [],
   }

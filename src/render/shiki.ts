@@ -1,9 +1,34 @@
-import { createHighlighter, type Highlighter } from 'shiki'
+import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { bundledLanguages, bundledLanguagesAlias, createHighlighter, type Highlighter } from 'shiki'
+import type { LanguageRegistration } from '@shikijs/types'
 import type { Attrs, BlockExtensionRenderContext, CarveExtension } from '@markup-carve/carve'
 
 export interface ShikiOptions {
   langs: string[]
   themes: { light: string; dark: string }
+}
+
+const require = createRequire(import.meta.url)
+const carveGrammar = JSON.parse(
+  readFileSync(require.resolve('@markup-carve/carve-grammars/textmate/carve.tmLanguage.json'), 'utf8'),
+) as LanguageRegistration
+const SPECIAL_LANGS = new Set(['ansi', 'text', 'plaintext', 'txt'])
+
+function isKnownShikiLanguage(lang: string): boolean {
+  return lang in bundledLanguages || lang in bundledLanguagesAlias || SPECIAL_LANGS.has(lang)
+}
+
+function languageRegistrations(langs: string[]): (string | LanguageRegistration)[] {
+  const registrations: (string | LanguageRegistration)[] = []
+  for (const lang of langs) {
+    if (lang === 'carve' || lang === 'crv') {
+      registrations.push(carveGrammar)
+    } else if (isKnownShikiLanguage(lang)) {
+      registrations.push(lang)
+    }
+  }
+  return registrations
 }
 
 /**
@@ -76,7 +101,7 @@ function mergeAttrsIntoPre(html: string, attrs: Attrs | undefined, ctx: BlockExt
  */
 export async function createShikiExtension(opts: ShikiOptions): Promise<CarveExtension> {
   const highlighter: Highlighter = await createHighlighter({
-    langs: opts.langs,
+    langs: languageRegistrations(opts.langs),
     themes: [opts.themes.light, opts.themes.dark],
   })
   const loaded = new Set(highlighter.getLoadedLanguages())

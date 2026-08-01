@@ -19,11 +19,6 @@ export interface BuildResult {
   routes: string[]
 }
 
-const DEFAULT_SHIKI: ShikiOptions = {
-  langs: ['html', 'bash', 'php', 'ts', 'js', 'go', 'python', 'rust', 'json', 'yaml'],
-  themes: { light: 'github-light', dark: 'github-dark' },
-}
-
 async function configExists(path: string): Promise<boolean> {
   try {
     return (await stat(path)).isFile()
@@ -72,7 +67,7 @@ export async function buildSite(opts: {
   const discovered = await discoverPages(srcDir, config.srcExclude)
   const { pages } = await bus.emit('contentDiscovered', { pages: discovered })
 
-  const extensions = await buildExtensionStack(config, opts.shiki ?? DEFAULT_SHIKI)
+  const extensions = await buildExtensionStack(config, opts.shiki ?? config.shiki)
   const stack = (await bus.emit('rendererCreated', { extensions })).extensions
 
   const routes = new Set(pages.map((p) => p.route))

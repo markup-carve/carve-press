@@ -15,7 +15,37 @@ describe('resolveConfig', () => {
     expect(c.themeConfig.sidebar).toEqual({})
     expect(c.themeConfig.outline.level).toEqual([2, 3])
     expect(c.carve.extensions).toEqual([])
+    expect(c.shiki.langs).toEqual([
+      'carve',
+      'html',
+      'bash',
+      'php',
+      'ts',
+      'js',
+      'go',
+      'python',
+      'rust',
+      'json',
+      'yaml',
+      'toml',
+      'md',
+      'txt',
+      'diff',
+      'css',
+      'sql',
+      'xml',
+    ])
+    expect(c.shiki.themes).toEqual({ light: 'github-light', dark: 'github-dark' })
     expect(c.extensions).toEqual([])
+  })
+
+  it('resolves user Shiki settings over defaults', () => {
+    const c = resolveConfig({
+      title: 'Carve',
+      shiki: { langs: ['carve', 'c'], themes: { dark: 'dracula' } },
+    })
+    expect(c.shiki.langs).toEqual(['carve', 'c'])
+    expect(c.shiki.themes).toEqual({ light: 'github-light', dark: 'dracula' })
   })
 
   it('normalizes base to a leading and trailing slash', () => {

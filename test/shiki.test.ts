@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { carveToHtml } from '@markup-carve/carve'
+import { resolveConfig } from '../src/config.js'
+import { buildExtensionStack } from '../src/render/extensions.js'
 import { createShikiExtension } from '../src/render/shiki.js'
 
 const ext = await createShikiExtension({
@@ -8,6 +10,29 @@ const ext = await createShikiExtension({
 })
 
 describe('createShikiExtension', () => {
+  it('highlights a carve fence with the bundled TextMate grammar', async () => {
+    const carveExt = await createShikiExtension({
+      langs: ['carve'],
+      themes: { light: 'github-light', dark: 'github-dark' },
+    })
+    const html = carveToHtml('```carve\n# Heading\n```\n', { extensions: [carveExt] })
+    expect(html).toContain('shiki')
+    expect(html).toContain('<span')
+    expect(html).not.toMatch(/^<pre><code class="language-carve">/)
+  })
+
+  it('honors a language added through config', async () => {
+    const config = resolveConfig({
+      title: 'Carve',
+      shiki: { langs: ['c'] },
+    })
+    const extensions = await buildExtensionStack(config, config.shiki)
+    const html = carveToHtml('```c\nint main(void) { return 0; }\n```\n', { extensions })
+    expect(html).toContain('shiki')
+    expect(html).toContain('<span')
+    expect(html).toContain('int')
+  })
+
   it('highlights a fence in a registered language', () => {
     const html = carveToHtml('```js\nconst x = 1\n```\n', { extensions: [ext] })
     expect(html).toContain('shiki')
