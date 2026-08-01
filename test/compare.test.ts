@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { carveToHtml } from '@markup-carve/carve'
 import { compareExtension } from '../src/render/compare.js'
 
@@ -54,5 +54,56 @@ describe('compareExtension', () => {
     const html = render('::: compare\n```carve\n*b*\n```\n:::')
     expect(html).toContain('carve-compare--malformed')
     expect(html).toContain('*b*')
+  })
+})
+
+/** Builds a `::: compare` block whose html fence is the given raw content. */
+const compareBlock = (htmlContent: string, attrLine?: string) =>
+  [
+    ...(attrLine !== undefined ? [attrLine] : []),
+    '::: compare',
+    '```carve',
+    '*bold*',
+    '```',
+    '```html',
+    htmlContent,
+    '```',
+    ':::',
+  ].join('\n')
+
+describe('compareExtension executable-content warning', () => {
+  it('warns when the live pane contains a <script> tag', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const localExt = compareExtension()
+    carveToHtml(compareBlock('<script>alert(1)</script>'), { extensions: [localExt] })
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0]?.[0]).toContain('<script')
+    expect(warn.mock.calls[0]?.[0]).toContain('{.no-render}')
+    warn.mockRestore()
+  })
+
+  it('does not warn for ordinary markup', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const localExt = compareExtension()
+    carveToHtml(compareBlock('<p>hello <strong>world</strong></p>'), { extensions: [localExt] })
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('never warns for a {.no-render} block, regardless of content', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const localExt = compareExtension()
+    carveToHtml(compareBlock('<script>alert(1)</script>', '{.no-render}'), { extensions: [localExt] })
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('does not repeat the warning for a second block matching the same pattern', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const localExt = compareExtension()
+    const src = `${compareBlock('<script>a()</script>')}\n\n${compareBlock('<script>b()</script>')}`
+    carveToHtml(src, { extensions: [localExt] })
+    expect(warn).toHaveBeenCalledTimes(1)
+    warn.mockRestore()
   })
 })

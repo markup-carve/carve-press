@@ -18,6 +18,21 @@ function withBaseClasses(attrs: Attrs | undefined, ...baseClasses: string[]): At
 }
 
 /**
+ * Executable-content patterns that the live pane's dangerous-attribute and
+ * URL-scheme denylists (which the core renderer applies everywhere else)
+ * cannot reach, because the html fence is injected verbatim rather than
+ * parsed. Matched against the raw fence text, not the parsed DOM.
+ */
+const EXECUTABLE_CONTENT_PATTERNS: ReadonlyArray<{ name: string; pattern: RegExp }> = [
+  { name: '<script', pattern: /<script/i },
+  { name: '<iframe', pattern: /<iframe/i },
+  { name: '<object', pattern: /<object/i },
+  { name: '<embed', pattern: /<embed/i },
+  { name: 'on<event>= attribute', pattern: /\bon[a-z][a-z0-9]*\s*=/i },
+  { name: 'javascript: URL', pattern: /javascript:/i },
+]
+
+/**
  * Server-render `::: compare` as CSS-only tabs.
  *
  * The live pane injects the HTML fence's own text as markup, so what a reader
@@ -28,6 +43,24 @@ function withBaseClasses(attrs: Attrs | undefined, ...baseClasses: string[]): At
  */
 export function compareExtension(): CarveExtension {
   let counter = 0
+  // Keyed by pattern name, not by block: a `warned` set scoped per document
+  // (reset alongside `counter` in beforeRender) would still print once per
+  // page on a site with the same demo repeated across many docs. Scoping it
+  // to the extension instance instead - which a site build creates exactly
+  // once via buildExtensionStack - warns once per distinct pattern for the
+  // whole build, matching the Shiki unregistered-language warning.
+  const warned = new Set<string>()
+
+  function warnIfExecutable(content: string): void {
+    for (const { name, pattern } of EXECUTABLE_CONTENT_PATTERNS) {
+      if (!pattern.test(content) || warned.has(name)) continue
+      warned.add(name)
+      console.warn(
+        `carve-press: a "::: compare" live pane contains ${name}, which renders live and unescaped in the published page. Add {.no-render} to this block if the content is meant to be inert.`,
+      )
+    }
+  }
+
   return {
     name: 'carve-press-compare',
     // The extension instance is shared across every page in a site build, but
@@ -77,6 +110,7 @@ export function compareExtension(): CarveExtension {
         const tabs: string[] = []
         const panes: string[] = []
         if (!noRender) {
+          warnIfExecutable(html.content)
           tabs.push(
             `<input type="radio" name="${group}" id="${renderedId}" class="carve-compare__radio" checked>`,
             `<label for="${renderedId}" class="carve-compare__label">Rendered</label>`,
