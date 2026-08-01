@@ -1,0 +1,104 @@
+import type { Attrs, CarveExtension } from '@markup-carve/carve'
+
+interface CodeBlockNode {
+  type: string
+  lang?: string
+  content: string
+}
+
+/**
+ * Merge structural classes ahead of the author's own `{.foo}` classes into a
+ * single Attrs, so `ctx.renderAttrs` emits one `class="..."` instead of a
+ * second, invalid `class=` attribute alongside a hardcoded literal one.
+ */
+function withBaseClasses(attrs: Attrs | undefined, ...baseClasses: string[]): Attrs {
+  const classes = [...baseClasses, ...(attrs?.classes ?? [])]
+  const order = attrs?.order === undefined ? undefined : attrs.order.includes('.class') ? attrs.order : ['.class', ...attrs.order]
+  return { ...attrs, classes, ...(order === undefined ? {} : { order }) }
+}
+
+/**
+ * Server-render `::: compare` as CSS-only tabs.
+ *
+ * The live pane injects the HTML fence's own text as markup, so what a reader
+ * sees rendered is byte-identical to the corpus-verified HTML shown beside it
+ * and cannot drift from the engine. A `{.no-render}` attribute line opts a
+ * block out, for raw-HTML and security examples that must not execute in the
+ * page.
+ */
+export function compareExtension(): CarveExtension {
+  let counter = 0
+  return {
+    name: 'carve-press-compare',
+    // The extension instance is shared across every page in a site build, but
+    // ids only need to be unique within one document. Resetting here (fired
+    // once per carveToHtml call) keeps a page's compare ids stable across
+    // rebuilds instead of drifting with whatever order other pages rendered.
+    beforeRender(doc) {
+      counter = 0
+      return doc
+    },
+    blockRenderers: {
+      admonition(node, ctx) {
+        const adm = node as {
+          kind?: string
+          children?: unknown[]
+          attrs?: { classes?: string[] }
+        }
+        // Returning undefined defers to the next extension, then to the core
+        // renderer - so every other admonition kind is untouched.
+        if (adm.kind !== 'compare') return undefined
+
+        const children = (adm.children ?? []) as CodeBlockNode[]
+        const fences = children.filter((c) => c.type === 'code_block')
+        const carve = fences.find((f) => f.lang === 'carve')
+        const html = fences.find((f) => f.lang === 'html')
+
+        if (!carve || !html) {
+          const attrs = ctx.renderAttrs(withBaseClasses(node.attrs, 'carve-compare', 'carve-compare--malformed'))
+          return `<div${attrs}>${ctx.renderChildren(adm.children as never, ctx.level + 1)}</div>`
+        }
+
+        const attrs = ctx.renderAttrs(withBaseClasses(node.attrs, 'carve-compare'))
+        const noRender = adm.attrs?.classes?.includes('no-render') ?? false
+        // `name` only has to be unique per document among compare blocks (it
+        // just groups this block's own radios), which the monotonic counter
+        // already guarantees. `id`/`for` must be unique across the WHOLE
+        // document - an authored `{#compare-1-html}` elsewhere (plausible in
+        // docs that talk about this very extension) would otherwise collide
+        // and misdirect a label - so those go through ctx.uniqueId.
+        const group = `compare-${++counter}`
+        const renderedId = ctx.uniqueId(`${group}-rendered`)
+        const htmlId = ctx.uniqueId(`${group}-html`)
+        const source = `<div class="carve-compare__source"><pre><code class="language-carve">${ctx.escapeHtml(
+          carve.content,
+        )}\n</code></pre></div>`
+
+        const tabs: string[] = []
+        const panes: string[] = []
+        if (!noRender) {
+          tabs.push(
+            `<input type="radio" name="${group}" id="${renderedId}" class="carve-compare__radio" checked>`,
+            `<label for="${renderedId}" class="carve-compare__label">Rendered</label>`,
+          )
+          panes.push(`<div class="carve-compare__pane carve-compare__live">${html.content}</div>`)
+        }
+        tabs.push(
+          `<input type="radio" name="${group}" id="${htmlId}" class="carve-compare__radio"${
+            noRender ? ' checked' : ''
+          }>`,
+          `<label for="${htmlId}" class="carve-compare__label">HTML</label>`,
+        )
+        panes.push(
+          `<div class="carve-compare__pane"><pre><code class="language-html">${ctx.escapeHtml(
+            html.content,
+          )}\n</code></pre></div>`,
+        )
+
+        return `<div${attrs}>${source}<div class="carve-compare__output">${tabs.join(
+          '',
+        )}${panes.join('')}</div></div>`
+      },
+    },
+  }
+}
