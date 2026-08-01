@@ -146,6 +146,76 @@ describe('expandIncludes', () => {
     expect(r.map.resolve(4)).toEqual({ srcPath: 'main.crv', line: 3 })
   })
 
+  it('still resolves a symlink that stays inside the roots', async () => {
+    // The confinement fix must not over-block: a legitimate in-root alias has
+    // to keep working, or real content silently disappears from the site.
+    const { symlink } = await import('node:fs/promises')
+    const dir = await site({ 'real.txt': 'legit\n' })
+    await symlink(resolve(dir, 'real.txt'), resolve(dir, 'alias.txt'))
+    const r = expandIncludes('%% @include: ./alias.txt\n', {
+      srcPath: 'm.crv',
+      baseDir: dir,
+      roots: [dir],
+    })
+    expect(r.source).toBe('legit\n')
+  })
+
+  it('reports a missing file as unreadable even when the root is itself a symlink', async () => {
+    // Resolving the root through realpath must not turn "file is absent" into a
+    // bogus boundary error - the author needs to know which include is missing.
+    const { symlink } = await import('node:fs/promises')
+    const dir = await site({ 'content/keep.crv': 'ok\n' })
+    const linked = resolve(dir, 'linked')
+    await symlink(resolve(dir, 'content'), linked)
+    try {
+      expandIncludes('a\n%% @include: ./gone.crv\n', {
+        srcPath: 'm.crv',
+        baseDir: linked,
+        roots: [linked],
+      })
+      expect.unreachable('should have thrown')
+    } catch (error) {
+      expect((error as Error).message).toMatch(/cannot read/)
+      expect((error as Error).message).not.toMatch(/outside the allowed roots/)
+    }
+  })
+
+  it('detects a cycle reached through a symlink alias', async () => {
+    // Cycle detection keys on the real path, so aliasing a file cannot be used
+    // to walk past it - otherwise a cycle recurses until the stack blows.
+    const { symlink } = await import('node:fs/promises')
+    const dir = await site({
+      'a.crv': '%% @include: ./b-link.crv\n',
+      'b.crv': '%% @include: ./a.crv\n',
+    })
+    await symlink(resolve(dir, 'b.crv'), resolve(dir, 'b-link.crv'))
+    expect(() =>
+      expandIncludes('%% @include: ./a.crv\n', {
+        srcPath: 'm.crv',
+        baseDir: dir,
+        roots: [dir],
+      }),
+    ).toThrow(/include cycle/)
+  })
+
+  it('shifts a directive error inside a sliced include by the slice offset', async () => {
+    // The failing directive sits at line 3 of mid.crv. Reporting its position
+    // within the slice (line 2) would point an author at the wrong line.
+    const dir = await site({ 'mid.crv': 'x1\nx2\n%% @include: ./missing.crv\nx4\n' })
+    try {
+      expandIncludes('%% @include: ./mid.crv{2,4}\n', {
+        srcPath: 'top.crv',
+        baseDir: dir,
+        roots: [dir],
+      })
+      expect.unreachable('should have thrown')
+    } catch (error) {
+      const err = error as SourceError
+      expect(err.line).toBe(3)
+      expect(err.format()).toMatch(/mid\.crv:3:1 /)
+    }
+  })
+
   it('maps an anchored include back to its real line numbers', async () => {
     const dir = await site({
       'g.crv': '# Top\n\nintro\n\n## Basic Usage\n\nbody\n\n## Next\n\nafter\n',
