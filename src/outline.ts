@@ -1,4 +1,4 @@
-import type { Document } from '@markup-carve/carve'
+import { resolve, type Document } from '@markup-carve/carve'
 
 export interface OutlineEntry {
   level: number
@@ -10,6 +10,9 @@ interface AnyNode {
   type: string
   level?: number
   value?: string
+  attrs?: {
+    id?: string
+  }
   children?: AnyNode[]
 }
 
@@ -25,31 +28,23 @@ function textOf(node: AnyNode): string {
   return (node.children ?? []).map(textOf).join('')
 }
 
-function slugify(text: string): string {
-  return text
-    .trim()
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, '-')
-    .replace(/^-+|-+$/g, '')
-}
-
 /**
  * Walk the AST for headings. A regex over rendered HTML would also match a `#`
  * inside a fenced code block; only the tree knows the difference.
  */
 export function outlineFromAst(ast: Document, levels: [number, number]): OutlineEntry[] {
+  resolve(ast)
+
   const [min, max] = levels
   const entries: OutlineEntry[] = []
-  const counts = new Map<string, number>()
 
   const visit = (node: AnyNode): void => {
     if (node.type === 'heading' && node.level !== undefined) {
       if (node.level >= min && node.level <= max) {
         const title = textOf(node)
-        const base = slugify(title)
-        const seen = (counts.get(base) ?? 0) + 1
-        counts.set(base, seen)
-        entries.push({ level: node.level, title, slug: seen === 1 ? base : `${base}-${seen}` })
+        const slug = node.attrs?.id
+        // A missing resolved id is safer to omit than to link to a wrong anchor.
+        if (slug !== undefined) entries.push({ level: node.level, title, slug })
       }
     }
     for (const child of node.children ?? []) visit(child)
