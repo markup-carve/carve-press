@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs'
-import { resolve, dirname, relative, isAbsolute } from 'node:path'
+import { readFileSync, realpathSync } from 'node:fs'
+import { resolve, dirname, basename, relative, isAbsolute } from 'node:path'
 import { SourceError } from '../errors.js'
 
 const RE_DIRECTIVE =
@@ -35,7 +35,7 @@ function slugify(text: string): string {
 }
 
 /** Extract a heading section: from the matching heading to the next same-or-higher one. */
-function sectionFor(lines: string[], anchor: string): string[] | null {
+function sectionFor(lines: string[], anchor: string): { lines: string[]; offset: number } | null {
   let start = -1
   let level = 0
   for (let i = 0; i < lines.length; i++) {
@@ -53,20 +53,41 @@ function sectionFor(lines: string[], anchor: string): string[] | null {
       // they belong to the document's flow, not to this extracted section.
       let end = i
       while (end > start && lines[end - 1] === '') end--
-      return lines.slice(start, end)
+      return { lines: lines.slice(start, end), offset: start }
     }
   }
-  return start === -1 ? null : lines.slice(start)
+  return start === -1 ? null : { lines: lines.slice(start), offset: start }
 }
 
-function assertInsideRoots(abs: string, roots: string[], srcPath: string, line: number): void {
+/**
+ * Resolve as much of `p` as actually exists through `realpathSync`, then
+ * reappend any missing tail lexically. A plain `realpathSync(p)` throws
+ * outright when `p` (e.g. a missing include target) doesn't exist, which
+ * would force callers to compare a resolved root against an unresolved
+ * path - and if a root itself is a symlink, that mismatch misclassifies an
+ * in-root missing file as outside the roots instead of reaching the
+ * "cannot read" error.
+ */
+function resolveRealish(p: string): string {
+  try {
+    return realpathSync(p)
+  } catch {
+    const parent = dirname(p)
+    if (parent === p) return p
+    return resolve(resolveRealish(parent), basename(p))
+  }
+}
+
+function assertInsideRoots(abs: string, roots: string[], srcPath: string, line: number): string {
+  const real = resolveRealish(abs)
   const ok = roots.some((root) => {
-    const rel = relative(root, abs)
+    const rel = relative(resolveRealish(root), real)
     return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel)
   })
   if (!ok) {
     throw new SourceError(srcPath, line, 1, `include: "${abs}" is outside the allowed roots`)
   }
+  return real
 }
 
 export function expandIncludes(
@@ -75,7 +96,13 @@ export function expandIncludes(
 ): { source: string; map: IncludeSourceMap } {
   const origins: Origin[] = []
 
-  function expand(text: string, srcPath: string, baseDir: string, stack: string[]): string[] {
+  function expand(
+    text: string,
+    srcPath: string,
+    baseDir: string,
+    stack: string[],
+    lineOffset = 0,
+  ): string[] {
     const lines = text.split('\n')
     const out: string[] = []
     let fence: string | null = null
@@ -86,63 +113,76 @@ export function expandIncludes(
       if (fence !== null) {
         if (fenceMatch && line.trim().startsWith(fence)) fence = null
         out.push(line)
-        origins.push({ srcPath, line: i + 1 })
+        origins.push({ srcPath, line: i + 1 + lineOffset })
         continue
       }
       if (fenceMatch) {
         fence = fenceMatch[1]!
         out.push(line)
-        origins.push({ srcPath, line: i + 1 })
+        origins.push({ srcPath, line: i + 1 + lineOffset })
         continue
       }
 
       const m = RE_DIRECTIVE.exec(line)
       if (!m?.groups) {
         out.push(line)
-        origins.push({ srcPath, line: i + 1 })
+        origins.push({ srcPath, line: i + 1 + lineOffset })
         continue
       }
 
-      const abs = resolve(baseDir, m.groups.path!)
-      assertInsideRoots(abs, opts.roots, srcPath, i + 1)
+      // The reported line is relative to srcPath, the file this directive was
+      // read from - which may itself be a sliced include, hence + lineOffset.
+      const directiveLine = i + 1 + lineOffset
+
+      // The REAL path is what gets read and what keys cycle detection, so a
+      // symlink cannot be validated as one path and read as another.
+      const abs = assertInsideRoots(
+        resolve(baseDir, m.groups.path!),
+        opts.roots,
+        srcPath,
+        directiveLine,
+      )
       if (stack.includes(abs)) {
-        throw new SourceError(srcPath, i + 1, 1, `include cycle: ${[...stack, abs].join(' -> ')}`)
+        throw new SourceError(
+          srcPath,
+          directiveLine,
+          1,
+          `include cycle: ${[...stack, abs].join(' -> ')}`,
+        )
       }
 
       let raw: string
       try {
         raw = readFileSync(abs, 'utf8')
       } catch {
-        // Location is folded into the message (not just the srcPath/line/column
-        // fields) because this is the one include failure a page author hits
-        // directly and expects to see pinpointed even from a bare .message read.
-        throw new SourceError(
-          srcPath,
-          i + 1,
-          1,
-          `${srcPath}:${i + 1}:1 include: cannot read "${m.groups.path}"`,
-        )
+        throw new SourceError(srcPath, directiveLine, 1, `include: cannot read "${m.groups.path}"`)
       }
 
       let body = raw.replace(/\n$/, '').split('\n')
+      // How far into the included file the kept slice begins. Without this the
+      // source map reports every ranged or anchored include as starting at
+      // line 1, so an error inside one points at the wrong line.
+      let sliceOffset = 0
       if (m.groups.anchor !== undefined) {
         const section = sectionFor(body, m.groups.anchor)
         if (section === null) {
           throw new SourceError(
             srcPath,
-            i + 1,
+            directiveLine,
             1,
             `include: no heading with slug "${m.groups.anchor}" in "${m.groups.path}"`,
           )
         }
-        body = section
+        body = section.lines
+        sliceOffset = section.offset
       } else if (m.groups.start !== undefined || m.groups.end !== undefined) {
         const from = m.groups.start !== undefined ? Number(m.groups.start) - 1 : 0
         const to = m.groups.end !== undefined ? Number(m.groups.end) : body.length
         body = body.slice(from, to)
+        sliceOffset = from
       }
 
-      out.push(...expand(body.join('\n'), abs, dirname(abs), [...stack, abs]))
+      out.push(...expand(body.join('\n'), abs, dirname(abs), [...stack, abs], sliceOffset))
     }
     return out
   }
