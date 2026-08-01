@@ -18,6 +18,7 @@
   },
   "files": [
     "dist",
+    "theme/default.css",
     "README.md",
     "LICENSE"
   ],

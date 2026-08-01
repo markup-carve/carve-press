@@ -1,15 +1,15 @@
 import { describe, it, expect } from 'vitest'
-import { mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { buildSite, loadConfig } from '../src/build.js'
 
 const SITE = resolve(import.meta.dirname, 'fixtures/site')
 
-async function build(over: object = {}) {
+async function build(over: object = {}, root = SITE) {
   const outDir = await mkdtemp(resolve(tmpdir(), 'cp-out-'))
   const result = await buildSite({
-    root: SITE,
+    root,
     config: {
       title: 'Fixture',
       srcDir: SITE,
@@ -41,6 +41,40 @@ describe('buildSite', () => {
     const html = await readFile(resolve(outDir, 'start/index.html'), 'utf8')
     expect(html).toContain('<h1>Start ')
     expect(html).toContain('<title>Start | Fixture</title>')
+  })
+
+  it('writes the shipped theme stylesheet', async () => {
+    const { outDir } = await build()
+    const actual = await readFile(resolve(outDir, 'assets/style.css'), 'utf8')
+    const expected = await readFile(resolve(import.meta.dirname, '../theme/default.css'), 'utf8')
+    expect(actual).toBe(expected)
+  })
+
+  it('lets a configured stylesheet replace the shipped theme', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-theme-'))
+    await writeFile(resolve(root, 'theme.css'), 'body { color: rebeccapurple; }\n')
+
+    const { outDir } = await build({ srcDir: SITE, theme: { css: 'theme.css' } }, root)
+    await expect(readFile(resolve(outDir, 'assets/style.css'), 'utf8')).resolves.toBe(
+      'body { color: rebeccapurple; }\n',
+    )
+  })
+
+  it('copies publicDir contents into the output root', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-public-'))
+    await mkdir(resolve(root, 'static/images'), { recursive: true })
+    await writeFile(resolve(root, 'static/favicon.ico'), 'ico')
+    await writeFile(resolve(root, 'static/images/logo.txt'), 'logo')
+
+    const { outDir } = await build({ srcDir: SITE, publicDir: 'static' }, root)
+    await expect(readFile(resolve(outDir, 'favicon.ico'), 'utf8')).resolves.toBe('ico')
+    await expect(readFile(resolve(outDir, 'images/logo.txt'), 'utf8')).resolves.toBe('logo')
+  })
+
+  it('does not fail when publicDir is missing', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-missing-public-'))
+    const { outDir } = await build({ srcDir: SITE, publicDir: 'missing' }, root)
+    await expect(readFile(resolve(outDir, 'index.html'), 'utf8')).resolves.toContain('<h1>Home ')
   })
 
   it('emits the index page at the output root', async () => {

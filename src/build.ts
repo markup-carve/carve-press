@@ -1,4 +1,5 @@
-import { mkdir, stat, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { resolveConfig, type UserConfig } from './config.js'
@@ -12,6 +13,9 @@ import { LAYOUTS, docLayout } from './layout/doc.js'
 import { validateLinks, validateNav, validateCrossrefs } from './validate.js'
 import { BuildEventBus } from './events.js'
 import { BuildError } from './errors.js'
+
+const require = createRequire(import.meta.url)
+const defaultThemePath = require.resolve('../theme/default.css')
 
 export interface BuildResult {
   rendered: RenderedPage[]
@@ -34,6 +38,46 @@ async function configExists(path: string): Promise<boolean> {
     const reason = error instanceof Error ? error.message : String(error)
     throw new BuildError(`cannot inspect config file ${path}`, [reason])
   }
+}
+
+async function directoryExists(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory()
+  } catch (error) {
+    if (
+      error !== null &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+    ) {
+      return false
+    }
+    const reason = error instanceof Error ? error.message : String(error)
+    throw new BuildError(`cannot inspect directory ${path}`, [reason])
+  }
+}
+
+async function copyDirectoryContents(src: string, dest: string): Promise<void> {
+  const entries = await readdir(src, { withFileTypes: true })
+  await mkdir(dest, { recursive: true })
+  for (const entry of entries) {
+    const srcPath = resolve(src, entry.name)
+    const destPath = resolve(dest, entry.name)
+    if (entry.isDirectory()) {
+      await copyDirectoryContents(srcPath, destPath)
+    } else if (entry.isFile()) {
+      await mkdir(dirname(destPath), { recursive: true })
+      await copyFile(srcPath, destPath)
+    }
+  }
+}
+
+async function writeThemeCss(opts: { root: string; outDir: string; css?: string }): Promise<void> {
+  const source = opts.css === undefined ? defaultThemePath : resolve(opts.root, opts.css)
+  const css = await readFile(source, 'utf8')
+  const outPath = resolve(opts.outDir, 'assets/style.css')
+  await mkdir(dirname(outPath), { recursive: true })
+  await writeFile(outPath, css, 'utf8')
 }
 
 /** Load `carve-press.config.{ts,js,mjs}` from a project root. */
@@ -64,6 +108,12 @@ export async function buildSite(opts: {
 
   const srcDir = resolve(opts.root, config.srcDir)
   const outDir = resolve(opts.root, config.outDir)
+  const publicDir = resolve(opts.root, config.publicDir)
+  if (await directoryExists(publicDir)) {
+    await copyDirectoryContents(publicDir, outDir)
+  }
+  await writeThemeCss({ root: opts.root, outDir, css: config.theme.css })
+
   const discovered = await discoverPages(srcDir, config.srcExclude)
   const { pages } = await bus.emit('contentDiscovered', { pages: discovered })
 

@@ -48,24 +48,31 @@ export interface ShikiConfig {
   themes: { light: string; dark: string }
 }
 
+export interface ThemeAssetsConfig {
+  css?: string
+}
+
 export interface CarvePressConfig {
   title: string
   description?: string
   base: string
   srcDir: string
   outDir: string
+  publicDir: string
   srcExclude: string[]
   cleanUrls: boolean
   ignoreDeadLinks: boolean
   head: HeadTag[]
+  theme: ThemeAssetsConfig
   themeConfig: ThemeConfig
   carve: { extensions: CarveExtension[]; profile?: string }
   shiki: ShikiConfig
   extensions: SiteExtension[]
 }
 
-export type UserConfig = Partial<Omit<CarvePressConfig, 'title' | 'themeConfig' | 'carve' | 'shiki'>> & {
+export type UserConfig = Partial<Omit<CarvePressConfig, 'title' | 'theme' | 'themeConfig' | 'carve' | 'shiki'>> & {
   title: string
+  theme?: Partial<ThemeAssetsConfig>
   themeConfig?: Partial<ThemeConfig>
   carve?: Partial<CarvePressConfig['carve']>
   shiki?: Partial<Omit<ShikiConfig, 'themes'>> & { themes?: Partial<ShikiConfig['themes']> }
@@ -119,10 +126,12 @@ export function resolveConfig(user: UserConfig): CarvePressConfig {
     base: normalizeBase(user.base ?? '/'),
     srcDir: user.srcDir ?? 'docs',
     outDir: user.outDir ?? 'dist',
+    publicDir: user.publicDir ?? 'public',
     srcExclude: user.srcExclude ?? [],
     cleanUrls: user.cleanUrls ?? true,
     ignoreDeadLinks: user.ignoreDeadLinks ?? false,
     head: user.head ?? [],
+    theme: user.theme?.css === undefined ? {} : { css: user.theme.css },
     themeConfig: {
       nav: user.themeConfig?.nav ?? [],
       sidebar: user.themeConfig?.sidebar ?? {},
