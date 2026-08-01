@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { carveToHtml } from '@markup-carve/carve'
 import { compareExtension } from '../src/render/compare.js'
+import { createShikiExtension } from '../src/render/shiki.js'
 
 const ext = compareExtension()
 const render = (src: string) => carveToHtml(src, { extensions: [ext] })
@@ -54,6 +55,20 @@ describe('compareExtension', () => {
     const html = render('::: compare\n```carve\n*b*\n```\n:::')
     expect(html).toContain('carve-compare--malformed')
     expect(html).toContain('*b*')
+  })
+
+  it('highlights the source pane when the Shiki extension is in the stack', async () => {
+    const shiki = await createShikiExtension({
+      langs: ['carve', 'html'],
+      themes: { light: 'github-light', dark: 'github-dark' },
+    })
+    const html = carveToHtml(BLOCK, { extensions: [shiki, compareExtension()] })
+    const sourcePane =
+      html.match(/<div class="carve-compare__source">[\s\S]*?<\/div><div class="carve-compare__output">/)?.[0] ??
+      ''
+    expect(sourcePane).toContain('shiki')
+    expect(sourcePane).toContain('<span')
+    expect(sourcePane).not.toContain('<pre><code class="language-carve">')
   })
 })
 

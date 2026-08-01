@@ -123,9 +123,10 @@ export function compareExtension(): CarveExtension {
         const group = `compare-${++counter}`
         const renderedId = ctx.uniqueId(`${group}-rendered`)
         const htmlId = ctx.uniqueId(`${group}-html`)
-        const source = `<div class="carve-compare__source"><pre><code class="language-carve">${ctx.escapeHtml(
-          carve.content,
-        )}\n</code></pre></div>`
+        const source = `<div class="carve-compare__source">${ctx.renderChildren(
+          [carve] as never,
+          ctx.level + 1,
+        )}</div>`
 
         const tabs: string[] = []
         const panes: string[] = []
@@ -144,9 +145,7 @@ export function compareExtension(): CarveExtension {
           `<label for="${htmlId}" class="carve-compare__label">HTML</label>`,
         )
         panes.push(
-          `<div class="carve-compare__pane"><pre><code class="language-html">${ctx.escapeHtml(
-            html.content,
-          )}\n</code></pre></div>`,
+          `<div class="carve-compare__pane">${ctx.renderChildren([html] as never, ctx.level + 1)}</div>`,
         )
 
         return `<div${attrs}>${source}<div class="carve-compare__output">${tabs.join(
