@@ -53,9 +53,6 @@ export function splitFrontmatter(source: string, srcPath = '<input>'): Frontmatt
     }
     const key = line.slice(0, sep).trim()
     const value = line.slice(sep + 1)
-    if (value.trim() === '') {
-      throw new SourceError(srcPath, i + 1, sep + 2, `frontmatter: nested value for "${key}"`)
-    }
     data[key] = coerce(value)
   }
 

@@ -43,4 +43,15 @@ describe('splitFrontmatter', () => {
   it('throws on a nested key rather than misparsing it', () => {
     expect(() => splitFrontmatter('---\nnav:\n  - a\n---\n')).toThrow(/nested/)
   })
+
+  it('reads an empty value as an empty string, not a nested value', () => {
+    // `subtitle:` with nothing after it is a legitimate empty scalar. Only an
+    // INDENTED following line means nesting.
+    const r = splitFrontmatter('---\ntitle: X\nsubtitle:\nlayout: post\n---\n')
+    expect(r.data).toEqual({ title: 'X', subtitle: '', layout: 'post' })
+  })
+
+  it('still throws on a genuinely nested value', () => {
+    expect(() => splitFrontmatter('---\nnav:\n  - a\n---\n')).toThrow(/nested/)
+  })
 })
