@@ -1,0 +1,13 @@
+* text=auto
+* text eol=lf
+*.png binary
+*.jpg binary
+*.woff2 binary
+
+test/ export-ignore
+.github/ export-ignore
+.gitignore export-ignore
+.gitattributes export-ignore
+.editorconfig export-ignore
+tsconfig.json export-ignore
+vitest.config.ts export-ignore

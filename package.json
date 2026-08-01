@@ -1,0 +1,32 @@
+{
+  "name": "@markup-carve/carve-press",
+  "version": "0.1.0",
+  "description": "Static site generator for the Carve markup language",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=20" },
+  "bin": { "carve-press": "./dist/cli.js" },
+  "exports": { ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" } },
+  "files": ["dist", "README.md", "LICENSE"],
+  "keywords": ["carve", "static-site-generator", "ssg", "markup", "documentation"],
+  "author": "Mark Scherer",
+  "support": {
+    "issues": "https://github.com/markup-carve/carve-press/issues",
+    "source": "https://github.com/markup-carve/carve-press"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@markup-carve/carve": "github:markup-carve/carve-js#1bbf01ff386e66f9e17a6565e4ff18f07a22cdbb",
+    "shiki": "^1.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
