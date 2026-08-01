@@ -14,6 +14,8 @@ const carveGrammar = JSON.parse(
   readFileSync(require.resolve('@markup-carve/carve-grammars/textmate/carve.tmLanguage.json'), 'utf8'),
 ) as LanguageRegistration
 const SPECIAL_LANGS = new Set(['ansi', 'text', 'plaintext', 'txt'])
+/** Fence languages that mean "no highlighting", so rendering plain is correct. */
+const PLAIN_TEXT_LANGS = new Set(['text', 'plaintext', 'txt'])
 
 function isKnownShikiLanguage(lang: string): boolean {
   return lang in bundledLanguages || lang in bundledLanguagesAlias || SPECIAL_LANGS.has(lang)
@@ -115,6 +117,10 @@ export async function createShikiExtension(opts: ShikiOptions): Promise<CarveExt
         const content = (node as { content: string }).content
         const attrs = (node as { attrs?: Attrs }).attrs
         if (lang === undefined || lang === '') return plainBlock(lang, content, attrs, ctx)
+        // A plain-text fence is already what the author asked for. Shiki never
+        // reports these from getLoadedLanguages(), so without this they fall
+        // into the branch below and warn about a language nobody needs to add.
+        if (PLAIN_TEXT_LANGS.has(lang)) return plainBlock(lang, content, attrs, ctx)
         if (!loaded.has(lang)) {
           // Warn once per language: a 42-page site would otherwise print the
           // same line hundreds of times and bury it.

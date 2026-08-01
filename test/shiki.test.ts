@@ -107,3 +107,31 @@ describe('createShikiExtension', () => {
     expect(html).toContain('data-x="y"')
   })
 })
+
+describe('plain-text fence languages', () => {
+  it('renders a txt fence plain without warning', async () => {
+    // `txt` means "no highlighting", so warning about it asks the author to fix
+    // something that is already correct. Shiki never lists these as loaded.
+    const ext = await createShikiExtension({
+      langs: ['js'],
+      themes: { light: 'github-light', dark: 'github-dark' },
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const html = carveToHtml('```txt\nhello\n```\n', { extensions: [ext] })
+    expect(html).toContain('hello')
+    expect(html).not.toContain('shiki')
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('still warns for a genuinely unregistered language', async () => {
+    const ext = await createShikiExtension({
+      langs: ['js'],
+      themes: { light: 'github-light', dark: 'github-dark' },
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    carveToHtml('```brainfuck\n+++\n```\n', { extensions: [ext] })
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('brainfuck'))
+    warn.mockRestore()
+  })
+})
