@@ -1,5 +1,5 @@
 import { dirname } from 'node:path'
-import { parse, renderHtml, type CarveExtension, type Document } from '@markup-carve/carve'
+import { carveToHtml, parse, type CarveExtension, type Document } from '@markup-carve/carve'
 import type { Page } from '../content/discover.js'
 import { outlineFromAst, type OutlineEntry } from '../outline.js'
 import { expandIncludes } from '../include/expand.js'
@@ -80,7 +80,7 @@ export function renderPage(page: Page, ctx: RenderContext): RenderedPage {
   } catch (error) {
     // Include errors carry a body-relative line; shift it back to the original
     // file so the reported location is clickable.
-    if (error instanceof SourceError) {
+    if (error instanceof SourceError && error.srcPath === page.relPath) {
       throw new SourceError(
         page.relPath,
         error.line + page.bodyStartLine - 1,
@@ -91,8 +91,11 @@ export function renderPage(page: Page, ctx: RenderContext): RenderedPage {
     throw error
   }
 
-  const ast = parse(expanded)
-  const html = renderHtml(ast, { extensions: ctx.extensions })
+  // The public engine pipeline resolves heading ids and runs extension hooks
+  // before rendering. Keep a second parsed AST for outline/search until the
+  // engine exports applyTransforms and runProfile, which would allow one pass.
+  const html = carveToHtml(expanded, { extensions: ctx.extensions })
+  const ast = parse(expanded, { extensions: ctx.extensions })
   const outline = outlineFromAst(ast, ctx.outlineLevels)
 
   const fmTitle = page.frontmatter.title

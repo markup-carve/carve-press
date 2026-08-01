@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { mkdtemp, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import type { Page } from '../src/content/discover.js'
 import { renderPage } from '../src/render/page.js'
@@ -18,15 +20,27 @@ const ctx = {
   includeRoots: [resolve(import.meta.dirname, 'fixtures')],
 }
 
+function idsFromHtml(html: string): string[] {
+  return [...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]!)
+}
+
 describe('renderPage', () => {
-  it('renders HTML, outline, and a search doc from one parse', () => {
+  it('renders HTML, outline, and a search doc', () => {
     const r = renderPage(page('# T\n\n## Install\n\nrun it\n'), ctx)
-    expect(r.html).toContain('<h1>T</h1>')
+    expect(r.html).toContain('<section id="T">')
     expect(r.outline).toEqual([{ level: 2, title: 'Install', slug: 'Install' }])
     expect(r.searchDoc.route).toBe('/p')
     expect(r.searchDoc.title).toBe('Start')
     expect(r.searchDoc.headings).toEqual(['Install'])
     expect(r.searchDoc.text).toContain('run it')
+  })
+
+  it('keeps rendered heading anchors aligned with outline slugs', () => {
+    const r = renderPage(page('# T\n\n## Install\n\n## Getting Started\n\n### Next Steps\n'), {
+      ...ctx,
+      outlineLevels: [1, 3],
+    })
+    expect(idsFromHtml(r.html)).toEqual(r.outline.map((entry) => entry.slug))
   })
 
   it('excludes code blocks from the search text', () => {
@@ -69,6 +83,25 @@ describe('renderPage', () => {
     } catch (error) {
       expect(error).toHaveProperty('format')
       expect((error as { format: () => string }).format()).toMatch(/start\.crv:6:1/)
+    }
+  })
+
+  it('preserves the source location for include failures inside included files', async () => {
+    const dir = await mkdtemp(resolve(tmpdir(), 'cp-page-'))
+    await writeFile(resolve(dir, 'outer.crv'), 'intro\n%% @include: ./missing.crv\n')
+
+    const p: Page = {
+      ...page('# T\n\n%% @include: ./outer.crv\n'),
+      srcPath: resolve(dir, 'start.crv'),
+    }
+
+    try {
+      renderPage(p, { ...ctx, includeRoots: [dir] })
+      expect.unreachable('should have thrown')
+    } catch (error) {
+      const formatted = (error as { format: () => string }).format()
+      expect(formatted).toMatch(/outer\.crv:2:1 /)
+      expect(formatted).not.toMatch(/start\.crv/)
     }
   })
 })
