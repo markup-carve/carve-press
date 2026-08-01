@@ -296,7 +296,7 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
 }
 @media (max-width: 940px) { .carve-compare { grid-template-columns: minmax(0, 1fr); } }
 
-.carve-compare__source { position: relative; border-right: 1px solid var(--rule); }
+.carve-compare__source { position: relative; border-right: 1px solid var(--rule); align-self: stretch; background: var(--paper-sunk); }
 @media (max-width: 940px) { .carve-compare__source { border-right: 0; border-bottom: 1px solid var(--rule); } }
 /* The eyebrow names what the left column is: the mark, before printing. */
 .carve-compare__source::before {
@@ -314,7 +314,9 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
 }
 .carve-compare__source pre { margin: 0; border: 0; border-radius: 0; background: none; padding: 1.6rem 1.15rem 1.15rem; }
 
-.carve-compare__output { display: flex; flex-direction: column; background: var(--paper); }
+/* Block, not flex: the labels are inline-block so they sit side by side as a
+   tab strip, while the panes below them break onto their own lines. */
+.carve-compare__output { background: var(--paper); }
 .carve-compare__radio { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .carve-compare__label {
   display: inline-block;
@@ -334,6 +336,7 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
 .carve-compare__radio:focus-visible + .carve-compare__label { outline: 2px solid var(--brass); outline-offset: -2px; }
 
 .carve-compare__pane { display: none; padding: 1.1rem 1.15rem; border-top: 1px solid var(--rule); }
+.carve-compare__label:last-of-type { margin-right: 0; }
 .carve-compare__radio:nth-of-type(1):checked ~ .carve-compare__pane:nth-of-type(1),
 .carve-compare__radio:nth-of-type(2):checked ~ .carve-compare__pane:nth-of-type(2) { display: block; }
 .carve-compare__pane > :first-child { margin-top: 0; }
