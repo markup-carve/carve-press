@@ -12,7 +12,7 @@ npm install --save-dev @markup-carve/carve-press
 
 | Command | Job |
 |---|---|
-| `carve-press init` | scaffold a project |
-| `carve-press dev` | watch, serve, and live-reload during development |
 | `carve-press build` | static build into `dist/` |
-| `carve-press serve` | serve a built site |
+| `carve-press routes` | print the resolved route table |
+
+Planned, not yet implemented: `init`, `new`, `dev`, `serve`.
