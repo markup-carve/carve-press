@@ -3,9 +3,10 @@ import { createRequire } from 'node:module'
 import { bundledLanguages, bundledLanguagesAlias, createHighlighter, type Highlighter } from 'shiki'
 import type { LanguageRegistration } from '@shikijs/types'
 import type { Attrs, BlockExtensionRenderContext, CarveExtension } from '@markup-carve/carve'
+import type { ShikiLanguage } from '../config.js'
 
 export interface ShikiOptions {
-  langs: string[]
+  langs: ShikiLanguage[]
   themes: { light: string; dark: string }
 }
 
@@ -20,9 +21,32 @@ const SPECIAL_LANGS = new Set(['ansi', 'text', 'plaintext', 'txt'])
 const PLAIN_TEXT_LANGS = new Set(['text', 'plaintext', 'txt'])
 const highlighterCache = new Map<string, Promise<Highlighter>>()
 
+type JsonLike = null | boolean | number | string | JsonLike[] | { [key: string]: JsonLike | undefined }
+
+function shikiLanguageName(lang: ShikiLanguage): string {
+  return typeof lang === 'string' ? lang : lang.name
+}
+
+function stableJson(value: unknown): string {
+  if (typeof value === 'undefined') return '"__undefined__"'
+  if (value === null || typeof value !== 'object') return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map((item) => stableJson(item)).join(',')}]`
+  const record = value as Record<string, JsonLike | undefined>
+  return `{${Object.keys(record)
+    .sort()
+    .filter((key) => record[key] !== undefined)
+    .map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`)
+    .join(',')}}`
+}
+
+function shikiLanguageCacheKey(lang: ShikiLanguage): string {
+  if (typeof lang === 'string') return `bundled:${lang}`
+  return `registration:${lang.name}:${stableJson(lang)}`
+}
+
 function highlighterCacheKey(opts: ShikiOptions): string {
   return JSON.stringify({
-    langs: [...new Set(opts.langs)].sort(),
+    langs: [...new Map(opts.langs.map((lang) => [shikiLanguageName(lang), shikiLanguageCacheKey(lang)])).values()].sort(),
     themes: [opts.themes.light, opts.themes.dark],
   })
 }
@@ -50,14 +74,24 @@ export function clearHighlighterCache(): void {
   highlighterCache.clear()
 }
 
+export function highlighterCacheSizeForTest(): number {
+  return highlighterCache.size
+}
+
 function isKnownShikiLanguage(lang: string): boolean {
   return lang in bundledLanguages || lang in bundledLanguagesAlias || SPECIAL_LANGS.has(lang)
 }
 
-function languageRegistrations(langs: string[]): (string | LanguageRegistration)[] {
+function languageRegistrations(langs: ShikiLanguage[]): (string | LanguageRegistration)[] {
   const registrations: (string | LanguageRegistration)[] = []
+  const merged = new Map<string, ShikiLanguage>()
   for (const lang of langs) {
-    if (lang === 'carve' || lang === 'crv') {
+    merged.set(shikiLanguageName(lang), lang)
+  }
+  for (const lang of merged.values()) {
+    if (typeof lang !== 'string') {
+      registrations.push(lang)
+    } else if (lang === 'carve' || lang === 'crv') {
       registrations.push(carveGrammar)
     } else if (isKnownShikiLanguage(lang)) {
       registrations.push(lang)

@@ -1,8 +1,20 @@
 import { describe, it, expect, vi } from 'vitest'
 import { carveToHtml } from '@markup-carve/carve'
+import type { LanguageRegistration } from '@shikijs/types'
 import { resolveConfig } from '../src/config.js'
 import { buildExtensionStack } from '../src/render/extensions.js'
-import { clearHighlighterCache, createShikiExtension, createShikiHighlighter } from '../src/render/shiki.js'
+import {
+  clearHighlighterCache,
+  createShikiExtension,
+  createShikiHighlighter,
+  highlighterCacheSizeForTest,
+} from '../src/render/shiki.js'
+
+const customGrammar = {
+  name: 'custom',
+  scopeName: 'source.custom',
+  patterns: [{ name: 'keyword.custom', match: '\\bCUSTOM\\b' }],
+} satisfies LanguageRegistration
 
 const ext = await createShikiExtension({
   langs: ['js'],
@@ -31,6 +43,25 @@ describe('createShikiExtension', () => {
     expect(html).toContain('shiki')
     expect(html).toContain('<span')
     expect(html).toContain('int')
+  })
+
+  it('highlights a fence in a language supplied as a registration object without warning', async () => {
+    const customExt = await createShikiExtension({
+      langs: [customGrammar],
+      themes: { light: 'github-light', dark: 'github-dark' },
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      const html = carveToHtml('```custom\nCUSTOM token\n```\n', { extensions: [customExt] })
+
+      expect(html).toContain('shiki')
+      expect(html).toContain('<span')
+      expect(html).toContain('CUSTOM')
+      expect(warn).not.toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('highlights a fence in a registered language', () => {
@@ -168,6 +199,31 @@ describe('code-group highlighting', () => {
 })
 
 describe('Shiki highlighter cache', () => {
+  it('shares cached highlighters for equivalent languages and separates different registrations', async () => {
+    clearHighlighterCache()
+    const equivalentGrammar = {
+      patterns: [{ match: '\\bCUSTOM\\b', name: 'keyword.custom' }],
+      scopeName: 'source.custom',
+      name: 'custom',
+    } satisfies LanguageRegistration
+    const differentGrammar = {
+      ...customGrammar,
+      patterns: [{ name: 'string.custom', match: '\\bCUSTOM\\b' }],
+    } satisfies LanguageRegistration
+    const themes = { light: 'github-light', dark: 'github-dark' }
+
+    try {
+      await createShikiHighlighter({ langs: ['js', customGrammar], themes })
+      await createShikiHighlighter({ langs: [equivalentGrammar, 'js'], themes })
+      expect(highlighterCacheSizeForTest()).toBe(1)
+
+      await createShikiHighlighter({ langs: ['js', differentGrammar], themes })
+      expect(highlighterCacheSizeForTest()).toBe(2)
+    } finally {
+      clearHighlighterCache()
+    }
+  })
+
   it('does not share unregistered-language warning state between highlight callbacks', async () => {
     clearHighlighterCache()
     const opts = {

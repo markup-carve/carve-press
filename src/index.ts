@@ -17,6 +17,8 @@ export type {
   SocialLink,
   SiteExtension,
   SearchConfig,
+  ShikiConfig,
+  ShikiLanguage,
 } from './config.js'
 export type { BuildResult } from './build.js'
 export type { BuildEvents } from './events.js'

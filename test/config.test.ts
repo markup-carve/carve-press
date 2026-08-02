@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
+import type { LanguageRegistration } from '@shikijs/types'
 import { resolveConfig } from '../src/config.js'
+
+const customGrammar = {
+  name: 'custom',
+  scopeName: 'source.custom',
+  patterns: [{ name: 'keyword.custom', match: '\\bCUSTOM\\b' }],
+} satisfies LanguageRegistration
 
 describe('resolveConfig', () => {
   it('applies defaults for every omitted field', () => {
@@ -77,6 +84,13 @@ describe('resolveConfig', () => {
 })
 
 describe('shiki languages', () => {
+  it('keeps a mix of bundled language names and custom registrations', () => {
+    const config = resolveConfig({ title: 'T', shiki: { langs: ['ruby', customGrammar] } }, '/root')
+
+    expect(config.shiki.langs).toContain('ruby')
+    expect(config.shiki.langs).toContain(customGrammar)
+  })
+
   it('adds the user languages to the defaults rather than replacing them', () => {
     // Replacing was the old behavior and it failed quietly: the build still
     // succeeded and every fence in a default language silently lost its
@@ -92,5 +106,22 @@ describe('shiki languages', () => {
     const config = resolveConfig({ title: 'T', shiki: { langs: ['html'] } }, '/root')
 
     expect(config.shiki.langs.filter((lang) => lang === 'html')).toHaveLength(1)
+  })
+
+  it('replaces a default bundled language with a user registration of the same name', () => {
+    const htmlGrammar = { ...customGrammar, name: 'html', scopeName: 'source.custom-html' } satisfies LanguageRegistration
+    const config = resolveConfig({ title: 'T', shiki: { langs: [htmlGrammar] } }, '/root')
+
+    expect(config.shiki.langs).toContain(htmlGrammar)
+    expect(config.shiki.langs.filter((lang) => (typeof lang === 'string' ? lang : lang.name) === 'html')).toHaveLength(1)
+    expect(config.shiki.langs).not.toContain('html')
+  })
+
+  it('keeps default languages when the user supplies only a registration object', () => {
+    const config = resolveConfig({ title: 'T', shiki: { langs: [customGrammar] } }, '/root')
+
+    expect(config.shiki.langs).toContain(customGrammar)
+    expect(config.shiki.langs).toContain('carve')
+    expect(config.shiki.langs).toContain('html')
   })
 })

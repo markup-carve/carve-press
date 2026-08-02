@@ -1,4 +1,5 @@
 import type { CarveExtension } from '@markup-carve/carve'
+import type { LanguageRegistration } from '@shikijs/types'
 import { BuildError } from './errors.js'
 import type { BuildEventBus } from './events.js'
 import { searchIndex, type SearchIndexOptions } from './extensions/search-index.js'
@@ -45,8 +46,10 @@ export interface SiteExtension {
   setup(bus: BuildEventBus): void
 }
 
+export type ShikiLanguage = string | LanguageRegistration
+
 export interface ShikiConfig {
-  langs: string[]
+  langs: ShikiLanguage[]
   themes: { light: string; dark: string }
 }
 
@@ -111,6 +114,18 @@ const DEFAULT_SHIKI: ShikiConfig = {
   themes: { light: 'github-light', dark: 'github-dark' },
 }
 
+function shikiLanguageName(lang: ShikiLanguage): string {
+  return typeof lang === 'string' ? lang : lang.name
+}
+
+function mergeShikiLanguages(defaults: ShikiLanguage[], user: ShikiLanguage[] | undefined): ShikiLanguage[] {
+  const merged = new Map<string, ShikiLanguage>()
+  for (const lang of [...defaults, ...(user ?? [])]) {
+    merged.set(shikiLanguageName(lang), lang)
+  }
+  return [...merged.values()]
+}
+
 /** Identity function; exists so a config file gets type checking and completion. */
 export function defineConfig(config: UserConfig): UserConfig {
   return config
@@ -166,7 +181,7 @@ export function resolveConfig(user: UserConfig): CarvePressConfig {
       // Additive, not a replacement. Naming one extra language should not cost a
       // site every default it never asked to lose - and the failure is quiet:
       // the build still succeeds, every fence just renders unhighlighted.
-      langs: [...new Set([...DEFAULT_SHIKI.langs, ...(user.shiki?.langs ?? [])])],
+      langs: mergeShikiLanguages(DEFAULT_SHIKI.langs, user.shiki?.langs),
       themes: {
         light: user.shiki?.themes?.light ?? DEFAULT_SHIKI.themes.light,
         dark: user.shiki?.themes?.dark ?? DEFAULT_SHIKI.themes.dark,
