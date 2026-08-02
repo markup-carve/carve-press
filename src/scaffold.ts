@@ -150,7 +150,7 @@ export async function newPage(
   pagePath: string,
   opts: { title?: string } = {},
 ): Promise<NewPageResult> {
-  const config = resolveConfig(await loadConfig(root))
+  const config = resolveConfig(await loadConfig(root), root)
   const relPath = normalizePagePath(pagePath)
   const title = opts.title ?? titleCase(relPath.replace(/\.crv$/, '').split('/').at(-1) ?? 'Page')
   const path = resolve(root, config.srcDir, relPath)

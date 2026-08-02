@@ -113,6 +113,61 @@ describe('buildSite', () => {
     await expect(stat(resolve(noPlayground.outDir, 'assets/carve/index.js'))).rejects.toThrow()
   })
 
+  it('copies configured playground runtime assets beside the playground client', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-playground-assets-'))
+    const srcDir = resolve(root, 'docs')
+    const wasmDir = resolve(root, 'runtime/carve-wasm')
+    await mkdir(srcDir)
+    await mkdir(wasmDir, { recursive: true })
+    await writeFile(resolve(wasmDir, 'carve_wasm.js'), 'export default async function init() {}\n')
+    await writeFile(resolve(wasmDir, 'carve_wasm_bg.wasm'), 'wasm')
+    await writeFile(resolve(root, 'runtime/mermaid.min.js'), 'window.mermaid = {}\n')
+    await writeFile(resolve(root, 'runtime/chart.umd.js'), 'window.Chart = function Chart() {}\n')
+    await writeFile(
+      resolve(srcDir, 'index.crv'),
+      ['---', 'title: Play', '---', '', '# Play', '', '::: playground', '```carve', '*bold*', '```', ':::'].join(
+        '\n',
+      ),
+    )
+
+    const { outDir } = await build(
+      {
+        base: '/docs/',
+        srcDir,
+        themeConfig: { sidebar: {} },
+        playground: {
+          wasmEngine: 'runtime/carve-wasm',
+          mermaid: 'runtime/mermaid.min.js',
+          chart: 'runtime/chart.umd.js',
+        },
+      },
+      root,
+    )
+
+    await expect(readFile(resolve(outDir, 'assets/playground/carve-wasm/carve_wasm.js'), 'utf8')).resolves.toContain(
+      'init',
+    )
+    await expect(readFile(resolve(outDir, 'assets/playground/carve-wasm/carve_wasm_bg.wasm'), 'utf8')).resolves.toBe(
+      'wasm',
+    )
+    await expect(readFile(resolve(outDir, 'assets/playground/mermaid.min.js'), 'utf8')).resolves.toContain(
+      'window.mermaid',
+    )
+    await expect(readFile(resolve(outDir, 'assets/playground/chart.umd.js'), 'utf8')).resolves.toContain(
+      'window.Chart',
+    )
+    const html = await readFile(resolve(outDir, 'index.html'), 'utf8')
+    expect(html).toContain('data-playground-wasm="/docs/assets/playground/carve-wasm/carve_wasm.js"')
+    expect(html).toContain('data-playground-mermaid="/docs/assets/playground/mermaid.min.js"')
+    expect(html).toContain('data-playground-chart="/docs/assets/playground/chart.umd.js"')
+
+    const unconfigured = await build({ srcDir, themeConfig: { sidebar: {} } }, root)
+    await expect(readdir(resolve(unconfigured.outDir, 'assets/playground'))).rejects.toThrow()
+    await expect(readFile(resolve(unconfigured.outDir, 'index.html'), 'utf8')).resolves.not.toContain(
+      'data-playground-wasm',
+    )
+  })
+
   it('does not emit search assets or chrome when search is disabled', async () => {
     const { outDir } = await build({ search: false })
     await expect(readFile(resolve(outDir, 'assets/search-index.json'), 'utf8')).rejects.toThrow()

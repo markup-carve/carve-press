@@ -1,3 +1,4 @@
+import { basename } from 'node:path'
 import {
   citations,
   codeCallouts,
@@ -20,10 +21,11 @@ import {
   type CarveExtension,
 } from '@markup-carve/carve'
 import type { CarvePressConfig } from '../config.js'
+import { withBase } from '../layout/shell.js'
 import { createShikiExtensionFromHighlighter, createShikiHighlighter, type ShikiOptions } from './shiki.js'
 import { compareExtension } from './compare.js'
 import { imageDefaultsExtension } from './images.js'
-import { playgroundExtension } from './playground.js'
+import { playgroundExtension, type PlaygroundAssetUrls } from './playground.js'
 import { tableScrollExtension } from './table-scroll.js'
 
 function presetExtensions(preset: CarvePressConfig['carve']['preset']): CarveExtension[] {
@@ -66,11 +68,27 @@ export async function buildExtensionStack(
   root = process.cwd(),
 ): Promise<CarveExtension[]> {
   const highlighter = await createShikiHighlighter(shiki)
+  const playgroundAssets: PlaygroundAssetUrls = {
+    ...(config.playground.wasmEngine === undefined
+      ? {}
+      : {
+          wasm: withBase(
+            config.base,
+            `/assets/playground/${basename(config.playground.wasmEngine)}/carve_wasm.js`,
+          ),
+        }),
+    ...(config.playground.mermaid === undefined
+      ? {}
+      : { mermaid: withBase(config.base, `/assets/playground/${basename(config.playground.mermaid)}`) }),
+    ...(config.playground.chart === undefined
+      ? {}
+      : { chart: withBase(config.base, `/assets/playground/${basename(config.playground.chart)}`) }),
+  }
   return [
     createShikiExtensionFromHighlighter(highlighter),
     tableScrollExtension(),
     compareExtension(),
-    playgroundExtension(),
+    playgroundExtension(playgroundAssets),
     codeGroup({ highlighter }),
     headingPermalinks(),
     imageDefaultsExtension({ root, publicDir: config.publicDir }),

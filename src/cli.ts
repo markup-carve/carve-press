@@ -79,7 +79,7 @@ async function commandBuild(root: string): Promise<void> {
 }
 
 async function commandRoutes(root: string): Promise<void> {
-  const config = resolveConfig(await loadConfig(root))
+  const config = resolveConfig(await loadConfig(root), root)
   const pages = await discoverPages(resolve(root, config.srcDir), config.srcExclude)
   const width = Math.max(...pages.map((p) => p.route.length), 5)
   console.log(`${'ROUTE'.padEnd(width)}  SOURCE`)
@@ -108,7 +108,7 @@ async function waitForExit(close: () => Promise<void>): Promise<void> {
 }
 
 async function commandServe(root: string, argv: string[]): Promise<void> {
-  const config = resolveConfig(await loadConfig(root))
+  const config = resolveConfig(await loadConfig(root), root)
   const outDir = resolve(root, config.outDir)
   const running = await startStaticServer({
     outDir,

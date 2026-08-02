@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { copyFile, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
-import { dirname, relative, resolve, sep } from 'node:path'
+import { basename, dirname, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import {
@@ -9,6 +9,7 @@ import {
   type CarvePressConfig,
   type HeadTag,
   type LocaleConfig,
+  type PlaygroundConfig,
   type SidebarConfigGroup,
   type SidebarGroup,
   type SidebarItem,
@@ -439,11 +440,27 @@ async function writeNavScript(outDir: string): Promise<void> {
   await copyFile(defaultNavScriptPath, outPath)
 }
 
-async function writePlaygroundAssets(outDir: string): Promise<void> {
+async function copyConfiguredPlaygroundAssets(outDir: string, playground: PlaygroundConfig): Promise<void> {
+  const playgroundDir = resolve(outDir, 'assets/playground')
+  if (playground.wasmEngine !== undefined) {
+    await copyDirectoryContents(playground.wasmEngine, resolve(playgroundDir, basename(playground.wasmEngine)))
+  }
+  if (playground.mermaid !== undefined) {
+    await mkdir(playgroundDir, { recursive: true })
+    await copyFile(playground.mermaid, resolve(playgroundDir, basename(playground.mermaid)))
+  }
+  if (playground.chart !== undefined) {
+    await mkdir(playgroundDir, { recursive: true })
+    await copyFile(playground.chart, resolve(playgroundDir, basename(playground.chart)))
+  }
+}
+
+async function writePlaygroundAssets(outDir: string, playground: PlaygroundConfig): Promise<void> {
   const scriptPath = resolve(outDir, 'assets/playground.js')
   await mkdir(dirname(scriptPath), { recursive: true })
   await copyFile(defaultPlaygroundScriptPath, scriptPath)
   await copyDirectoryContents(carveEngineDistPath, resolve(outDir, 'assets/carve'))
+  await copyConfiguredPlaygroundAssets(outDir, playground)
 }
 
 async function collectGitUpdatedTimes(root: string, srcDir: string): Promise<Map<string, Date>> {
@@ -513,7 +530,7 @@ export async function buildSite(opts: {
   config: UserConfig
   shiki?: ShikiOptions
 }): Promise<BuildResult> {
-  const config = resolveConfig(opts.config)
+  const config = resolveConfig(opts.config, opts.root)
   const bus = new BuildEventBus()
   for (const extension of config.extensions) extension.setup(bus)
 
@@ -586,7 +603,7 @@ export async function buildSite(opts: {
   // The 404 page is written outside the normal loop but gets the same layout,
   // so a playground that only appears there still needs the runtime shipped.
   if ([...rendered, notFoundRendered].some((result) => result.html.includes('<carve-playground'))) {
-    await writePlaygroundAssets(outDir)
+    await writePlaygroundAssets(outDir, config.playground)
   }
 
   const expandedConfig: CarvePressConfig = {

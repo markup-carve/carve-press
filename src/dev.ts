@@ -29,7 +29,7 @@ export function createDevRebuilder(root: string, onSuccess?: () => void): DevReb
         const userConfig = await loadConfig(root, { bustCache: true })
         const started = Date.now()
         const result = await buildSite({ root, config: userConfig })
-        const config = resolveConfig(userConfig)
+        const config = resolveConfig(userConfig, root)
         console.log(
           `carve-press: rebuilt ${result.routes.length} page(s) into ${result.outDir} in ${
             Date.now() - started
