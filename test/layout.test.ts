@@ -149,6 +149,21 @@ describe('docLayout', () => {
     )
   })
 
+  it('renders the search control and client script', () => {
+    const html = docLayout({ config, rendered, sidebar: [] })
+    expect(html).toContain('class="site-search"')
+    expect(html).toContain('data-search-index="/carve/assets/search-index.json"')
+    expect(html).toContain('<label class="site-search__label" for="site-search-input">Search</label>')
+    expect(html).toContain('<script src="/carve/assets/search.js" defer></script>')
+  })
+
+  it('omits search chrome when search is disabled', () => {
+    const withoutSearch = resolveConfig({ title: 'Carve', search: false })
+    const html = docLayout({ config: withoutSearch, rendered, sidebar: [] })
+    expect(html).not.toContain('class="site-search"')
+    expect(html).not.toContain('/assets/search.js')
+  })
+
   it('omits optional site chrome sections when they are not configured', () => {
     const bare = resolveConfig({ title: 'Carve' })
     const html = docLayout({ config: bare, rendered, sidebar: [] })

@@ -50,6 +50,22 @@ describe('buildSite', () => {
     expect(actual).toBe(expected)
   })
 
+  it('writes the shipped search client script', async () => {
+    const { outDir } = await build()
+    const actual = await readFile(resolve(outDir, 'assets/search.js'), 'utf8')
+    const expected = await readFile(resolve(import.meta.dirname, '../theme/search.js'), 'utf8')
+    expect(actual).toBe(expected)
+  })
+
+  it('does not emit search assets or chrome when search is disabled', async () => {
+    const { outDir } = await build({ search: false })
+    await expect(readFile(resolve(outDir, 'assets/search-index.json'), 'utf8')).rejects.toThrow()
+    await expect(readFile(resolve(outDir, 'assets/search.js'), 'utf8')).rejects.toThrow()
+    const html = await readFile(resolve(outDir, 'start/index.html'), 'utf8')
+    expect(html).not.toContain('class="site-search"')
+    expect(html).not.toContain('/assets/search.js')
+  })
+
   it('lets a configured stylesheet replace the shipped theme', async () => {
     const root = await mkdtemp(resolve(tmpdir(), 'cp-theme-'))
     await writeFile(resolve(root, 'theme.css'), 'body { color: rebeccapurple; }\n')

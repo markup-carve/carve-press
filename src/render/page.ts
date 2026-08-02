@@ -9,6 +9,13 @@ export interface SearchDoc {
   route: string
   title: string
   headings: string[]
+  sections: SearchSection[]
+  text: string
+}
+
+export interface SearchSection {
+  heading: string
+  slug: string
   text: string
 }
 
@@ -29,6 +36,7 @@ interface AnyNode {
   type: string
   level?: number
   value?: string
+  attrs?: { id?: string }
   children?: AnyNode[]
 }
 
@@ -67,6 +75,60 @@ function firstH1(ast: Document): string | undefined {
     if (found !== undefined) return found
   }
   return undefined
+}
+
+function textOf(node: AnyNode): string {
+  const parts: string[] = []
+  searchText(node, parts)
+  return parts.join('').trim()
+}
+
+function normalizeSearchParts(parts: string[]): string {
+  return parts.join(' ').replace(/\s+/g, ' ').replace(/\s+([.,;:!?])/g, '$1').trim()
+}
+
+function sectionText(node: AnyNode, out: string[]): void {
+  if (node.type === 'heading') return
+  searchText(node, out)
+}
+
+function normalizedText(nodes: AnyNode[]): string {
+  const parts: string[] = []
+  for (const node of nodes) sectionText(node, parts)
+  return normalizeSearchParts(parts)
+}
+
+function searchSections(ast: Document, outline: OutlineEntry[]): SearchSection[] {
+  const outlineKeys = new Set(outline.map((entry) => `${entry.level}\0${entry.slug}`))
+  const sections: SearchSection[] = []
+  const children = (ast as unknown as AnyNode).children ?? []
+
+  for (let i = 0; i < children.length; i += 1) {
+    const node = children[i]
+    if (node === undefined || node.type !== 'heading' || node.level === undefined) continue
+    const slug = node.attrs?.id
+    if (slug === undefined || !outlineKeys.has(`${node.level}\0${slug}`)) continue
+
+    const body: AnyNode[] = []
+    for (let j = i + 1; j < children.length; j += 1) {
+      const next = children[j]
+      if (
+        next === undefined ||
+        (next.type === 'heading' && next.level !== undefined && next.level <= node.level)
+      ) {
+        break
+      }
+      body.push(next)
+    }
+
+    sections.push({
+      heading: textOf(node),
+      slug,
+      text: normalizedText(body),
+    })
+  }
+
+  return sections
 }
 
 export function renderPage(page: Page, ctx: RenderContext): RenderedPage {
@@ -115,7 +177,8 @@ export function renderPage(page: Page, ctx: RenderContext): RenderedPage {
       route: page.route,
       title,
       headings: outline.map((o) => o.title),
-      text: parts.join(' ').replace(/\s+/g, ' ').trim(),
+      sections: searchSections(ast, outline),
+      text: normalizeSearchParts(parts),
     },
   }
 }

@@ -16,6 +16,7 @@ import { BuildError } from './errors.js'
 
 const require = createRequire(import.meta.url)
 const defaultThemePath = require.resolve('../theme/default.css')
+const defaultSearchScriptPath = require.resolve('../theme/search.js')
 
 export interface BuildResult {
   rendered: RenderedPage[]
@@ -80,6 +81,12 @@ async function writeThemeCss(opts: { root: string; outDir: string; css?: string 
   await writeFile(outPath, css, 'utf8')
 }
 
+async function writeSearchScript(outDir: string): Promise<void> {
+  const outPath = resolve(outDir, 'assets/search.js')
+  await mkdir(dirname(outPath), { recursive: true })
+  await copyFile(defaultSearchScriptPath, outPath)
+}
+
 /** Load `carve-press.config.{ts,js,mjs}` from a project root. */
 export async function loadConfig(root: string): Promise<UserConfig> {
   for (const name of ['carve-press.config.ts', 'carve-press.config.js', 'carve-press.config.mjs']) {
@@ -113,6 +120,7 @@ export async function buildSite(opts: {
     await copyDirectoryContents(publicDir, outDir)
   }
   await writeThemeCss({ root: opts.root, outDir, css: config.theme.css })
+  if (config.search !== false) await writeSearchScript(outDir)
 
   const discovered = await discoverPages(srcDir, config.srcExclude)
   const { pages } = await bus.emit('contentDiscovered', { pages: discovered })

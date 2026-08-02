@@ -69,6 +69,13 @@ function themeToggleHtml(): string {
   return `<button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark theme"><span aria-hidden="true">Theme</span></button>`
 }
 
+function searchHtml(ctx: LayoutContext): string {
+  if (ctx.config.search === false) return ''
+  return `<div class="site-search" data-search-root data-search-index="${escapeAttr(
+    withBase(ctx.config.base, `/assets/${ctx.config.search.filename}`),
+  )}" hidden><label class="site-search__label" for="site-search-input">Search</label><input class="site-search__input" id="site-search-input" type="search" placeholder="Search" autocomplete="off" spellcheck="false" data-search-input><div class="site-search__status" aria-live="polite" data-search-status></div><div class="site-search__panel" data-search-panel hidden><ul class="site-search__results" data-search-results></ul></div></div>`
+}
+
 function headerHtml(ctx: LayoutContext): string {
   return `<header class="site-header"><a class="site-title" href="${escapeAttr(
     withBase(ctx.config.base, '/'),
@@ -76,7 +83,7 @@ function headerHtml(ctx: LayoutContext): string {
     ctx.config.themeConfig.nav,
     ctx.config.base,
     ctx.rendered.page.route,
-  )}${socialLinksHtml(ctx.config.themeConfig.socialLinks)}${themeToggleHtml()}</div></header>`
+  )}${searchHtml(ctx)}${socialLinksHtml(ctx.config.themeConfig.socialLinks)}${themeToggleHtml()}</div></header>`
 }
 
 function sidebarHtml(groups: SidebarGroup[], base: string, current: string): string {
@@ -138,6 +145,12 @@ function themeToggleScript(): string {
   return `    <script>(()=>{const b=document.querySelector('[data-theme-toggle]');if(!b)return;const d=document.documentElement,k='carve-press-theme',m=matchMedia('(prefers-color-scheme: dark)'),p=()=>m.matches?'dark':'light',c=()=>d.dataset.theme||p(),u=()=>{const n=c()==='dark'?'light':'dark';b.setAttribute('aria-label','Switch to '+n+' theme');b.dataset.themeToggleState=c()};u();b.addEventListener('click',()=>{const n=c()==='dark'?'light':'dark';d.dataset.theme=n;try{localStorage.setItem(k,n)}catch{}u()});m.addEventListener('change',()=>{try{if(localStorage.getItem(k))return}catch{}u()})})()</script>`
 }
 
+function searchScript(ctx: LayoutContext): string {
+  return ctx.config.search === false
+    ? ''
+    : `\n    <script src="${escapeAttr(withBase(ctx.config.base, '/assets/search.js'))}" defer></script>`
+}
+
 function editLink(ctx: LayoutContext): string {
   const edit = ctx.config.themeConfig.editLink
   if (edit === undefined) return ''
@@ -163,7 +176,7 @@ ${ctx.rendered.html}
       ${outlineHtml(ctx)}
     </div>
     ${siteFooter(ctx)}
-${themeToggleScript()}`
+${themeToggleScript()}${searchScript(ctx)}`
 
   return htmlDocument({
     lang: 'en-US',

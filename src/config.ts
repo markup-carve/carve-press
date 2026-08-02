@@ -1,6 +1,7 @@
 import type { CarveExtension } from '@markup-carve/carve'
 import { BuildError } from './errors.js'
 import type { BuildEventBus } from './events.js'
+import { searchIndex, type SearchIndexOptions } from './extensions/search-index.js'
 
 export type HeadTag = [tag: string, attrs: Record<string, string>]
 
@@ -52,6 +53,8 @@ export interface ThemeAssetsConfig {
   css?: string
 }
 
+export type SearchConfig = false | Required<SearchIndexOptions>
+
 export interface CarvePressConfig {
   title: string
   description?: string
@@ -67,15 +70,19 @@ export interface CarvePressConfig {
   themeConfig: ThemeConfig
   carve: { extensions: CarveExtension[]; profile?: string }
   shiki: ShikiConfig
+  search: SearchConfig
   extensions: SiteExtension[]
 }
 
-export type UserConfig = Partial<Omit<CarvePressConfig, 'title' | 'theme' | 'themeConfig' | 'carve' | 'shiki'>> & {
+export type UserConfig = Partial<
+  Omit<CarvePressConfig, 'title' | 'theme' | 'themeConfig' | 'carve' | 'shiki' | 'search'>
+> & {
   title: string
   theme?: Partial<ThemeAssetsConfig>
   themeConfig?: Partial<ThemeConfig>
   carve?: Partial<CarvePressConfig['carve']>
   shiki?: Partial<Omit<ShikiConfig, 'themes'>> & { themes?: Partial<ShikiConfig['themes']> }
+  search?: false | SearchIndexOptions
 }
 
 const DEFAULT_SHIKI: ShikiConfig = {
@@ -120,6 +127,13 @@ export function resolveConfig(user: UserConfig): CarvePressConfig {
   if (!user || typeof user.title !== 'string' || user.title === '') {
     throw new BuildError('config: title is required')
   }
+  const search: SearchConfig =
+    user.search === false
+      ? false
+      : {
+          filename: user.search?.filename ?? 'search-index.json',
+          exclude: user.search?.exclude ?? [],
+        }
   return {
     title: user.title,
     description: user.description,
@@ -151,6 +165,7 @@ export function resolveConfig(user: UserConfig): CarvePressConfig {
         dark: user.shiki?.themes?.dark ?? DEFAULT_SHIKI.themes.dark,
       },
     },
-    extensions: user.extensions ?? [],
+    search,
+    extensions: [...(search === false ? [] : [searchIndex(search)]), ...(user.extensions ?? [])],
   }
 }

@@ -38,6 +38,13 @@ describe('resolveConfig', () => {
       'xml',
     ])
     expect(c.shiki.themes).toEqual({ light: 'github-light', dark: 'github-dark' })
+    expect(c.search).toEqual({ filename: 'search-index.json', exclude: [] })
+    expect(c.extensions.map((extension) => extension.name)).toEqual(['search-index'])
+  })
+
+  it('can disable the default search extension', () => {
+    const c = resolveConfig({ title: 'Carve', search: false })
+    expect(c.search).toBe(false)
     expect(c.extensions).toEqual([])
   })
 
