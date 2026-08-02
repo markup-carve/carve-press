@@ -2,6 +2,7 @@ import { codeGroup, headingPermalinks, type CarveExtension } from '@markup-carve
 import type { CarvePressConfig } from '../config.js'
 import { createShikiExtensionFromHighlighter, createShikiHighlighter, type ShikiOptions } from './shiki.js'
 import { compareExtension } from './compare.js'
+import { playgroundExtension } from './playground.js'
 
 /**
  * The render stack. Built-ins come first so a user extension appended from
@@ -15,6 +16,7 @@ export async function buildExtensionStack(
   return [
     createShikiExtensionFromHighlighter(highlighter),
     compareExtension(),
+    playgroundExtension(),
     codeGroup({ highlighter }),
     headingPermalinks(),
     ...config.carve.extensions,

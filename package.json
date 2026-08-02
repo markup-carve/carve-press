@@ -19,6 +19,7 @@
   "files": [
     "dist",
     "theme/default.css",
+    "theme/playground.js",
     "theme/search.js",
     "README.md",
     "LICENSE"

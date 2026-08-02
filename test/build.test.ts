@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { buildSite, loadConfig } from '../src/build.js'
@@ -55,6 +55,28 @@ describe('buildSite', () => {
     const actual = await readFile(resolve(outDir, 'assets/search.js'), 'utf8')
     const expected = await readFile(resolve(import.meta.dirname, '../theme/search.js'), 'utf8')
     expect(actual).toBe(expected)
+  })
+
+  it('writes playground assets only when a page contains a playground', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-playground-'))
+    const srcDir = resolve(root, 'docs')
+    await mkdir(srcDir)
+    await writeFile(
+      resolve(srcDir, 'index.crv'),
+      ['---', 'title: Play', '---', '', '# Play', '', '::: playground', '```carve', '*bold*', '```', ':::'].join(
+        '\n',
+      ),
+    )
+
+    const { outDir } = await build({ srcDir, themeConfig: { sidebar: {} } }, root)
+    const script = await readFile(resolve(outDir, 'assets/playground.js'), 'utf8')
+    expect(script).toBe(await readFile(resolve(import.meta.dirname, '../theme/playground.js'), 'utf8'))
+    await expect(stat(resolve(outDir, 'assets/carve/index.js'))).resolves.toMatchObject({ size: expect.any(Number) })
+    await expect(readFile(resolve(outDir, 'index.html'), 'utf8')).resolves.toContain('/assets/playground.js')
+
+    const noPlayground = await build()
+    await expect(readFile(resolve(noPlayground.outDir, 'assets/playground.js'), 'utf8')).rejects.toThrow()
+    await expect(stat(resolve(noPlayground.outDir, 'assets/carve/index.js'))).rejects.toThrow()
   })
 
   it('does not emit search assets or chrome when search is disabled', async () => {

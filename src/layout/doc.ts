@@ -206,6 +206,12 @@ function searchScript(ctx: LayoutContext): string {
     : `\n    <script src="${escapeAttr(withBase(ctx.config.base, '/assets/search.js'))}" defer></script>`
 }
 
+function playgroundScript(ctx: LayoutContext): string {
+  return ctx.rendered.html.includes('<carve-playground')
+    ? `\n    <script src="${escapeAttr(withBase(ctx.config.base, '/assets/playground.js'))}" type="module"></script>`
+    : ''
+}
+
 function editLink(ctx: LayoutContext): string {
   const edit = ctx.config.themeConfig.editLink
   if (edit === undefined) return ''
@@ -225,7 +231,7 @@ ${ctx.rendered.html}
       ${outlineHtml(ctx)}
     </div>
     ${siteFooter(ctx)}
-${themeToggleScript()}${searchScript(ctx)}`
+${themeToggleScript()}${searchScript(ctx)}${playgroundScript(ctx)}`
 
   return htmlDocument({
     lang: 'en-US',
@@ -307,7 +313,7 @@ export const homeLayout: Layout = (ctx) => {
       ${renderedBody}
     </main>
     ${siteFooter(ctx)}
-${themeToggleScript()}${searchScript(ctx)}`
+${themeToggleScript()}${searchScript(ctx)}${playgroundScript(ctx)}`
 
   return htmlDocument({
     lang: 'en-US',

@@ -164,6 +164,16 @@ describe('docLayout', () => {
     expect(html).not.toContain('/assets/search.js')
   })
 
+  it('loads the playground client only for pages with a playground', () => {
+    const html = docLayout({
+      config,
+      rendered: { ...rendered, html: '<carve-playground></carve-playground>' } as RenderedPage,
+      sidebar: [],
+    })
+    expect(html).toContain('<script src="/carve/assets/playground.js" type="module"></script>')
+    expect(docLayout({ config, rendered, sidebar: [] })).not.toContain('/assets/playground.js')
+  })
+
   it('omits optional site chrome sections when they are not configured', () => {
     const bare = resolveConfig({ title: 'Carve' })
     const html = docLayout({ config: bare, rendered, sidebar: [] })

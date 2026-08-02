@@ -17,6 +17,9 @@ import { BuildError } from './errors.js'
 const require = createRequire(import.meta.url)
 const defaultThemePath = require.resolve('../theme/default.css')
 const defaultSearchScriptPath = require.resolve('../theme/search.js')
+const defaultPlaygroundScriptPath = require.resolve('../theme/playground.js')
+const carveGrammarPath = require.resolve('@markup-carve/carve-grammars/textmate/carve.tmLanguage.json')
+const carveEngineDistPath = resolve(dirname(carveGrammarPath), '../../carve/dist')
 
 export interface BuildResult {
   rendered: RenderedPage[]
@@ -87,6 +90,13 @@ async function writeSearchScript(outDir: string): Promise<void> {
   await copyFile(defaultSearchScriptPath, outPath)
 }
 
+async function writePlaygroundAssets(outDir: string): Promise<void> {
+  const scriptPath = resolve(outDir, 'assets/playground.js')
+  await mkdir(dirname(scriptPath), { recursive: true })
+  await copyFile(defaultPlaygroundScriptPath, scriptPath)
+  await copyDirectoryContents(carveEngineDistPath, resolve(outDir, 'assets/carve'))
+}
+
 /** Load `carve-press.config.{ts,js,mjs}` from a project root. */
 export async function loadConfig(root: string): Promise<UserConfig> {
   for (const name of ['carve-press.config.ts', 'carve-press.config.js', 'carve-press.config.mjs']) {
@@ -138,6 +148,10 @@ export async function buildSite(opts: {
     })
     const after = await bus.emit('pageRendered', { rendered: result, html: result.html })
     rendered.push({ ...result, html: after.html })
+  }
+
+  if (rendered.some((result) => result.html.includes('<carve-playground'))) {
+    await writePlaygroundAssets(outDir)
   }
 
   validateNav(config.themeConfig, routes)
