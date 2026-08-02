@@ -21,6 +21,7 @@
     "theme/default.css",
     "theme/code-copy.js",
     "theme/playground.js",
+    "theme/nav.js",
     "theme/table-scroll.js",
     "theme/outline.js",
     "theme/search.js",

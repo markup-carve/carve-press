@@ -3,6 +3,7 @@ import type { LanguageRegistration } from '@shikijs/types'
 import { BuildError } from './errors.js'
 import type { BuildEventBus } from './events.js'
 import { searchIndex, type SearchIndexOptions } from './extensions/search-index.js'
+import type { Layout } from './layout/doc.js'
 
 export type HeadTag = [tag: string, attrs: Record<string, string>]
 
@@ -25,15 +26,19 @@ export interface SidebarGroup {
 }
 
 export interface SocialLink {
-  icon: string
+  icon: string | { svg: string }
   link: string
 }
+
+export type ThemeLogo = string | { light: string; dark: string; alt?: string }
 
 export interface ThemeConfig {
   nav: NavItem[]
   /** Path-keyed: the longest matching key prefix wins for a given route. */
   sidebar: Record<string, SidebarGroup[]>
   socialLinks: SocialLink[]
+  logo?: ThemeLogo
+  siteTitle?: string | false
   editLink?: { pattern: string; text: string }
   footer?: { message: string; copyright: string }
   lastUpdated?: boolean
@@ -85,6 +90,7 @@ export interface CarvePressConfig {
   shiki: ShikiConfig
   search: SearchConfig
   extensions: SiteExtension[]
+  layouts: Record<string, Layout>
 }
 
 export type UserConfig = Partial<
@@ -96,6 +102,7 @@ export type UserConfig = Partial<
   carve?: { extensions?: CarveExtension[]; profile?: string | Profile }
   shiki?: Partial<Omit<ShikiConfig, 'themes'>> & { themes?: Partial<ShikiConfig['themes']> }
   search?: false | SearchIndexOptions
+  layouts?: Record<string, Layout>
 }
 
 const DEFAULT_SHIKI: ShikiConfig = {
@@ -202,6 +209,8 @@ export function resolveConfig(user: UserConfig): CarvePressConfig {
       nav: user.themeConfig?.nav ?? [],
       sidebar: user.themeConfig?.sidebar ?? {},
       socialLinks: user.themeConfig?.socialLinks ?? [],
+      logo: user.themeConfig?.logo,
+      siteTitle: user.themeConfig?.siteTitle,
       editLink: user.themeConfig?.editLink,
       footer: user.themeConfig?.footer,
       lastUpdated: user.themeConfig?.lastUpdated,
@@ -224,5 +233,6 @@ export function resolveConfig(user: UserConfig): CarvePressConfig {
     },
     search,
     extensions: [...(search === false ? [] : [searchIndex(search)]), ...(user.extensions ?? [])],
+    layouts: user.layouts ?? {},
   }
 }

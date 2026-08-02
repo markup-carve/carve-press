@@ -47,6 +47,7 @@ describe('resolveConfig', () => {
     expect(c.shiki.themes).toEqual({ light: 'github-light', dark: 'github-dark' })
     expect(c.search).toEqual({ filename: 'search-index.json', exclude: [] })
     expect(c.extensions.map((extension) => extension.name)).toEqual(['search-index'])
+    expect(c.layouts).toEqual({})
   })
 
   it('can disable the default search extension', () => {

@@ -84,6 +84,13 @@ describe('buildSite', () => {
     expect(actual).toBe(expected)
   })
 
+  it('writes the shipped mobile navigation client script', async () => {
+    const { outDir } = await build()
+    const actual = await readFile(resolve(outDir, 'assets/nav.js'), 'utf8')
+    const expected = await readFile(resolve(import.meta.dirname, '../theme/nav.js'), 'utf8')
+    expect(actual).toBe(expected)
+  })
+
   it('writes playground assets only when a page contains a playground', async () => {
     const root = await mkdtemp(resolve(tmpdir(), 'cp-playground-'))
     const srcDir = resolve(root, 'docs')
@@ -266,6 +273,54 @@ describe('buildSite', () => {
     expect(html).toContain('<span class="page-nav__title">Home</span>')
     expect(html).toContain('<a class="page-nav__next" rel="next" href="/guide/">')
     expect(html).toContain('<span class="page-nav__title">Guide</span>')
+  })
+
+  it('uses the built-in page layout without sidebar or outline', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-page-layout-'))
+    const srcDir = resolve(root, 'docs')
+    await mkdir(srcDir)
+    await writeFile(
+      resolve(srcDir, 'index.crv'),
+      ['---', 'title: Plain', 'layout: page', '---', '', '# Plain'].join('\n'),
+    )
+
+    const { outDir } = await build({ srcDir, themeConfig: { sidebar: {} } }, root)
+    const html = await readFile(resolve(outDir, 'index.html'), 'utf8')
+    expect(html).toContain('<main class="page-layout content">')
+    expect(html).not.toContain('class="sidebar"')
+    expect(html).not.toContain('class="outline"')
+  })
+
+  it('lets user layouts replace built-ins', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-custom-layout-'))
+    const srcDir = resolve(root, 'docs')
+    await mkdir(srcDir)
+    await writeFile(resolve(srcDir, 'index.crv'), ['---', 'title: Custom', '---', '', '# Custom'].join('\n'))
+
+    const { outDir } = await build(
+      {
+        srcDir,
+        themeConfig: { sidebar: {} },
+        layouts: {
+          doc: ({ rendered }: { rendered: { html: string } }) => `<!doctype html><main>${rendered.html}</main>`,
+        },
+      },
+      root,
+    )
+    const html = await readFile(resolve(outDir, 'index.html'), 'utf8')
+    expect(html).toContain('<!doctype html><main><section id="Custom">')
+    expect(html).not.toContain('class="site-header"')
+  })
+
+  it('fails on an unknown frontmatter layout and lists known layouts', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-unknown-layout-'))
+    const srcDir = resolve(root, 'docs')
+    await mkdir(srcDir)
+    await writeFile(resolve(srcDir, 'index.crv'), ['---', 'title: Custom', 'layout: missing', '---', '', '# Custom'].join('\n'))
+
+    await expect(build({ srcDir, themeConfig: { sidebar: {} } }, root)).rejects.toThrow(
+      /unknown layout "missing" \(known layouts: doc, home, page\)/,
+    )
   })
 
   it('omits unavailable prev/next links and omits the block for pages outside the sidebar', async () => {

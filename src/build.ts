@@ -11,10 +11,10 @@ import { buildExtensionStack } from './render/extensions.js'
 import type { ShikiOptions } from './render/shiki.js'
 import { renderPage, type RenderedPage } from './render/page.js'
 import { resolveSidebar, resolvePrevNext } from './nav.js'
-import { LAYOUTS, docLayout } from './layout/doc.js'
+import { LAYOUTS } from './layout/doc.js'
 import { validateLinks, validateNav, validateCrossrefs } from './validate.js'
 import { BuildEventBus } from './events.js'
-import { BuildError } from './errors.js'
+import { BuildError, SourceError } from './errors.js'
 
 const require = createRequire(import.meta.url)
 const execFileAsync = promisify(execFile)
@@ -25,6 +25,7 @@ const defaultPlaygroundScriptPath = require.resolve('../theme/playground.js')
 const defaultTableScrollScriptPath = require.resolve('../theme/table-scroll.js')
 const defaultCodeCopyScriptPath = require.resolve('../theme/code-copy.js')
 const defaultOutlineScriptPath = require.resolve('../theme/outline.js')
+const defaultNavScriptPath = require.resolve('../theme/nav.js')
 const carveGrammarPath = require.resolve('@markup-carve/carve-grammars/textmate/carve.tmLanguage.json')
 const carveEngineDistPath = resolve(dirname(carveGrammarPath), '../../carve/dist')
 
@@ -166,6 +167,12 @@ async function writeOutlineScript(outDir: string): Promise<void> {
   await copyFile(defaultOutlineScriptPath, outPath)
 }
 
+async function writeNavScript(outDir: string): Promise<void> {
+  const outPath = resolve(outDir, 'assets/nav.js')
+  await mkdir(dirname(outPath), { recursive: true })
+  await copyFile(defaultNavScriptPath, outPath)
+}
+
 async function writePlaygroundAssets(outDir: string): Promise<void> {
   const scriptPath = resolve(outDir, 'assets/playground.js')
   await mkdir(dirname(scriptPath), { recursive: true })
@@ -262,6 +269,7 @@ export async function buildSite(opts: {
   await writeTableScrollScript(outDir)
   await writeCodeCopyScript(outDir)
   await writeOutlineScript(outDir)
+  await writeNavScript(outDir)
 
   const discovered = await discoverPages(srcDir, config.srcExclude)
   const discoveredContent = await bus.emit('contentDiscovered', { pages: discovered })
@@ -310,12 +318,27 @@ export async function buildSite(opts: {
   validateLinks(rendered, routes, config.ignoreDeadLinks, config.base)
   validateLinks([notFoundRendered], routes, config.ignoreDeadLinks, config.base)
 
+  const layouts = { ...LAYOUTS, ...config.layouts }
+  const knownLayoutNames = Object.keys(layouts).sort().join(', ')
+  const selectLayout = (result: RenderedPage) => {
+    const layoutName =
+      typeof result.page.frontmatter.layout === 'string' ? result.page.frontmatter.layout : 'doc'
+    const layout = layouts[layoutName]
+    if (layout === undefined) {
+      throw new SourceError(
+        result.page.relPath,
+        1,
+        1,
+        `unknown layout "${layoutName}" (known layouts: ${knownLayoutNames})`,
+      )
+    }
+    return layout
+  }
+
   for (const result of rendered) {
     const sidebar = resolveSidebar(result.page.route, config.themeConfig.sidebar)
     const { prev, next } = resolvePrevNext(result.page.route, sidebar)
-    const layoutName =
-      typeof result.page.frontmatter.layout === 'string' ? result.page.frontmatter.layout : 'doc'
-    const layout = LAYOUTS[layoutName] ?? docLayout
+    const layout = selectLayout(result)
     const html = layout({
       config,
       rendered: result,
@@ -331,7 +354,7 @@ export async function buildSite(opts: {
     await bus.emit('pageWritten', { rendered: result, outPath })
   }
 
-  const notFoundHtml = docLayout({
+  const notFoundHtml = selectLayout(notFoundRendered)({
     config,
     rendered: notFoundRendered,
     sidebar: resolveSidebar(notFoundRendered.page.route, config.themeConfig.sidebar),

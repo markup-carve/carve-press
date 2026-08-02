@@ -2,7 +2,25 @@ export { defineConfig, resolveConfig } from './config.js'
 export { buildSite, loadConfig } from './build.js'
 export { resolveSidebar, flattenSidebar, resolvePrevNext } from './nav.js'
 export { BuildEventBus } from './events.js'
-export { docLayout, homeLayout, LAYOUTS, htmlDocument } from './layout/doc.js'
+export {
+  docLayout,
+  homeLayout,
+  pageLayout,
+  LAYOUTS,
+  htmlDocument,
+  headerHtml,
+  headerNavHtml,
+  socialLinkHtml,
+  socialLinksHtml,
+  sidebarHtml,
+  outlineHtml,
+  footerNav,
+  lastUpdatedHtml,
+  siteFooter,
+  pageDescription,
+  documentTitle,
+  editLink,
+} from './layout/doc.js'
 export { searchIndex } from './extensions/search-index.js'
 export { sitemap } from './extensions/sitemap.js'
 export { llmsTxt } from './extensions/llms-txt.js'
@@ -15,6 +33,7 @@ export type {
   SidebarGroup,
   SidebarItem,
   SocialLink,
+  ThemeLogo,
   SiteExtension,
   SearchConfig,
   ShikiConfig,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { htmlDocument, docLayout, homeLayout } from '../src/layout/doc.js'
+import { htmlDocument, docLayout, homeLayout, pageLayout } from '../src/layout/doc.js'
 import { resolveConfig } from '../src/config.js'
 import type { RenderedPage } from '../src/render/page.js'
 
@@ -81,11 +81,29 @@ describe('docLayout', () => {
       },
     })
     const html = docLayout({ config: withNav, rendered, sidebar: [] })
-    expect(html).toContain('<nav class="site-nav" aria-label="Primary">')
+    expect(html).toContain('<nav class="site-nav" id="site-nav-drawer" aria-label="Primary"')
     expect(html).toContain('<a class="site-nav__link" href="/carve/">Home</a>')
     expect(html).toContain(
       '<a class="site-nav__link" href="/carve/start" aria-current="page">Start</a>',
     )
+  })
+
+  it('renders mobile drawer controls for primary nav and sidebar', () => {
+    const withNav = resolveConfig({
+      title: 'Carve',
+      themeConfig: { nav: [{ text: 'Start', link: '/start' }] },
+    })
+    const html = docLayout({
+      config: withNav,
+      rendered,
+      sidebar: [{ text: 'Guide', items: [{ text: 'Start', link: '/start' }] }],
+    })
+    expect(html).toContain('data-drawer-toggle="sidebar"')
+    expect(html).toContain('aria-controls="site-sidebar-drawer"')
+    expect(html).toContain('data-drawer-toggle="nav"')
+    expect(html).toContain('aria-controls="site-nav-drawer"')
+    expect(html).toContain('data-drawer-scrim hidden')
+    expect(html).toContain('<script src="/assets/nav.js" defer></script>')
   })
 
   it('renders configured dropdown nav children', () => {
@@ -126,7 +144,91 @@ describe('docLayout', () => {
     const html = docLayout({ config: withSocial, rendered, sidebar: [] })
     expect(html).toContain('aria-label="github"')
     expect(html).toContain('<svg viewBox="0 0 16 16"')
-    expect(html).toContain('aria-label="mastodon"><span>mastodon</span></a>')
+    expect(html).toContain('aria-label="mastodon"><svg')
+  })
+
+  it('keeps text fallback for unknown social icons', () => {
+    const withSocial = resolveConfig({
+      title: 'Carve',
+      themeConfig: { socialLinks: [{ icon: 'forum', link: 'https://example.com/forum' }] },
+    })
+    const html = docLayout({ config: withSocial, rendered, sidebar: [] })
+    expect(html).toContain('aria-label="forum"><span>forum</span></a>')
+  })
+
+  it('renders safe custom social SVG and rejects unsafe custom SVG', () => {
+    const safe = resolveConfig({
+      title: 'Carve',
+      themeConfig: {
+        socialLinks: [
+          {
+            icon: { svg: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M0 0h16v16H0z"/></svg>' },
+            link: 'https://example.com/custom',
+          },
+        ],
+      },
+    })
+    expect(docLayout({ config: safe, rendered, sidebar: [] })).toContain(
+      'aria-label="https://example.com/custom"><svg',
+    )
+
+    const unsafe = resolveConfig({
+      title: 'Carve',
+      themeConfig: {
+        socialLinks: [
+          {
+            icon: {
+              svg: '<svg onclick="alert(1)"><script>alert(2)</script><a xlink:href="javascript:alert(3)">link</a><circle r="4"/></svg>',
+            },
+            link: 'https://example.com/unsafe',
+          },
+        ],
+      },
+    })
+    const page = docLayout({ config: unsafe, rendered, sidebar: [] })
+    // Scoped to the icon: the page has its own legitimate script tags.
+    const icon = /<div class="social-links">.*?<\/div>/s.exec(page)?.[0] ?? ''
+    // Sanitized, not pattern-matched: the handler, the script, and the
+    // javascript: URL are gone while the drawable shape survives.
+    expect(icon).not.toContain('onclick')
+    expect(icon).not.toContain('<script')
+    expect(icon).not.toContain('javascript:')
+    expect(icon).toContain('<circle')
+
+    const malformed = resolveConfig({
+      title: 'Carve',
+      themeConfig: {
+        socialLinks: [{ icon: { svg: 'not markup at all' }, link: 'https://example.com/broken' }],
+      },
+    })
+    expect(() => docLayout({ config: malformed, rendered, sidebar: [] })).toThrow(
+      /not a well-formed <svg>/,
+    )
+  })
+
+  it('renders base-aware logo variants and site title overrides', () => {
+    const withLogo = resolveConfig({
+      title: 'Carve',
+      base: '/docs/',
+      themeConfig: {
+        logo: { light: '/logo-light.svg', dark: '/logo-dark.svg', alt: 'Mark' },
+        siteTitle: 'Press',
+      },
+    })
+    const html = docLayout({ config: withLogo, rendered, sidebar: [] })
+    expect(html).toContain('src="/docs/logo-light.svg" alt="Mark"')
+    expect(html).toContain('src="/docs/logo-dark.svg" alt="Mark"')
+    expect(html).toContain('<span class="site-title__text">Press</span>')
+  })
+
+  it('can hide the site title next to the logo', () => {
+    const withLogoOnly = resolveConfig({
+      title: 'Carve',
+      themeConfig: { logo: '/logo.svg', siteTitle: false },
+    })
+    const html = docLayout({ config: withLogoOnly, rendered, sidebar: [] })
+    expect(html).toContain('class="site-logo site-logo--single"')
+    expect(html).not.toContain('site-title__text')
   })
 
   it('renders configured footer fields', () => {
@@ -362,5 +464,38 @@ describe('homeLayout', () => {
     const html = homeLayout({ config, rendered: homeRendered, sidebar: [] })
     expect(html).toContain('See &lt;details&gt;')
     expect(html).not.toContain('<p>See <details></p>')
+  })
+})
+
+describe('pageLayout', () => {
+  it('renders header, content, and footer without sidebar or outline', () => {
+    const config = resolveConfig({
+      title: 'Carve',
+      themeConfig: { footer: { message: 'MIT', copyright: 'Copyright' } },
+    })
+    const html = pageLayout({ config, rendered, sidebar: [] })
+    expect(html).toContain('<header class="site-header">')
+    expect(html).toContain('<main class="page-layout content">')
+    expect(html).toContain('<footer class="site-footer">')
+    expect(html).not.toContain('class="sidebar"')
+    expect(html).not.toContain('class="outline"')
+  })
+})
+
+describe('mobile drawer toggles', () => {
+  const sidebar = [{ text: 'Guide', items: [{ text: 'Start', link: '/start' }] }]
+
+  it('offers the sidebar toggle only on layouts that render the sidebar', () => {
+    const config = resolveConfig({ title: 'Carve' })
+
+    const doc = docLayout({ config, rendered, sidebar })
+    const page = pageLayout({ config, rendered, sidebar })
+    const home = homeLayout({ config, rendered, sidebar })
+
+    expect(doc).toContain('data-drawer-toggle="sidebar"')
+    expect(doc).toContain('id="site-sidebar-drawer"')
+    // A toggle whose target is not on the page is a button that does nothing.
+    expect(page).not.toContain('data-drawer-toggle="sidebar"')
+    expect(home).not.toContain('data-drawer-toggle="sidebar"')
   })
 })
