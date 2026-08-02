@@ -661,6 +661,40 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
 .content figure { margin: 1.5rem 0; }
 .content figcaption { font-size: 0.8rem; color: var(--ink-soft); margin-top: 0.5rem; }
 
+/* ------------------------------------------------- wide-block hover expand */
+
+/*
+ * A wide comparison table still overflows its column on a laptop. On hover or
+ * keyboard focus it lifts out over the outline gutter and takes the width its
+ * content actually needs, so the reader can see the whole thing without
+ * dragging a scrollbar.
+ *
+ * Width is not transitioned - animating it reflows the table and reads as jank.
+ * Only the lift is animated, and reduced-motion drops that too. The expansion
+ * itself still happens, because it is a legibility affordance, not decoration.
+ */
+.content table,
+.content .carve-compare {
+  transition: box-shadow 0.16s ease;
+}
+@media (min-width: 1181px) {
+  .content table:hover,
+  .content table:focus-within,
+  .content .carve-compare:hover,
+  .content .carve-compare:focus-within {
+    position: relative;
+    z-index: 5;
+    width: max-content;
+    max-width: calc(100vw - var(--sidebar-w) - 8rem);
+    background: var(--paper);
+    box-shadow: 0 2px 24px -6px rgb(0 0 0 / 18%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .content table,
+  .content .carve-compare { transition: none; }
+}
+
 /* -------------------------------------------------------------- admonition */
 
 .admonition {
