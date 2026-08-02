@@ -48,12 +48,16 @@ describe('resolveConfig', () => {
     expect(c.extensions).toEqual([])
   })
 
-  it('resolves user Shiki settings over defaults', () => {
+  it('resolves user Shiki themes over defaults and adds user languages to them', () => {
+    // A theme is a single choice, so the user's replaces the default. A language
+    // list is a set, and replacing it silently stripped highlighting from every
+    // default language the site never meant to drop.
     const c = resolveConfig({
       title: 'Carve',
-      shiki: { langs: ['carve', 'c'], themes: { dark: 'dracula' } },
+      shiki: { langs: ['c'], themes: { dark: 'dracula' } },
     })
-    expect(c.shiki.langs).toEqual(['carve', 'c'])
+    expect(c.shiki.langs).toContain('c')
+    expect(c.shiki.langs).toContain('carve')
     expect(c.shiki.themes).toEqual({ light: 'github-light', dark: 'dracula' })
   })
 
@@ -69,5 +73,24 @@ describe('resolveConfig', () => {
   it('rejects a config with no title', () => {
     // @ts-expect-error deliberately invalid at runtime
     expect(() => resolveConfig({})).toThrow(/title is required/)
+  })
+})
+
+describe('shiki languages', () => {
+  it('adds the user languages to the defaults rather than replacing them', () => {
+    // Replacing was the old behavior and it failed quietly: the build still
+    // succeeded and every fence in a default language silently lost its
+    // highlighting.
+    const config = resolveConfig({ title: 'T', shiki: { langs: ['textile'] } }, '/root')
+
+    expect(config.shiki.langs).toContain('textile')
+    expect(config.shiki.langs).toContain('carve')
+    expect(config.shiki.langs).toContain('html')
+  })
+
+  it('does not duplicate a language the defaults already cover', () => {
+    const config = resolveConfig({ title: 'T', shiki: { langs: ['html'] } }, '/root')
+
+    expect(config.shiki.langs.filter((lang) => lang === 'html')).toHaveLength(1)
   })
 })

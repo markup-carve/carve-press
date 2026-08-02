@@ -163,7 +163,10 @@ export function resolveConfig(user: UserConfig): CarvePressConfig {
       profile: user.carve?.profile,
     },
     shiki: {
-      langs: user.shiki?.langs ?? DEFAULT_SHIKI.langs,
+      // Additive, not a replacement. Naming one extra language should not cost a
+      // site every default it never asked to lose - and the failure is quiet:
+      // the build still succeeds, every fence just renders unhighlighted.
+      langs: [...new Set([...DEFAULT_SHIKI.langs, ...(user.shiki?.langs ?? [])])],
       themes: {
         light: user.shiki?.themes?.light ?? DEFAULT_SHIKI.themes.light,
         dark: user.shiki?.themes?.dark ?? DEFAULT_SHIKI.themes.dark,
