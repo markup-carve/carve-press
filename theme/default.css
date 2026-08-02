@@ -881,6 +881,36 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
 .carve-playground__editor:focus { outline: 2px solid var(--brass); outline-offset: -2px; }
 
 .carve-playground__output { background: var(--paper); }
+.carve-playground__engine {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.75rem 0;
+  color: var(--ink-soft);
+  font: 600 0.62rem/1.2 var(--body);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.carve-playground__engine-button {
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 0.22rem 0.5rem;
+  color: var(--ink-soft);
+  background: var(--paper-sunk);
+  font: inherit;
+  cursor: pointer;
+}
+.carve-playground__engine-button[aria-pressed="true"] { color: var(--verdigris); border-color: var(--verdigris); }
+.carve-playground__engine-button:disabled { opacity: 0.65; cursor: wait; }
+.carve-playground__engine-button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+.carve-playground__engine-status { min-width: 0; text-transform: none; letter-spacing: 0; }
+.carve-playground__engine-status[data-error="true"] { color: #b4472f; }
+.carve-playground__engine-note {
+  margin: 0 0 0.75rem;
+  color: var(--ink-soft);
+  font: 0.82rem/1.45 var(--body);
+}
+.carve-playground__engine-note:empty { display: none; }
 .carve-playground__radio { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .carve-playground__label {
   display: inline-block;
@@ -918,9 +948,9 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
 .carve-playground__copy:hover { color: var(--ink); }
 .carve-playground__copy:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
 .carve-playground__pane { position: relative; display: none; padding: 2.7rem 1.15rem 1.1rem; border-top: 1px solid var(--rule); }
-.carve-playground__radio:nth-of-type(1):checked ~ .carve-playground__pane:nth-of-type(1),
-.carve-playground__radio:nth-of-type(2):checked ~ .carve-playground__pane:nth-of-type(2),
-.carve-playground__radio:nth-of-type(3):checked ~ .carve-playground__pane:nth-of-type(3) { display: block; }
+.carve-playground__radio:nth-of-type(1):checked ~ .carve-playground__live,
+.carve-playground__radio:nth-of-type(2):checked ~ .carve-playground__pane--html,
+.carve-playground__radio:nth-of-type(3):checked ~ .carve-playground__pane--ast { display: block; }
 .carve-playground__pane > :first-child { margin-top: 0; }
 .carve-playground__pane > :last-child { margin-bottom: 0; }
 .carve-playground__rendered > :first-child { margin-top: 0; }

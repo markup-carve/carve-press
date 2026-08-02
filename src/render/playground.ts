@@ -6,12 +6,36 @@ interface CodeBlockNode {
   content: string
 }
 
+export interface PlaygroundAssetUrls {
+  wasm?: string
+  mermaid?: string
+  chart?: string
+}
+
 const FALLBACK_SAMPLE = ['/italic/', '*bold*', '_underline_', '~strike~', '=highlight='].join('\n')
 
 function withBaseClasses(attrs: Attrs | undefined, ...baseClasses: string[]): Attrs {
   const classes = [...baseClasses, ...(attrs?.classes ?? [])]
   const order = attrs?.order === undefined ? undefined : attrs.order.includes('.class') ? attrs.order : ['.class', ...attrs.order]
   return { ...attrs, classes, ...(order === undefined ? {} : { order }) }
+}
+
+function withPlaygroundAssets(attrs: Attrs | undefined, assets: PlaygroundAssetUrls): Attrs | undefined {
+  const entries: Array<[string, string | undefined]> = [
+    ['data-playground-wasm', assets.wasm],
+    ['data-playground-mermaid', assets.mermaid],
+    ['data-playground-chart', assets.chart],
+  ]
+  const configured = entries.filter((entry): entry is [string, string] => entry[1] !== undefined)
+  if (configured.length === 0) return attrs
+
+  const keyValues = { ...(attrs?.keyValues ?? {}) }
+  const order = [...(attrs?.order ?? [])]
+  for (const [key, value] of configured) {
+    keyValues[key] = value
+    if (!order.includes(key)) order.push(key)
+  }
+  return { ...attrs, keyValues, order }
 }
 
 function syntheticCarveBlock(content: string): CodeBlockNode {
@@ -22,7 +46,7 @@ function renderSourceTemplate(source: string, escapeHtml: (value: string) => str
   return `<template data-carve-playground-source>${escapeHtml(source)}</template>`
 }
 
-export function playgroundExtension(): CarveExtension {
+export function playgroundExtension(assets: PlaygroundAssetUrls = {}): CarveExtension {
   let counter = 0
 
   return {
@@ -49,7 +73,7 @@ export function playgroundExtension(): CarveExtension {
         const htmlId = ctx.uniqueId(`${group}-html`)
         const astId = ctx.uniqueId(`${group}-ast`)
         const ast = JSON.stringify(carveToAstJson(source), null, 2)
-        const attrs = ctx.renderAttrs(withBaseClasses(node.attrs, 'carve-playground'))
+        const attrs = ctx.renderAttrs(withPlaygroundAssets(withBaseClasses(node.attrs, 'carve-playground'), assets))
 
         const sourcePane = `<div class="carve-playground__source" data-carve-playground-source-view>${ctx.renderChildren(
           [sourceBlock] as never,
@@ -63,7 +87,7 @@ export function playgroundExtension(): CarveExtension {
           `<input type="radio" name="${group}" id="${astId}" class="carve-playground__radio">`,
           `<label for="${astId}" class="carve-playground__label">AST</label>`,
           `<div class="carve-playground__pane carve-playground__live" data-carve-playground-rendered>${rendered}</div>`,
-          `<div class="carve-playground__pane"><pre><code data-carve-playground-html>${ctx.escapeHtml(rendered)}\n</code></pre></div>`,
+          `<div class="carve-playground__pane carve-playground__pane--html"><pre><code data-carve-playground-html>${ctx.escapeHtml(rendered)}\n</code></pre></div>`,
           `<div class="carve-playground__pane carve-playground__pane--ast"><pre><code data-carve-playground-ast>${ctx.escapeHtml(ast)}\n</code></pre></div>`,
         ].join('')
 

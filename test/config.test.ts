@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest'
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { resolve } from 'node:path'
 import type { LanguageRegistration } from '@shikijs/types'
 import { resolveConfig } from '../src/config.js'
 
@@ -80,6 +83,40 @@ describe('resolveConfig', () => {
   it('rejects a config with no title', () => {
     // @ts-expect-error deliberately invalid at runtime
     expect(() => resolveConfig({})).toThrow(/title is required/)
+  })
+
+  it('resolves configured playground paths relative to the site root', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-config-playground-'))
+    await mkdir(resolve(root, 'runtime/carve-wasm'), { recursive: true })
+    await writeFile(resolve(root, 'runtime/mermaid.js'), 'window.mermaid = {}\n')
+    await writeFile(resolve(root, 'runtime/chart.js'), 'window.Chart = function Chart() {}\n')
+
+    const config = resolveConfig(
+      {
+        title: 'Carve',
+        playground: {
+          wasmEngine: 'runtime/carve-wasm',
+          mermaid: 'runtime/mermaid.js',
+          chart: 'runtime/chart.js',
+        },
+      },
+      root,
+    )
+
+    expect(config.playground).toEqual({
+      wasmEngine: resolve(root, 'runtime/carve-wasm'),
+      mermaid: resolve(root, 'runtime/mermaid.js'),
+      chart: resolve(root, 'runtime/chart.js'),
+    })
+  })
+
+  it('rejects a configured missing playground path with the key and resolved path', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-config-playground-missing-'))
+    const missing = resolve(root, 'runtime/missing-wasm')
+
+    expect(() =>
+      resolveConfig({ title: 'Carve', playground: { wasmEngine: 'runtime/missing-wasm' } }, root),
+    ).toThrow(new RegExp(`playground\\.wasmEngine.*${missing.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))
   })
 })
 
