@@ -135,10 +135,101 @@ describe('buildSite', () => {
     expect(html).toContain('<h1>Home ')
   })
 
-  it('resolves prev/next from the sidebar', async () => {
-    const { outDir } = await build()
+  it('renders prev/next from sidebar order', async () => {
+    const { outDir } = await build({
+      themeConfig: {
+        sidebar: {
+          '/': [
+            {
+              text: 'Intro',
+              items: [
+                { text: 'Home', link: '/' },
+                { text: 'Start', link: '/start' },
+                { text: 'Guide', link: '/guide/' },
+              ],
+            },
+          ],
+        },
+      },
+    })
     const html = await readFile(resolve(outDir, 'start/index.html'), 'utf8')
-    expect(html).toContain('rel="prev"')
+    expect(html).toContain('<nav class="page-nav" aria-label="Page navigation">')
+    expect(html).toContain('<a class="page-nav__prev" rel="prev" href="/">')
+    expect(html).toContain('<span class="page-nav__title">Home</span>')
+    expect(html).toContain('<a class="page-nav__next" rel="next" href="/guide/">')
+    expect(html).toContain('<span class="page-nav__title">Guide</span>')
+  })
+
+  it('omits unavailable prev/next links and omits the block for pages outside the sidebar', async () => {
+    const { outDir } = await build({
+      themeConfig: {
+        sidebar: {
+          '/': [
+            {
+              text: 'Intro',
+              items: [
+                { text: 'Home', link: '/' },
+                { text: 'Start', link: '/start' },
+                { text: 'Guide', link: '/guide/' },
+              ],
+            },
+          ],
+        },
+      },
+    })
+    const first = await readFile(resolve(outDir, 'index.html'), 'utf8')
+    const last = await readFile(resolve(outDir, 'guide/index.html'), 'utf8')
+    const absent = await readFile(resolve(outDir, 'draft/index.html'), 'utf8')
+    expect(first).not.toContain('rel="prev"')
+    expect(first).toContain('rel="next"')
+    expect(last).toContain('rel="prev"')
+    expect(last).not.toContain('rel="next"')
+    expect(absent).not.toContain('class="page-nav"')
+  })
+
+  it('follows sidebar order across group boundaries', async () => {
+    const { outDir } = await build({
+      themeConfig: {
+        sidebar: {
+          '/': [
+            {
+              text: 'Intro',
+              items: [
+                { text: 'Home', link: '/' },
+                { text: 'Start', link: '/start' },
+              ],
+            },
+            {
+              text: 'Guide',
+              items: [
+                { text: 'Guide', link: '/guide/' },
+                { text: 'Deep', link: '/guide/deep' },
+              ],
+            },
+          ],
+        },
+      },
+    })
+    const html = await readFile(resolve(outDir, 'start/index.html'), 'utf8')
+    expect(html).toContain('<a class="page-nav__next" rel="next" href="/guide/">')
+    expect(html).toContain('<span class="page-nav__title">Guide</span>')
+  })
+
+  it('renders last updated from mtime when git has no entry for the file', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-last-updated-'))
+    const srcDir = resolve(root, 'docs')
+    await mkdir(srcDir)
+    await writeFile(resolve(srcDir, 'index.crv'), ['---', 'title: Fresh', '---', '', '# Fresh'].join('\n'))
+
+    const { outDir } = await build(
+      {
+        srcDir,
+        themeConfig: { lastUpdated: true, sidebar: {} },
+      },
+      root,
+    )
+    const html = await readFile(resolve(outDir, 'index.html'), 'utf8')
+    expect(html).toMatch(/<time datetime="\d{4}-\d{2}-\d{2}T[^"]+Z">/)
   })
 
   it('fires build events in order', async () => {

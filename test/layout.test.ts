@@ -210,8 +210,81 @@ describe('docLayout', () => {
       prev: { text: 'Home', link: '/' },
       next: { text: 'Guide', link: '/guide/' },
     })
-    expect(html).toContain('href="/carve/"')
-    expect(html).toContain('href="/carve/guide/"')
+    expect(html).toContain('<nav class="page-nav" aria-label="Page navigation">')
+    expect(html).toContain('<span class="page-nav__eyebrow">Previous</span>')
+    expect(html).toContain('<span class="page-nav__title">Home</span>')
+    expect(html).toContain('<a class="page-nav__next" rel="next" href="/carve/guide/">')
+    expect(html).toContain('<span class="page-nav__eyebrow">Next</span>')
+    expect(html).toContain('<span class="page-nav__title">Guide</span>')
+  })
+
+  it('omits last updated by default', () => {
+    const html = docLayout({ config, rendered, sidebar: [], lastUpdated: new Date('2026-01-02T03:04:05.000Z') })
+    expect(html).not.toContain('class="last-updated"')
+  })
+
+  it('renders last updated as a time element when enabled', () => {
+    const withLastUpdated = resolveConfig({
+      title: 'Carve',
+      themeConfig: { lastUpdated: true },
+    })
+    const html = docLayout({
+      config: withLastUpdated,
+      rendered,
+      sidebar: [],
+      lastUpdated: new Date('2026-01-02T03:04:05.000Z'),
+    })
+    expect(html).toContain(
+      '<p class="last-updated">Last updated <time datetime="2026-01-02T03:04:05.000Z">',
+    )
+  })
+
+  it('omits canonical and og:url without a hostname', () => {
+    const html = docLayout({ config, rendered, sidebar: [] })
+    expect(html).not.toContain('rel="canonical"')
+    expect(html).not.toContain('property="og:url"')
+  })
+
+  it('emits per-page canonical and og:url for a nested route with base', () => {
+    const withHostname = resolveConfig({
+      title: 'Carve',
+      hostname: 'https://example.com',
+      base: '/docs/',
+    })
+    const nested = {
+      ...rendered,
+      page: { ...rendered.page, route: '/guide/deep', relPath: 'guide/deep.crv' },
+    } as RenderedPage
+    const html = docLayout({ config: withHostname, rendered: nested, sidebar: [] })
+    expect(html).toContain('<link rel="canonical" href="https://example.com/docs/guide/deep">')
+    expect(html).toContain('<meta property="og:url" content="https://example.com/docs/guide/deep">')
+  })
+
+  it('lets user-supplied og:url suppress the generated one', () => {
+    const withUserOg = resolveConfig({
+      title: 'Carve',
+      hostname: 'https://example.com',
+      head: [['meta', { property: 'og:url', content: 'https://canonical.example/custom' }]],
+    })
+    const html = docLayout({ config: withUserOg, rendered, sidebar: [] })
+    expect(html).toContain('<meta property="og:url" content="https://canonical.example/custom">')
+    expect(html).not.toContain('<meta property="og:url" content="https://example.com/start">')
+    expect(html).toContain('<link rel="canonical" href="https://example.com/start">')
+  })
+
+  it('normalizes generated page URLs without double slashes', () => {
+    const withMessyUrlParts = resolveConfig({
+      title: 'Carve',
+      hostname: 'https://example.com/',
+      base: '/docs/',
+    })
+    const nested = {
+      ...rendered,
+      page: { ...rendered.page, route: '/guide/deep', relPath: 'guide/deep.crv' },
+    } as RenderedPage
+    const html = docLayout({ config: withMessyUrlParts, rendered: nested, sidebar: [] })
+    expect(html).toContain('https://example.com/docs/guide/deep')
+    expect(html).not.toContain('https://example.com//')
   })
 
   it('expands :path in the edit link', () => {

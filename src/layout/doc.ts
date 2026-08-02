@@ -1,4 +1,4 @@
-import type { CarvePressConfig, NavItem, SidebarGroup, SocialLink } from '../config.js'
+import type { CarvePressConfig, HeadTag, NavItem, SidebarGroup, SocialLink } from '../config.js'
 import type { RenderedPage } from '../render/page.js'
 import type { FlatLink } from '../nav.js'
 import { htmlDocument, escapeAttr, escapeText, withBase } from './shell.js'
@@ -11,6 +11,7 @@ export interface LayoutContext {
   sidebar: SidebarGroup[]
   prev?: FlatLink
   next?: FlatLink
+  lastUpdated?: Date
 }
 
 export type Layout = (ctx: LayoutContext) => string
@@ -171,10 +172,27 @@ function footerNav(ctx: LayoutContext): string {
       ? ''
       : `<a class="page-nav__${rel}" rel="${rel}" href="${escapeAttr(
           withBase(base, item.link),
-        )}">${escapeText(item.text)}</a>`
+        )}"><span class="page-nav__eyebrow">${rel === 'prev' ? 'Previous' : 'Next'}</span><span class="page-nav__title">${escapeText(
+          item.text,
+        )}</span></a>`
   const prev = link(ctx.prev, 'prev')
   const next = link(ctx.next, 'next')
-  return prev === '' && next === '' ? '' : `<nav class="page-nav">${prev}${next}</nav>`
+  return prev === '' && next === ''
+    ? ''
+    : `<nav class="page-nav" aria-label="Page navigation">${prev}${next}</nav>`
+}
+
+function lastUpdatedHtml(ctx: LayoutContext): string {
+  if (ctx.config.themeConfig.lastUpdated !== true || ctx.lastUpdated === undefined) return ''
+  const iso = ctx.lastUpdated.toISOString()
+  const text = new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  }).format(ctx.lastUpdated)
+  return `<p class="last-updated">Last updated <time datetime="${escapeAttr(iso)}">${escapeText(
+    text,
+  )}</time></p>`
 }
 
 function siteFooter(ctx: LayoutContext): string {
@@ -194,6 +212,31 @@ function pageDescription(ctx: LayoutContext): string | undefined {
 function documentTitle(ctx: LayoutContext): string {
   const pageTitle = ctx.rendered.searchDoc.title
   return pageTitle === ctx.config.title ? pageTitle : `${pageTitle} | ${ctx.config.title}`
+}
+
+function absolutePageUrl(ctx: LayoutContext): string | undefined {
+  const hostname = ctx.config.hostname?.replace(/\/+$/, '')
+  if (hostname === undefined || hostname === '') return undefined
+  return `${hostname}${withBase(ctx.config.base, ctx.rendered.page.route)}`
+}
+
+function hasCanonical(head: HeadTag[]): boolean {
+  return head.some(([tag, attrs]) => tag.toLowerCase() === 'link' && attrs.rel?.toLowerCase() === 'canonical')
+}
+
+function hasOgUrl(head: HeadTag[]): boolean {
+  return head.some(
+    ([tag, attrs]) => tag.toLowerCase() === 'meta' && attrs.property?.toLowerCase() === 'og:url',
+  )
+}
+
+function pageUrlHead(ctx: LayoutContext): HeadTag[] {
+  const url = absolutePageUrl(ctx)
+  if (url === undefined) return []
+  const tags: HeadTag[] = []
+  if (!hasCanonical(ctx.config.head)) tags.push(['link', { rel: 'canonical', href: url }])
+  if (!hasOgUrl(ctx.config.head)) tags.push(['meta', { property: 'og:url', content: url }])
+  return tags
 }
 
 function themeToggleScript(): string {
@@ -234,6 +277,7 @@ export const docLayout: Layout = (ctx) => {
       <main class="content">
 ${ctx.rendered.html}
         ${editLink(ctx)}
+        ${lastUpdatedHtml(ctx)}
         ${footerNav(ctx)}
       </main>
       ${outlineHtml(ctx)}
@@ -246,6 +290,7 @@ ${themeToggleScript()}${searchScript(ctx)}${tableScrollScript(ctx)}${outlineScri
     title: documentTitle(ctx),
     description: pageDescription(ctx),
     head: ctx.config.head,
+    extraHead: pageUrlHead(ctx),
     base: ctx.config.base,
     body,
   })

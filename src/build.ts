@@ -1,9 +1,11 @@
+import { execFile } from 'node:child_process'
 import { copyFile, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
-import { dirname, resolve } from 'node:path'
+import { dirname, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { promisify } from 'node:util'
 import { resolveConfig, type UserConfig } from './config.js'
-import { discoverPages } from './content/discover.js'
+import { discoverPages, type Page } from './content/discover.js'
 import { outPathForRoute } from './content/route.js'
 import { buildExtensionStack } from './render/extensions.js'
 import type { ShikiOptions } from './render/shiki.js'
@@ -15,6 +17,7 @@ import { BuildEventBus } from './events.js'
 import { BuildError } from './errors.js'
 
 const require = createRequire(import.meta.url)
+const execFileAsync = promisify(execFile)
 const defaultThemePath = require.resolve('../theme/default.css')
 const defaultSearchScriptPath = require.resolve('../theme/search.js')
 const defaultPlaygroundScriptPath = require.resolve('../theme/playground.js')
@@ -111,6 +114,52 @@ async function writePlaygroundAssets(outDir: string): Promise<void> {
   await copyDirectoryContents(carveEngineDistPath, resolve(outDir, 'assets/carve'))
 }
 
+async function collectGitUpdatedTimes(root: string, srcDir: string): Promise<Map<string, Date>> {
+  try {
+    const top = await execFileAsync('git', ['-C', root, 'rev-parse', '--show-toplevel'])
+    const topLevel = top.stdout.trim()
+    if (topLevel === '') return new Map()
+    const srcPathspec = relative(topLevel, srcDir).split(sep).join('/')
+    const pathspec = srcPathspec === '' ? '.' : srcPathspec
+    const log = await execFileAsync('git', ['-C', root, 'log', '--format=%ct', '--name-only', '--', pathspec], {
+      maxBuffer: 1024 * 1024 * 20,
+    })
+    const times = new Map<string, Date>()
+    let current: Date | undefined
+    for (const line of log.stdout.split(/\r?\n/)) {
+      if (line === '') continue
+      if (/^\d+$/.test(line)) {
+        current = new Date(Number(line) * 1000)
+        continue
+      }
+      if (current === undefined) continue
+      const absPath = resolve(topLevel, line)
+      if (!times.has(absPath)) times.set(absPath, current)
+    }
+    return times
+  } catch {
+    return new Map()
+  }
+}
+
+async function collectLastUpdatedTimes(root: string, srcDir: string, pages: Page[]): Promise<Map<string, Date>> {
+  const gitTimes = await collectGitUpdatedTimes(root, srcDir)
+  const times = new Map<string, Date>()
+  for (const page of pages) {
+    const gitTime = gitTimes.get(page.srcPath)
+    if (gitTime !== undefined) {
+      times.set(page.srcPath, gitTime)
+      continue
+    }
+    try {
+      times.set(page.srcPath, (await stat(page.srcPath)).mtime)
+    } catch {
+      // Last-updated metadata must not decide whether a content page builds.
+    }
+  }
+  return times
+}
+
 /** Load `carve-press.config.{ts,js,mjs}` from a project root. */
 export async function loadConfig(root: string): Promise<UserConfig> {
   for (const name of ['carve-press.config.ts', 'carve-press.config.js', 'carve-press.config.mjs']) {
@@ -150,6 +199,10 @@ export async function buildSite(opts: {
 
   const discovered = await discoverPages(srcDir, config.srcExclude)
   const { pages } = await bus.emit('contentDiscovered', { pages: discovered })
+  const lastUpdated =
+    config.themeConfig.lastUpdated === true
+      ? await collectLastUpdatedTimes(opts.root, srcDir, pages)
+      : new Map<string, Date>()
 
   const extensions = await buildExtensionStack(config, opts.shiki ?? config.shiki)
   const stack = (await bus.emit('rendererCreated', { extensions })).extensions
@@ -180,7 +233,14 @@ export async function buildSite(opts: {
     const layoutName =
       typeof result.page.frontmatter.layout === 'string' ? result.page.frontmatter.layout : 'doc'
     const layout = LAYOUTS[layoutName] ?? docLayout
-    const html = layout({ config, rendered: result, sidebar, prev, next })
+    const html = layout({
+      config,
+      rendered: result,
+      sidebar,
+      prev,
+      next,
+      lastUpdated: lastUpdated.get(result.page.srcPath),
+    })
 
     const outPath = resolve(outDir, outPathForRoute(result.page.route, config.cleanUrls))
     await mkdir(dirname(outPath), { recursive: true })

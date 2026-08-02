@@ -37,6 +37,7 @@ export interface DocumentOptions {
   title: string
   description?: string
   head: HeadTag[]
+  extraHead?: HeadTag[]
   base: string
   body: string
 }
@@ -54,7 +55,7 @@ export function htmlDocument(opts: DocumentOptions): string {
     <title>${escapeText(opts.title)}</title>${description}
     ${themeBootstrapScript()}
     <link rel="stylesheet" href="${escapeAttr(withBase(opts.base, '/assets/style.css'))}">
-    ${renderHead(opts.head)}
+    ${renderHead([...(opts.extraHead ?? []), ...opts.head])}
   </head>
   <body>
 ${opts.body}

@@ -35,6 +35,7 @@ export interface ThemeConfig {
   socialLinks: SocialLink[]
   editLink?: { pattern: string; text: string }
   footer?: { message: string; copyright: string }
+  lastUpdated?: boolean
   outline: { level: [number, number] }
 }
 
@@ -58,6 +59,7 @@ export type SearchConfig = false | Required<SearchIndexOptions>
 export interface CarvePressConfig {
   title: string
   description?: string
+  hostname?: string
   base: string
   srcDir: string
   outDir: string
@@ -137,6 +139,7 @@ export function resolveConfig(user: UserConfig): CarvePressConfig {
   return {
     title: user.title,
     description: user.description,
+    hostname: user.hostname,
     base: normalizeBase(user.base ?? '/'),
     srcDir: user.srcDir ?? 'docs',
     outDir: user.outDir ?? 'dist',
@@ -152,6 +155,7 @@ export function resolveConfig(user: UserConfig): CarvePressConfig {
       socialLinks: user.themeConfig?.socialLinks ?? [],
       editLink: user.themeConfig?.editLink,
       footer: user.themeConfig?.footer,
+      lastUpdated: user.themeConfig?.lastUpdated,
       outline: user.themeConfig?.outline ?? { level: [2, 3] },
     },
     carve: {
