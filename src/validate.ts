@@ -1,5 +1,5 @@
 import { lintCarve } from '@markup-carve/carve'
-import type { NavItem, SidebarGroup, SidebarItem, ThemeConfig } from './config.js'
+import type { NavItem, SidebarConfigGroup, SidebarItem, ThemeConfig } from './config.js'
 import type { Page } from './content/discover.js'
 import { BuildError } from './errors.js'
 import type { RenderedPage } from './render/page.js'
@@ -63,6 +63,29 @@ export function validateLinks(
   }
 }
 
+/**
+ * A frontmatter prev/next override is injected into the footer after the page
+ * HTML was validated, so it needs its own check. Without it, an override is the
+ * one internal link on the site that can point nowhere and still build.
+ */
+export function validatePageNavOverrides(
+  overrides: Array<{ relPath: string; links: Array<string | undefined> }>,
+  routes: Set<string>,
+  ignore: boolean,
+): void {
+  if (ignore) return
+  const dead: string[] = []
+  for (const { relPath, links } of overrides) {
+    for (const link of links) {
+      if (link === undefined || !isInternal(link)) continue
+      if (!routes.has(routeWithoutHashOrQuery(link))) dead.push(`${relPath}: ${link}`)
+    }
+  }
+  if (dead.length > 0) {
+    throw new ValidationError(`${dead.length} dead frontmatter prev/next link(s)`, dead)
+  }
+}
+
 function walkNav(items: NavItem[], out: string[]): void {
   for (const item of items) {
     if (item.link !== undefined) out.push(item.link)
@@ -75,6 +98,10 @@ function walkSidebar(items: SidebarItem[], out: string[]): void {
     if (item.link !== undefined) out.push(item.link)
     if (item.items !== undefined) walkSidebar(item.items, out)
   }
+}
+
+function isStaticSidebarGroup(group: SidebarConfigGroup): group is SidebarConfigGroup & { items: SidebarItem[] } {
+  return Array.isArray((group as { items?: unknown }).items)
 }
 
 /**
@@ -97,7 +124,9 @@ export function validateNav(theme: ThemeConfig, routes: Set<string>): void {
     }
 
     const links: string[] = []
-    for (const group of groups as SidebarGroup[]) walkSidebar(group.items, links)
+    for (const group of groups) {
+      if (isStaticSidebarGroup(group)) walkSidebar(group.items, links)
+    }
 
     const seen = new Set<string>()
     const duplicates = new Set<string>()

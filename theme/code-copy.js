@@ -40,7 +40,7 @@
       void copyText(source.content?.textContent ?? source.textContent ?? '')
         .then((copied) => {
           if (!copied) return
-          button.textContent = 'Copied'
+          button.textContent = button.dataset.copiedLabel || 'Copied'
           button.dataset.copied = 'true'
           window.clearTimeout(timeout)
           timeout = window.setTimeout(() => {

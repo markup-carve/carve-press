@@ -354,6 +354,20 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+.locale-switcher ul {
+  display: flex;
+  gap: 0.45rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.locale-switcher a {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  text-decoration: none;
+}
+.locale-switcher a:hover,
+.locale-switcher a[aria-current='true'] { color: var(--ink); }
 .theme-toggle {
   padding: 0 0.55rem;
   cursor: pointer;
@@ -382,8 +396,13 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
   padding: 3rem 2rem 8rem;
   align-items: start;
 }
+.layout--no-aside { grid-template-columns: var(--sidebar-w) minmax(0, 1fr); }
+.layout--no-sidebar { grid-template-columns: minmax(0, 1fr) var(--outline-w); }
+.layout--no-sidebar.layout--no-aside { grid-template-columns: minmax(0, 1fr); }
 @media (max-width: 1180px) {
   .layout { grid-template-columns: var(--sidebar-w) minmax(0, 1fr); }
+  .layout--no-sidebar,
+  .layout--no-sidebar.layout--no-aside { grid-template-columns: minmax(0, 1fr); }
   .outline { display: none; }
 }
 @media (max-width: 820px) {
@@ -700,7 +719,7 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
 
 .outline { border-left: 1px solid var(--rule); padding-left: 1.5rem; font-size: 0.8rem; }
 .outline::before {
-  content: 'On this page';
+  content: attr(aria-label);
   display: block;
   font-size: 0.66rem;
   font-weight: 600;

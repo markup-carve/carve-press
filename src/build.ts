@@ -4,15 +4,31 @@ import { createRequire } from 'node:module'
 import { dirname, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
-import { resolveConfig, type UserConfig } from './config.js'
+import {
+  resolveConfig,
+  type CarvePressConfig,
+  type HeadTag,
+  type LocaleConfig,
+  type SidebarConfigGroup,
+  type SidebarGroup,
+  type SidebarItem,
+  type ThemeConfig,
+  type ThemeLabels,
+  type UserConfig,
+} from './config.js'
 import { discoverPages, type Page } from './content/discover.js'
 import { outPathForRoute } from './content/route.js'
 import { buildExtensionStack } from './render/extensions.js'
 import type { ShikiOptions } from './render/shiki.js'
 import { renderPage, type RenderedPage } from './render/page.js'
-import { resolveSidebar, resolvePrevNext } from './nav.js'
+import { resolveByPrefix, resolveSidebar, resolvePrevNext, type FlatLink } from './nav.js'
 import { LAYOUTS } from './layout/doc.js'
-import { validateLinks, validateNav, validateCrossrefs } from './validate.js'
+import {
+  validateLinks,
+  validateNav,
+  validateCrossrefs,
+  validatePageNavOverrides,
+} from './validate.js'
 import { BuildEventBus } from './events.js'
 import { BuildError, SourceError } from './errors.js'
 
@@ -138,15 +154,251 @@ function partitionNotFoundPage(pages: Page[]): { pages: Page[]; notFoundPage?: P
   return { pages: pages.filter((page) => page !== notFound), notFoundPage: notFound }
 }
 
-function builtInNotFoundPage(srcDir: string): Page {
+function builtInNotFoundPage(srcDir: string, title: string): Page {
   return {
     route: '/404',
     srcPath: resolve(srcDir, '404.crv'),
     relPath: '404.crv',
-    frontmatter: { title: 'Page not found' },
+    frontmatter: { title },
     source: 'The page you requested could not be found. [Return home](/).\n',
     bodyStartLine: 1,
   }
+}
+
+interface ActiveLocale {
+  prefix: string
+  lang: string
+  label: string
+  title: string
+  description?: string
+  themeConfig: ThemeConfig
+  labels: ThemeLabels
+}
+
+interface PageMeta {
+  head: HeadTag[]
+  image?: string
+  outlineLevels?: [number, number] | false
+  aside: boolean
+  sidebar: boolean
+  prev?: FlatLink | false
+  next?: FlatLink | false
+  editLink: boolean
+  lastUpdated: boolean
+}
+
+function objectValue(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined
+}
+
+function isGeneratedSidebarGroup(group: SidebarConfigGroup): group is SidebarConfigGroup & { generate: string } {
+  return typeof (group as { generate?: unknown }).generate === 'string'
+}
+
+function sourceError(page: Page, key: string): SourceError {
+  return new SourceError(page.relPath, 1, 1, `frontmatter: invalid ${key}`)
+}
+
+function validUrl(value: string): boolean {
+  return value.startsWith('/') || /^[a-z][a-z0-9+.-]*:/i.test(value) || value.startsWith('//')
+}
+
+function pageHead(page: Page): HeadTag[] {
+  const value = page.frontmatter.head
+  if (value === undefined) return []
+  if (!Array.isArray(value)) throw sourceError(page, 'head')
+  const out: HeadTag[] = []
+  for (const entry of value) {
+    if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string') {
+      throw sourceError(page, 'head')
+    }
+    const attrs = objectValue(entry[1])
+    if (attrs === undefined || Object.values(attrs).some((attr) => typeof attr !== 'string')) {
+      throw sourceError(page, 'head')
+    }
+    out.push([entry[0], attrs as Record<string, string>])
+  }
+  return out
+}
+
+function imageMeta(page: Page): string | undefined {
+  const key = page.frontmatter.image === undefined ? 'ogImage' : 'image'
+  const image = page.frontmatter[key]
+  if (image === undefined) return undefined
+  if (typeof image !== 'string' || image === '' || !validUrl(image)) throw sourceError(page, key)
+  return image
+}
+
+function outlineLevels(page: Page): [number, number] | false | undefined {
+  const value = page.frontmatter.outline
+  if (value === undefined) return undefined
+  if (value === false) return false
+  if (value === 'deep') return [2, 6]
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 6) return [value, value]
+  if (
+    Array.isArray(value) &&
+    value.length === 2 &&
+    typeof value[0] === 'number' &&
+    typeof value[1] === 'number' &&
+    Number.isInteger(value[0]) &&
+    Number.isInteger(value[1]) &&
+    value[0] >= 1 &&
+    value[1] <= 6 &&
+    value[0] <= value[1]
+  ) {
+    return [value[0], value[1]]
+  }
+  throw sourceError(page, 'outline')
+}
+
+function navOverride(page: Page, key: 'prev' | 'next'): FlatLink | false | undefined {
+  const value = page.frontmatter[key]
+  if (value === undefined) return undefined
+  if (value === false) return false
+  const record = objectValue(value)
+  if (record === undefined || typeof record.text !== 'string' || typeof record.link !== 'string') {
+    throw sourceError(page, key)
+  }
+  return { text: record.text, link: record.link }
+}
+
+function booleanFlag(page: Page, key: 'aside' | 'sidebar' | 'editLink' | 'lastUpdated'): boolean | undefined {
+  const value = page.frontmatter[key]
+  if (value === undefined) return undefined
+  if (value === false) return false
+  throw sourceError(page, key)
+}
+
+function pageMeta(page: Page): PageMeta {
+  const order = page.frontmatter.order
+  if (order !== undefined && typeof order !== 'number') throw sourceError(page, 'order')
+  return {
+    head: pageHead(page),
+    image: imageMeta(page),
+    outlineLevels: outlineLevels(page),
+    aside: booleanFlag(page, 'aside') !== false,
+    sidebar: booleanFlag(page, 'sidebar') !== false,
+    prev: navOverride(page, 'prev'),
+    next: navOverride(page, 'next'),
+    editLink: booleanFlag(page, 'editLink') !== false,
+    lastUpdated: booleanFlag(page, 'lastUpdated') !== false,
+  }
+}
+
+function activeLocale(config: CarvePressConfig, route: string): ActiveLocale {
+  const fallback: LocaleConfig = {
+    lang: 'en',
+    label: 'English',
+  }
+  const locales = Object.keys(config.locales).length === 0 ? { '/': fallback } : config.locales
+  const locale = resolveByPrefix(route, locales) ?? fallback
+  const prefix = Object.entries(locales).find(([, value]) => value === locale)?.[0] ?? '/'
+  const labels = { ...config.themeConfig.labels, ...(locale.themeConfig?.labels ?? {}) }
+  const themeConfig: ThemeConfig = {
+    ...config.themeConfig,
+    nav: locale.themeConfig?.nav ?? config.themeConfig.nav,
+    sidebar: locale.themeConfig?.sidebar ?? config.themeConfig.sidebar,
+    footer: locale.themeConfig?.footer ?? config.themeConfig.footer,
+    editLink: locale.themeConfig?.editLink ?? config.themeConfig.editLink,
+    outline: {
+      level:
+        locale.themeConfig?.outline?.level === undefined
+          ? config.themeConfig.outline.level
+          : locale.themeConfig.outline.level === 'deep'
+            ? [2, 6]
+            : locale.themeConfig.outline.level === false
+              ? [7, 6]
+              : typeof locale.themeConfig.outline.level === 'number'
+                ? [locale.themeConfig.outline.level, locale.themeConfig.outline.level]
+                : locale.themeConfig.outline.level,
+    },
+    labels,
+  }
+  return {
+    prefix,
+    lang: locale.lang,
+    label: locale.label,
+    title: locale.title ?? config.title,
+    description: locale.description ?? config.description,
+    themeConfig,
+    labels,
+  }
+}
+
+function shouldCollectLastUpdated(config: CarvePressConfig): boolean {
+  return config.themeConfig.lastUpdated === true
+}
+
+function renderOutlineLevels(levels: [number, number] | false): [number, number] | false {
+  return levels === false || levels[0] > levels[1] ? false : levels
+}
+
+function sortPagesForSidebar(a: RenderedPage, b: RenderedPage): number {
+  const aIndex = a.page.relPath.split('/').at(-1)?.startsWith('index.') === true
+  const bIndex = b.page.relPath.split('/').at(-1)?.startsWith('index.') === true
+  if (aIndex !== bIndex) return aIndex ? -1 : 1
+  const aOrder = a.page.frontmatter.order
+  const bOrder = b.page.frontmatter.order
+  if (typeof aOrder === 'number' && typeof bOrder === 'number' && aOrder !== bOrder) return aOrder - bOrder
+  if (typeof aOrder === 'number' && typeof bOrder !== 'number') return -1
+  if (typeof aOrder !== 'number' && typeof bOrder === 'number') return 1
+  return a.searchDoc.title.localeCompare(b.searchDoc.title)
+}
+
+function generatedSidebarItems(prefix: string, rendered: RenderedPage[]): SidebarItem[] {
+  const children = new Map<string, RenderedPage[]>()
+  const direct: RenderedPage[] = []
+  for (const page of rendered) {
+    if (!page.page.route.startsWith(prefix)) continue
+    if (page.page.frontmatter.sidebar === false || page.page.frontmatter.draft === true) continue
+    const rest = page.page.route.slice(prefix.length)
+    if (rest === '' || !rest.includes('/')) {
+      direct.push(page)
+      continue
+    }
+    const dir = rest.slice(0, rest.indexOf('/') + 1)
+    children.set(dir, [...(children.get(dir) ?? []), page])
+  }
+
+  const items: SidebarItem[] = direct.sort(sortPagesForSidebar).map((page) => ({
+    text: page.searchDoc.title,
+    link: page.page.route,
+  }))
+  for (const [dir, pages] of [...children.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const dirPrefix = `${prefix}${dir}`
+    const index = pages.find((page) => page.page.route === dirPrefix)
+    items.push({
+      text: index?.searchDoc.title ?? dir.replace(/\/$/, ''),
+      ...(index === undefined ? {} : { link: index.page.route }),
+      items: generatedSidebarItems(
+        dirPrefix,
+        index === undefined ? pages : pages.filter((page) => page !== index),
+      ),
+    })
+  }
+  return items
+}
+
+function expandSidebar(
+  sidebar: Record<string, SidebarConfigGroup[]>,
+  rendered: RenderedPage[],
+): Record<string, SidebarGroup[]> {
+  return Object.fromEntries(
+    Object.entries(sidebar).map(([key, groups]) => [
+      key,
+      groups.map((group) =>
+        isGeneratedSidebarGroup(group)
+          ? {
+              text: group.text,
+              collapsed: group.collapsed,
+              items: generatedSidebarItems(group.generate, rendered),
+            }
+          : group,
+      ),
+    ]),
+  )
 }
 
 async function writeTableScrollScript(outDir: string): Promise<void> {
@@ -275,7 +527,7 @@ export async function buildSite(opts: {
   const discoveredContent = await bus.emit('contentDiscovered', { pages: discovered })
   const { pages, notFoundPage } = partitionNotFoundPage(discoveredContent.pages)
   const lastUpdated =
-    config.themeConfig.lastUpdated === true
+    shouldCollectLastUpdated(config)
       ? await collectLastUpdatedTimes(opts.root, srcDir, pages)
       : new Map<string, Date>()
 
@@ -285,10 +537,15 @@ export async function buildSite(opts: {
 
   const routes = new Set(pages.map((p) => p.route))
   const rendered: RenderedPage[] = []
+  const metas = new Map<string, PageMeta>()
   for (const page of pages) {
+    const locale = activeLocale(config, page.route)
+    const meta = pageMeta(page)
+    metas.set(page.srcPath, meta)
+    const outline = meta.outlineLevels ?? locale.themeConfig.outline.level
     const result = renderPage(page, {
       extensions: stack,
-      outlineLevels: config.themeConfig.outline.level,
+      outlineLevels: renderOutlineLevels(outline),
       includeRoots: [srcDir, opts.root],
       base: config.base,
       profile: config.carve.profile,
@@ -298,9 +555,13 @@ export async function buildSite(opts: {
     rendered.push({ ...result, html: after.html })
   }
 
-  const notFoundRendered = renderPage(notFoundPage ?? builtInNotFoundPage(srcDir), {
+  const notFoundLocale = activeLocale(config, '/404')
+  const notFoundSource = notFoundPage ?? builtInNotFoundPage(srcDir, notFoundLocale.labels.pageNotFound)
+  const notFoundMeta = pageMeta(notFoundSource)
+  const notFoundOutline = notFoundMeta.outlineLevels ?? notFoundLocale.themeConfig.outline.level
+  const notFoundRendered = renderPage(notFoundSource, {
     extensions: stack,
-    outlineLevels: config.themeConfig.outline.level,
+    outlineLevels: renderOutlineLevels(notFoundOutline),
     includeRoots: [srcDir, opts.root],
     base: config.base,
     profile: config.carve.profile,
@@ -313,10 +574,50 @@ export async function buildSite(opts: {
     await writePlaygroundAssets(outDir)
   }
 
-  validateNav(config.themeConfig, routes)
+  const expandedConfig: CarvePressConfig = {
+    ...config,
+    themeConfig: {
+      ...config.themeConfig,
+      sidebar: expandSidebar(config.themeConfig.sidebar, rendered),
+    },
+    locales: Object.fromEntries(
+      Object.entries(config.locales).map(([key, locale]) => [
+        key,
+        {
+          ...locale,
+          themeConfig:
+            locale.themeConfig?.sidebar === undefined
+              ? locale.themeConfig
+              : {
+                  ...locale.themeConfig,
+                  sidebar: expandSidebar(locale.themeConfig.sidebar, rendered),
+                },
+        },
+      ]),
+    ),
+  }
+
+  validateNav(expandedConfig.themeConfig, routes)
+  for (const prefix of Object.keys(expandedConfig.locales)) {
+    validateNav(activeLocale(expandedConfig, prefix).themeConfig, routes)
+  }
   validateCrossrefs(pages)
   validateLinks(rendered, routes, config.ignoreDeadLinks, config.base)
   validateLinks([notFoundRendered], routes, config.ignoreDeadLinks, config.base)
+  validatePageNavOverrides(
+    rendered.map((result) => {
+      const meta = metas.get(result.page.srcPath) ?? pageMeta(result.page)
+      return {
+        relPath: result.page.relPath,
+        links: [
+          meta.prev === false ? undefined : meta.prev?.link,
+          meta.next === false ? undefined : meta.next?.link,
+        ],
+      }
+    }),
+    routes,
+    config.ignoreDeadLinks,
+  )
 
   const layouts = { ...LAYOUTS, ...config.layouts }
   const knownLayoutNames = Object.keys(layouts).sort().join(', ')
@@ -336,16 +637,25 @@ export async function buildSite(opts: {
   }
 
   for (const result of rendered) {
-    const sidebar = resolveSidebar(result.page.route, config.themeConfig.sidebar)
-    const { prev, next } = resolvePrevNext(result.page.route, sidebar)
+    const locale = activeLocale(expandedConfig, result.page.route)
+    const meta = metas.get(result.page.srcPath) ?? pageMeta(result.page)
+    const sidebar = meta.sidebar ? resolveSidebar(result.page.route, locale.themeConfig.sidebar as Record<string, SidebarGroup[]>) : []
+    const computed = resolvePrevNext(result.page.route, sidebar)
+    const prev = meta.prev === false ? undefined : meta.prev ?? computed.prev
+    const next = meta.next === false ? undefined : meta.next ?? computed.next
     const layout = selectLayout(result)
     const html = layout({
-      config,
+      config: expandedConfig,
       rendered: result,
       sidebar,
       prev,
       next,
-      lastUpdated: lastUpdated.get(result.page.srcPath),
+      lastUpdated: meta.lastUpdated ? lastUpdated.get(result.page.srcPath) : undefined,
+      locale,
+      themeConfig: locale.themeConfig,
+      labels: locale.labels,
+      meta,
+      routes,
     })
 
     const outPath = resolve(outDir, outPathForRoute(result.page.route, config.cleanUrls))
@@ -354,10 +664,22 @@ export async function buildSite(opts: {
     await bus.emit('pageWritten', { rendered: result, outPath })
   }
 
+  // Resolved against the expanded config: a generated sidebar group still
+  // carries its `generate` marker before expansion, and the layout would crash
+  // on a group with no items while writing 404.html.
+  const expandedNotFoundLocale = activeLocale(expandedConfig, '/404')
   const notFoundHtml = selectLayout(notFoundRendered)({
-    config,
+    config: expandedConfig,
     rendered: notFoundRendered,
-    sidebar: resolveSidebar(notFoundRendered.page.route, config.themeConfig.sidebar),
+    sidebar: resolveSidebar(
+      notFoundRendered.page.route,
+      expandedNotFoundLocale.themeConfig.sidebar as Record<string, SidebarGroup[]>,
+    ),
+    locale: expandedNotFoundLocale,
+    themeConfig: expandedNotFoundLocale.themeConfig,
+    labels: expandedNotFoundLocale.labels,
+    meta: notFoundMeta,
+    routes,
   })
   const notFoundOutPath = resolve(outDir, '404.html')
   await mkdir(dirname(notFoundOutPath), { recursive: true })

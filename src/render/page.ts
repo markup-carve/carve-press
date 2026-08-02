@@ -38,7 +38,7 @@ export interface RenderedPage {
 
 export interface RenderContext {
   extensions: CarveExtension[]
-  outlineLevels: [number, number]
+  outlineLevels: [number, number] | false
   includeRoots: string[]
   base: string
   profile?: Profile
@@ -264,7 +264,7 @@ export function renderPage(page: Page, ctx: RenderContext): RenderedPage {
     }
     throw error
   }
-  const outline = outlineFromAst(ast, ctx.outlineLevels)
+  const outline = ctx.outlineLevels === false ? [] : outlineFromAst(ast, ctx.outlineLevels)
 
   const fmTitle = page.frontmatter.title
   const title = typeof fmTitle === 'string' && fmTitle !== '' ? fmTitle : firstH1(ast)

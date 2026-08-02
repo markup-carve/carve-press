@@ -25,6 +25,15 @@ export interface SidebarGroup {
   items: SidebarItem[]
 }
 
+export interface GeneratedSidebarGroup {
+  text: string
+  generate: string
+  collapsed?: boolean
+  order?: number
+}
+
+export type SidebarConfigGroup = SidebarGroup | GeneratedSidebarGroup
+
 export interface SocialLink {
   icon: string | { svg: string }
   link: string
@@ -32,10 +41,24 @@ export interface SocialLink {
 
 export type ThemeLogo = string | { light: string; dark: string; alt?: string }
 
+export type OutlineSetting = false | number | [number, number] | 'deep'
+
+export interface ThemeLabels {
+  search: string
+  previous: string
+  next: string
+  lastUpdated: string
+  onThisPage: string
+  pageNotFound: string
+  copy: string
+  copied: string
+  menu: string
+}
+
 export interface ThemeConfig {
   nav: NavItem[]
   /** Path-keyed: the longest matching key prefix wins for a given route. */
-  sidebar: Record<string, SidebarGroup[]>
+  sidebar: Record<string, SidebarConfigGroup[]>
   socialLinks: SocialLink[]
   logo?: ThemeLogo
   siteTitle?: string | false
@@ -43,6 +66,24 @@ export interface ThemeConfig {
   footer?: { message: string; copyright: string }
   lastUpdated?: boolean
   outline: { level: [number, number] }
+  labels: ThemeLabels
+}
+
+export interface LocaleThemeConfig {
+  nav?: NavItem[]
+  sidebar?: Record<string, SidebarConfigGroup[]>
+  footer?: { message: string; copyright: string }
+  editLink?: { pattern: string; text: string }
+  outline?: { level: OutlineSetting }
+  labels?: Partial<ThemeLabels>
+}
+
+export interface LocaleConfig {
+  lang: string
+  label: string
+  title?: string
+  description?: string
+  themeConfig?: LocaleThemeConfig
 }
 
 /** A site-level extension: it subscribes to build events and writes derived files. */
@@ -91,6 +132,7 @@ export interface CarvePressConfig {
   search: SearchConfig
   extensions: SiteExtension[]
   layouts: Record<string, Layout>
+  locales: Record<string, LocaleConfig>
 }
 
 export type UserConfig = Partial<
@@ -98,11 +140,12 @@ export type UserConfig = Partial<
 > & {
   title: string
   theme?: Partial<ThemeAssetsConfig>
-  themeConfig?: Partial<ThemeConfig>
+  themeConfig?: Partial<Omit<ThemeConfig, 'labels'>> & { labels?: Partial<ThemeLabels> }
   carve?: { extensions?: CarveExtension[]; profile?: string | Profile }
   shiki?: Partial<Omit<ShikiConfig, 'themes'>> & { themes?: Partial<ShikiConfig['themes']> }
   search?: false | SearchIndexOptions
   layouts?: Record<string, Layout>
+  locales?: Record<string, LocaleConfig>
 }
 
 const DEFAULT_SHIKI: ShikiConfig = {
@@ -128,6 +171,18 @@ const DEFAULT_SHIKI: ShikiConfig = {
   ],
   themes: { light: 'github-light', dark: 'github-dark' },
   lineNumbers: false,
+}
+
+export const DEFAULT_LABELS: ThemeLabels = {
+  search: 'Search',
+  previous: 'Previous',
+  next: 'Next',
+  lastUpdated: 'Last updated',
+  onThisPage: 'On this page',
+  pageNotFound: 'Page not found',
+  copy: 'Copy',
+  copied: 'Copied',
+  menu: 'Menu',
 }
 
 function shikiLanguageName(lang: ShikiLanguage): string {
@@ -178,6 +233,11 @@ function resolveProfile(profile: string | Profile | undefined): Profile | undefi
   return resolved.onDisallowed(Profile.ACTION_ERROR)
 }
 
+function normalizeLocaleKey(key: string): string {
+  const trimmed = key.replace(/^\/+/, '').replace(/\/+$/, '')
+  return trimmed === '' ? '/' : `/${trimmed}/`
+}
+
 export function resolveConfig(user: UserConfig): CarvePressConfig {
   if (!user || typeof user.title !== 'string' || user.title === '') {
     throw new BuildError('config: title is required')
@@ -215,6 +275,7 @@ export function resolveConfig(user: UserConfig): CarvePressConfig {
       footer: user.themeConfig?.footer,
       lastUpdated: user.themeConfig?.lastUpdated,
       outline: user.themeConfig?.outline ?? { level: [2, 3] },
+      labels: { ...DEFAULT_LABELS, ...(user.themeConfig?.labels ?? {}) },
     },
     carve: {
       extensions: user.carve?.extensions ?? [],
@@ -234,5 +295,8 @@ export function resolveConfig(user: UserConfig): CarvePressConfig {
     search,
     extensions: [...(search === false ? [] : [searchIndex(search)]), ...(user.extensions ?? [])],
     layouts: user.layouts ?? {},
+    locales: Object.fromEntries(
+      Object.entries(user.locales ?? {}).map(([key, locale]) => [normalizeLocaleKey(key), locale]),
+    ),
   }
 }

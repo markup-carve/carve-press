@@ -1,10 +1,13 @@
 import type {
   CarvePressConfig,
   HeadTag,
+  LocaleConfig,
   NavItem,
   SidebarGroup,
   SidebarItem,
   SocialLink,
+  ThemeConfig,
+  ThemeLabels,
   ThemeLogo,
 } from '../config.js'
 import type { RenderedPage } from '../render/page.js'
@@ -22,6 +25,18 @@ export interface LayoutContext {
   prev?: FlatLink
   next?: FlatLink
   lastUpdated?: Date
+  locale?: LocaleConfig & { prefix: string; title: string; description?: string }
+  themeConfig?: ThemeConfig
+  labels?: ThemeLabels
+  meta?: {
+    head: HeadTag[]
+    image?: string
+    aside: boolean
+    sidebar: boolean
+    editLink: boolean
+    lastUpdated: boolean
+  }
+  routes?: Set<string>
 }
 
 export type Layout = (ctx: LayoutContext) => string
@@ -58,6 +73,26 @@ function objectValue(value: unknown): Record<string, unknown> | undefined {
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value !== '' ? value : undefined
+}
+
+function themeConfig(ctx: LayoutContext): ThemeConfig {
+  return ctx.themeConfig ?? ctx.config.themeConfig
+}
+
+function labels(ctx: LayoutContext): ThemeLabels {
+  return ctx.labels ?? themeConfig(ctx).labels
+}
+
+function localeLang(ctx: LayoutContext): string {
+  return ctx.locale?.lang ?? 'en'
+}
+
+function siteTitle(ctx: LayoutContext): string {
+  return ctx.locale?.title ?? ctx.config.title
+}
+
+function siteDescription(ctx: LayoutContext): string | undefined {
+  return ctx.locale?.description ?? ctx.config.description
 }
 
 function homeHeroActionValue(value: unknown): HomeHeroAction | undefined {
@@ -167,15 +202,42 @@ export function socialLinksHtml(links: SocialLink[]): string {
   return `<div class="social-links">${links.map(socialLinkHtml).join('')}</div>`
 }
 
+function localePath(prefix: string, currentPrefix: string, currentRoute: string): string {
+  const rest = currentPrefix === '/' ? currentRoute.replace(/^\//, '') : currentRoute.slice(currentPrefix.length)
+  if (prefix === '/') return rest === '' ? '/' : `/${rest}`
+  return `${prefix}${rest}`.replace(/\/$/, '') || prefix
+}
+
+function localeSwitcherHtml(ctx: LayoutContext): string {
+  const localeEntries = Object.entries(ctx.config.locales)
+  if (localeEntries.length < 2 || ctx.locale === undefined || ctx.routes === undefined) return ''
+  const items = localeEntries
+    .map(([prefix, locale]) => {
+      const target = localePath(prefix, ctx.locale!.prefix, ctx.rendered.page.route)
+      const href = ctx.routes!.has(target) ? target : prefix
+      const current = prefix === ctx.locale!.prefix ? ' aria-current="true"' : ''
+      return `<li><a href="${escapeAttr(withBase(ctx.config.base, href))}"${current}>${escapeText(
+        locale.label,
+      )}</a></li>`
+    })
+    .join('')
+  return `<nav class="locale-switcher" aria-label="Language"><ul>${items}</ul></nav>`
+}
+
 function themeToggleHtml(): string {
   return `<button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark theme"><span aria-hidden="true">Theme</span></button>`
 }
 
 function searchHtml(ctx: LayoutContext): string {
   if (ctx.config.search === false) return ''
+  const label = labels(ctx).search
   return `<div class="site-search" data-search-root data-search-index="${escapeAttr(
     withBase(ctx.config.base, `/assets/${ctx.config.search.filename}`),
-  )}" hidden><label class="site-search__label" for="site-search-input">Search</label><input class="site-search__input" id="site-search-input" type="search" placeholder="Search" autocomplete="off" spellcheck="false" data-search-input><div class="site-search__status" aria-live="polite" data-search-status></div><div class="site-search__panel" data-search-panel hidden><ul class="site-search__results" data-search-results></ul></div></div>`
+  )}" hidden><label class="site-search__label" for="site-search-input">${escapeText(
+    label,
+  )}</label><input class="site-search__input" id="site-search-input" type="search" placeholder="${escapeAttr(
+    label,
+  )}" autocomplete="off" spellcheck="false" data-search-input><div class="site-search__status" aria-live="polite" data-search-status></div><div class="site-search__panel" data-search-panel hidden><ul class="site-search__results" data-search-results></ul></div></div>`
 }
 
 function drawerButtonHtml(kind: 'nav' | 'sidebar', label: string, hasTarget: boolean): string {
@@ -211,19 +273,21 @@ function logoHtml(logo: ThemeLogo | undefined, base: string, fallbackAlt: string
  * aria-controls target does not exist is a button that does nothing.
  */
 export function headerHtml(ctx: LayoutContext, sidebarDrawer = ctx.sidebar.length > 0): string {
-  const title = ctx.config.themeConfig.siteTitle ?? ctx.config.title
+  const tc = themeConfig(ctx)
+  const title = tc.siteTitle ?? siteTitle(ctx)
   const titleText = title === false ? '' : `<span class="site-title__text">${escapeText(title)}</span>`
-  return `<header class="site-header">${drawerButtonHtml('sidebar', 'Open documentation navigation', sidebarDrawer)}<a class="site-title" href="${escapeAttr(
+  const switcher = localeSwitcherHtml(ctx)
+  return `<header class="site-header">${drawerButtonHtml('sidebar', labels(ctx).menu, sidebarDrawer)}<a class="site-title" href="${escapeAttr(
     withBase(ctx.config.base, '/'),
-  )}">${logoHtml(ctx.config.themeConfig.logo, ctx.config.base, ctx.config.title)}${titleText}</a><div class="site-header__right">${drawerButtonHtml(
+  )}">${logoHtml(tc.logo, ctx.config.base, siteTitle(ctx))}${titleText}</a><div class="site-header__right">${drawerButtonHtml(
     'nav',
-    'Open primary navigation',
-    ctx.config.themeConfig.nav.length > 0,
+    labels(ctx).menu,
+    tc.nav.length > 0,
   )}${headerNavHtml(
-    ctx.config.themeConfig.nav,
+    tc.nav,
     ctx.config.base,
     ctx.rendered.page.route,
-  )}${searchHtml(ctx)}${socialLinksHtml(ctx.config.themeConfig.socialLinks)}${themeToggleHtml()}</div></header>`
+  )}${switcher}${searchHtml(ctx)}${socialLinksHtml(tc.socialLinks)}${themeToggleHtml()}</div></header>`
 }
 
 function sidebarContainsCurrent(items: SidebarItem[], current: string): boolean {
@@ -265,6 +329,7 @@ export function sidebarHtml(groups: SidebarGroup[], base: string, current: strin
 }
 
 export function outlineHtml(ctx: LayoutContext): string {
+  if (ctx.meta?.aside === false) return ''
   if (ctx.rendered.outline.length === 0) return ''
   const items = ctx.rendered.outline
     .map(
@@ -274,7 +339,7 @@ export function outlineHtml(ctx: LayoutContext): string {
         )}">${escapeText(entry.title)}</a></li>`,
     )
     .join('')
-  return `<nav class="outline" aria-label="On this page"><ul>${items}</ul></nav>`
+  return `<nav class="outline" aria-label="${escapeAttr(labels(ctx).onThisPage)}"><ul>${items}</ul></nav>`
 }
 
 export function footerNav(ctx: LayoutContext): string {
@@ -284,7 +349,9 @@ export function footerNav(ctx: LayoutContext): string {
       ? ''
       : `<a class="page-nav__${rel}" rel="${rel}" href="${escapeAttr(
           withBase(base, item.link),
-        )}"><span class="page-nav__eyebrow">${rel === 'prev' ? 'Previous' : 'Next'}</span><span class="page-nav__title">${escapeText(
+        )}"><span class="page-nav__eyebrow">${escapeText(
+          rel === 'prev' ? labels(ctx).previous : labels(ctx).next,
+        )}</span><span class="page-nav__title">${escapeText(
           item.text,
         )}</span></a>`
   const prev = link(ctx.prev, 'prev')
@@ -295,20 +362,20 @@ export function footerNav(ctx: LayoutContext): string {
 }
 
 export function lastUpdatedHtml(ctx: LayoutContext): string {
-  if (ctx.config.themeConfig.lastUpdated !== true || ctx.lastUpdated === undefined) return ''
+  if (themeConfig(ctx).lastUpdated !== true || ctx.meta?.lastUpdated === false || ctx.lastUpdated === undefined) return ''
   const iso = ctx.lastUpdated.toISOString()
-  const text = new Intl.DateTimeFormat('en-US', {
+  const text = new Intl.DateTimeFormat(localeLang(ctx), {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   }).format(ctx.lastUpdated)
-  return `<p class="last-updated">Last updated <time datetime="${escapeAttr(iso)}">${escapeText(
+  return `<p class="last-updated">${escapeText(labels(ctx).lastUpdated)} <time datetime="${escapeAttr(iso)}">${escapeText(
     text,
   )}</time></p>`
 }
 
 export function siteFooter(ctx: LayoutContext): string {
-  const footer = ctx.config.themeConfig.footer
+  const footer = themeConfig(ctx).footer
   if (footer === undefined) return ''
   return `<footer class="site-footer"><p class="site-footer__message">${escapeText(
     footer.message,
@@ -318,12 +385,13 @@ export function siteFooter(ctx: LayoutContext): string {
 export function pageDescription(ctx: LayoutContext): string | undefined {
   return typeof ctx.rendered.page.frontmatter.description === 'string'
     ? ctx.rendered.page.frontmatter.description
-    : ctx.config.description
+    : siteDescription(ctx)
 }
 
 export function documentTitle(ctx: LayoutContext): string {
   const pageTitle = ctx.rendered.searchDoc.title
-  return pageTitle === ctx.config.title ? pageTitle : `${pageTitle} | ${ctx.config.title}`
+  const title = siteTitle(ctx)
+  return pageTitle === title ? pageTitle : `${pageTitle} | ${title}`
 }
 
 function absolutePageUrl(ctx: LayoutContext): string | undefined {
@@ -345,14 +413,47 @@ function hasOgUrl(head: HeadTag[]): boolean {
 function pageUrlHead(ctx: LayoutContext): HeadTag[] {
   const url = absolutePageUrl(ctx)
   if (url === undefined) return []
+  const head = [...ctx.config.head, ...(ctx.meta?.head ?? [])]
   const tags: HeadTag[] = []
-  if (!hasCanonical(ctx.config.head)) tags.push(['link', { rel: 'canonical', href: url }])
-  if (!hasOgUrl(ctx.config.head)) tags.push(['meta', { property: 'og:url', content: url }])
+  if (!hasCanonical(head)) tags.push(['link', { rel: 'canonical', href: url }])
+  if (!hasOgUrl(head)) tags.push(['meta', { property: 'og:url', content: url }])
   return tags
+}
+
+function pageImageHead(ctx: LayoutContext): HeadTag[] {
+  const image = ctx.meta?.image
+  if (image === undefined) return []
+  const content = image.startsWith('/') ? withBase(ctx.config.base, image) : image
+  return [
+    ['meta', { property: 'og:image', content }],
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+  ]
+}
+
+function extraHead(ctx: LayoutContext): HeadTag[] {
+  return [...pageUrlHead(ctx), ...pageImageHead(ctx), ...(ctx.meta?.head ?? [])]
+}
+
+function localizedHtml(ctx: LayoutContext): string {
+  const copy = escapeText(labels(ctx).copy)
+  const copied = escapeAttr(labels(ctx).copied)
+  const copyAria = escapeAttr(`${labels(ctx).copy} code`)
+  return ctx.rendered.html.replace(
+    /<button class="code-block__copy" type="button" aria-label="Copy code">Copy<\/button>/g,
+    `<button class="code-block__copy" type="button" aria-label="${copyAria}" data-copied-label="${copied}">${copy}</button>`,
+  )
 }
 
 function themeToggleScript(): string {
   return `    <script>(()=>{const b=document.querySelector('[data-theme-toggle]');if(!b)return;const d=document.documentElement,k='carve-press-theme',m=matchMedia('(prefers-color-scheme: dark)'),p=()=>m.matches?'dark':'light',c=()=>d.dataset.theme||p(),u=()=>{const n=c()==='dark'?'light':'dark';b.setAttribute('aria-label','Switch to '+n+' theme');b.dataset.themeToggleState=c()};u();b.addEventListener('click',()=>{const n=c()==='dark'?'light':'dark';d.dataset.theme=n;try{localStorage.setItem(k,n)}catch{}u()});m.addEventListener('change',()=>{try{if(localStorage.getItem(k))return}catch{}u()})})()</script>`
+}
+
+function labelsScript(ctx: LayoutContext): string {
+  const payload = JSON.stringify({
+    copy: labels(ctx).copy,
+    copied: labels(ctx).copied,
+  }).replace(/</g, '\\u003c')
+  return `\n    <script>window.__carvePressLabels=${payload}</script>`
 }
 
 function searchScript(ctx: LayoutContext): string {
@@ -384,18 +485,23 @@ function navScript(ctx: LayoutContext): string {
 }
 
 export function editLink(ctx: LayoutContext): string {
-  const edit = ctx.config.themeConfig.editLink
+  if (ctx.meta?.editLink === false) return ''
+  const edit = themeConfig(ctx).editLink
   if (edit === undefined) return ''
   const href = edit.pattern.replace(':path', ctx.rendered.page.relPath)
   return `<a class="edit-link" href="${escapeAttr(href)}">${escapeText(edit.text)}</a>`
 }
 
 export const docLayout: Layout = (ctx) => {
+  const content = localizedHtml(ctx)
+  const layoutClasses = ['layout']
+  if (ctx.meta?.aside === false || ctx.rendered.outline.length === 0) layoutClasses.push('layout--no-aside')
+  if (ctx.sidebar.length === 0) layoutClasses.push('layout--no-sidebar')
   const body = `    ${headerHtml(ctx)}
-    <div class="layout">
+    <div class="${layoutClasses.join(' ')}">
       ${sidebarHtml(ctx.sidebar, ctx.config.base, ctx.rendered.page.route)}
       <main class="content">
-${ctx.rendered.html}
+${content}
         ${editLink(ctx)}
         ${lastUpdatedHtml(ctx)}
         ${footerNav(ctx)}
@@ -404,36 +510,37 @@ ${ctx.rendered.html}
     </div>
     ${siteFooter(ctx)}
     <div class="drawer-scrim" data-drawer-scrim hidden></div>
-${themeToggleScript()}${searchScript(ctx)}${navScript(ctx)}${tableScrollScript(ctx)}${codeCopyScript(ctx)}${outlineScript(ctx)}${playgroundScript(ctx)}`
+${themeToggleScript()}${labelsScript(ctx)}${searchScript(ctx)}${navScript(ctx)}${tableScrollScript(ctx)}${codeCopyScript(ctx)}${outlineScript(ctx)}${playgroundScript(ctx)}`
 
   return htmlDocument({
-    lang: 'en-US',
+    lang: localeLang(ctx),
     title: documentTitle(ctx),
     description: pageDescription(ctx),
     head: ctx.config.head,
-    extraHead: pageUrlHead(ctx),
+    extraHead: extraHead(ctx),
     base: ctx.config.base,
     body,
   })
 }
 
 export const pageLayout: Layout = (ctx) => {
+  const content = localizedHtml(ctx)
   const body = `    ${headerHtml(ctx, false)}
     <main class="page-layout content">
-${ctx.rendered.html}
+${content}
         ${editLink(ctx)}
         ${lastUpdatedHtml(ctx)}
       </main>
     ${siteFooter(ctx)}
     <div class="drawer-scrim" data-drawer-scrim hidden></div>
-${themeToggleScript()}${searchScript(ctx)}${navScript(ctx)}${tableScrollScript(ctx)}${codeCopyScript(ctx)}${playgroundScript(ctx)}`
+${themeToggleScript()}${labelsScript(ctx)}${searchScript(ctx)}${navScript(ctx)}${tableScrollScript(ctx)}${codeCopyScript(ctx)}${playgroundScript(ctx)}`
 
   return htmlDocument({
-    lang: 'en-US',
+    lang: localeLang(ctx),
     title: documentTitle(ctx),
     description: pageDescription(ctx),
     head: ctx.config.head,
-    extraHead: pageUrlHead(ctx),
+    extraHead: extraHead(ctx),
     base: ctx.config.base,
     body,
   })
@@ -500,8 +607,9 @@ function featuresHtml(ctx: LayoutContext): string {
 }
 
 export const homeLayout: Layout = (ctx) => {
+  const content = localizedHtml(ctx)
   const renderedBody =
-    ctx.rendered.html.trim() === '' ? '' : `<div class="home-body content">${ctx.rendered.html}</div>`
+    content.trim() === '' ? '' : `<div class="home-body content">${content}</div>`
   const body = `    ${headerHtml(ctx, false)}
     <main class="home-layout">
       ${heroHtml(ctx)}
@@ -510,13 +618,14 @@ export const homeLayout: Layout = (ctx) => {
     </main>
     ${siteFooter(ctx)}
     <div class="drawer-scrim" data-drawer-scrim hidden></div>
-${themeToggleScript()}${searchScript(ctx)}${navScript(ctx)}${tableScrollScript(ctx)}${codeCopyScript(ctx)}${playgroundScript(ctx)}`
+${themeToggleScript()}${labelsScript(ctx)}${searchScript(ctx)}${navScript(ctx)}${tableScrollScript(ctx)}${codeCopyScript(ctx)}${playgroundScript(ctx)}`
 
   return htmlDocument({
-    lang: 'en-US',
+    lang: localeLang(ctx),
     title: documentTitle(ctx),
     description: pageDescription(ctx),
     head: ctx.config.head,
+    extraHead: extraHead(ctx),
     base: ctx.config.base,
     body,
   })

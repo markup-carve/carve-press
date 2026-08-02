@@ -427,7 +427,10 @@ export function broken() {
       const stdout = await dumpDom(bin, [
         ...chromeFlags,
         `--user-data-dir=${userDataDir}`,
-        '--virtual-time-budget=3000',
+        // Must outlast the in-page polling budget (100 x 50ms of virtual time).
+        // When the browser's budget expires first, the page is cut off before it
+        // can report which wait timed out, and the failure reads as an empty dump.
+        '--virtual-time-budget=20000',
         '--dump-dom',
         pathToFileURL(htmlPath).href,
       ])
@@ -446,7 +449,7 @@ export function broken() {
               .replace(/&quot;/g, '"')
               .replace(/&#39;/g, "'")
               .replace(/&amp;/g, '&')
-      expect(result).toBeDefined()
+      expect(result, `the page never reported a result; dump tail: ${stdout.slice(-400)}`).toBeDefined()
       const parsed = JSON.parse(result ?? '{}') as { ok: boolean; message?: string }
       // Assert the harness message first: toMatchObject elides it, which turns a
       // precise in-page assertion failure into an unreadable shape mismatch.
