@@ -43,7 +43,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@markup-carve/carve": "github:markup-carve/carve-js#ef45a7484348e4d1cd84c1061e0b774038b16115",
+    "@markup-carve/carve": "github:markup-carve/carve-js#5e43fc1b5883e26d9eaf87df235566372e22a4e0",
     "@markup-carve/carve-grammars": "github:markup-carve/carve-grammars",
     "minisearch": "^7.2.0",
     "shiki": "^1.24.0",

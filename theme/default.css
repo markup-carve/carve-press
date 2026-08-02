@@ -534,7 +534,26 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
 
 /* ----------------------------------------------------------------- content */
 
-.content { min-width: 0; max-width: var(--measure); }
+/*
+ * Prose keeps a readable measure, but wide blocks are allowed to use the whole
+ * column: a comparison table or a source/output pair is data, and squeezing it
+ * into a text measure buys nothing and costs a scrollbar.
+ */
+.content { min-width: 0; }
+.content > * { max-width: var(--measure); }
+.content > table,
+.content > .carve-compare,
+.content > .carve-playground,
+.content > .code-group,
+.content > pre,
+.content > figure { max-width: none; }
+.content > section > * { max-width: var(--measure); }
+.content > section > table,
+.content > section > .carve-compare,
+.content > section > .carve-playground,
+.content > section > .code-group,
+.content > section > pre,
+.content > section > figure { max-width: none; }
 
 .content h1 {
   font-family: var(--display);
