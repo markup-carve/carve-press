@@ -28,6 +28,10 @@ function renderHead(tags: HeadTag[]): string {
     .join('\n    ')
 }
 
+function themeBootstrapScript(): string {
+  return `<script>(()=>{try{const t=localStorage.getItem('carve-press-theme');if(t==='dark'||t==='light')document.documentElement.dataset.theme=t}catch{}})()</script>`
+}
+
 export interface DocumentOptions {
   lang: string
   title: string
@@ -48,6 +52,7 @@ export function htmlDocument(opts: DocumentOptions): string {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>${escapeText(opts.title)}</title>${description}
+    ${themeBootstrapScript()}
     <link rel="stylesheet" href="${escapeAttr(withBase(opts.base, '/assets/style.css'))}">
     ${renderHead(opts.head)}
   </head>
