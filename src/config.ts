@@ -51,6 +51,7 @@ export type ShikiLanguage = string | LanguageRegistration
 export interface ShikiConfig {
   langs: ShikiLanguage[]
   themes: { light: string; dark: string }
+  lineNumbers: boolean | number
 }
 
 export interface ThemeAssetsConfig {
@@ -119,6 +120,7 @@ const DEFAULT_SHIKI: ShikiConfig = {
     'xml',
   ],
   themes: { light: 'github-light', dark: 'github-dark' },
+  lineNumbers: false,
 }
 
 function shikiLanguageName(lang: ShikiLanguage): string {
@@ -218,6 +220,7 @@ export function resolveConfig(user: UserConfig): CarvePressConfig {
         light: user.shiki?.themes?.light ?? DEFAULT_SHIKI.themes.light,
         dark: user.shiki?.themes?.dark ?? DEFAULT_SHIKI.themes.dark,
       },
+      lineNumbers: user.shiki?.lineNumbers ?? DEFAULT_SHIKI.lineNumbers,
     },
     search,
     extensions: [...(search === false ? [] : [searchIndex(search)]), ...(user.extensions ?? [])],

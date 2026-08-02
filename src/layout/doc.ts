@@ -276,6 +276,10 @@ function tableScrollScript(ctx: LayoutContext): string {
   return `\n    <script src="${escapeAttr(withBase(ctx.config.base, '/assets/table-scroll.js'))}" defer></script>`
 }
 
+function codeCopyScript(ctx: LayoutContext): string {
+  return `\n    <script src="${escapeAttr(withBase(ctx.config.base, '/assets/code-copy.js'))}" defer></script>`
+}
+
 function outlineScript(ctx: LayoutContext): string {
   return `\n    <script src="${escapeAttr(withBase(ctx.config.base, '/assets/outline.js'))}" defer></script>`
 }
@@ -300,7 +304,7 @@ ${ctx.rendered.html}
       ${outlineHtml(ctx)}
     </div>
     ${siteFooter(ctx)}
-${themeToggleScript()}${searchScript(ctx)}${tableScrollScript(ctx)}${outlineScript(ctx)}${playgroundScript(ctx)}`
+${themeToggleScript()}${searchScript(ctx)}${tableScrollScript(ctx)}${codeCopyScript(ctx)}${outlineScript(ctx)}${playgroundScript(ctx)}`
 
   return htmlDocument({
     lang: 'en-US',
@@ -383,7 +387,7 @@ export const homeLayout: Layout = (ctx) => {
       ${renderedBody}
     </main>
     ${siteFooter(ctx)}
-${themeToggleScript()}${searchScript(ctx)}${tableScrollScript(ctx)}${playgroundScript(ctx)}`
+${themeToggleScript()}${searchScript(ctx)}${tableScrollScript(ctx)}${codeCopyScript(ctx)}${playgroundScript(ctx)}`
 
   return htmlDocument({
     lang: 'en-US',

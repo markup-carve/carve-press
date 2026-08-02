@@ -23,6 +23,7 @@ const defaultSearchScriptPath = require.resolve('../theme/search.js')
 const miniSearchScriptPath = resolveMiniSearchScriptPath()
 const defaultPlaygroundScriptPath = require.resolve('../theme/playground.js')
 const defaultTableScrollScriptPath = require.resolve('../theme/table-scroll.js')
+const defaultCodeCopyScriptPath = require.resolve('../theme/code-copy.js')
 const defaultOutlineScriptPath = require.resolve('../theme/outline.js')
 const carveGrammarPath = require.resolve('@markup-carve/carve-grammars/textmate/carve.tmLanguage.json')
 const carveEngineDistPath = resolve(dirname(carveGrammarPath), '../../carve/dist')
@@ -153,6 +154,12 @@ async function writeTableScrollScript(outDir: string): Promise<void> {
   await copyFile(defaultTableScrollScriptPath, outPath)
 }
 
+async function writeCodeCopyScript(outDir: string): Promise<void> {
+  const outPath = resolve(outDir, 'assets/code-copy.js')
+  await mkdir(dirname(outPath), { recursive: true })
+  await copyFile(defaultCodeCopyScriptPath, outPath)
+}
+
 async function writeOutlineScript(outDir: string): Promise<void> {
   const outPath = resolve(outDir, 'assets/outline.js')
   await mkdir(dirname(outPath), { recursive: true })
@@ -253,6 +260,7 @@ export async function buildSite(opts: {
   })
   if (config.search !== false) await writeSearchScript(outDir)
   await writeTableScrollScript(outDir)
+  await writeCodeCopyScript(outDir)
   await writeOutlineScript(outDir)
 
   const discovered = await discoverPages(srcDir, config.srcExclude)
