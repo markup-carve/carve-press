@@ -451,7 +451,14 @@ class CarvePlayground extends HTMLElementBase {
     const renderCharts = async (current) => {
       const chartUrl = this.dataset.playgroundChart
       if (chartUrl === undefined) return
-      const blocks = Array.from(renderedContent.querySelectorAll('div.chart'))
+      // `div.chart` is the chart extension's output; `pre > code.language-chart`
+      // is the plain code block the Rust engine emits, which has no such
+      // extension. Mermaid already handles both forms, and a chart that renders
+      // under one engine and not the other is the kind of inconsistency a reader
+      // reads as a bug.
+      const blocks = Array.from(
+        renderedContent.querySelectorAll('div.chart, pre > code.language-chart'),
+      )
       if (blocks.length === 0) return
       let Chart
       try {
@@ -466,26 +473,33 @@ class CarvePlayground extends HTMLElementBase {
       if (!stillCurrent(current)) return
       for (const block of blocks) {
         if (!renderedContent.contains(block)) continue
-        const script = block.querySelector('script[type="application/json"]')
-        if (script === null) continue
+        // A code block carries its config as text; the extension's div wraps it
+        // in a JSON script tag. Either way the config is read, never evaluated.
+        const isCodeBlock = block.tagName === 'CODE'
+        const source = isCodeBlock
+          ? block.textContent
+          : block.querySelector('script[type="application/json"]')?.textContent
+        if (source === undefined || source === null) continue
         let config
         try {
-          config = JSON.parse(script.textContent ?? '')
+          config = JSON.parse(source)
         } catch {
           continue
         }
+        const host = isCodeBlock ? block.parentElement : block
+        if (host === null) continue
         const canvas = this.ownerDocument.createElement('canvas')
         canvas.id = `carve-chart-${chartSeq++}`
-        block.replaceChildren(canvas)
+        host.replaceChildren(canvas)
         try {
           const chart = new Chart(canvas, config)
-          if (!stillCurrent(current) || !block.isConnected || !renderedContent.contains(block)) {
+          if (!stillCurrent(current) || !host.isConnected || !renderedContent.contains(host)) {
             chart.destroy()
             return
           }
           charts.push(chart)
         } catch (error) {
-          block.replaceChildren(playgroundError(this.ownerDocument, errorMessage(error)))
+          host.replaceChildren(playgroundError(this.ownerDocument, errorMessage(error)))
         }
       }
     }
