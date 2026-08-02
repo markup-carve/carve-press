@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
+import * as carveEngine from '@markup-carve/carve'
 import { carveToHtml } from '@markup-carve/carve'
 import { afterEach, describe, expect, it } from 'vitest'
 import { playgroundExtension } from '../src/render/playground.js'
@@ -73,21 +74,45 @@ function fixtureHtml(playgroundMarkup: string): string {
         const el = document.querySelector('carve-playground')
         const textarea = el.querySelector('textarea')
         const preview = el.querySelector('.carve-playground__live')
-        const code = el.querySelector('.carve-playground__pane code')
+        const rendered = el.querySelector('.carve-playground__rendered')
+        const code = el.querySelector('.carve-playground__pane:not(.carve-playground__live) code')
+        const astText = () => el.querySelector('.carve-playground__pane--ast code')?.textContent ?? ''
+        const buttons = [...el.querySelectorAll('button')]
 
         await waitFor(() => textarea.value === '*bold*', 'textarea seeded from the template source')
-        await waitFor(() => preview.innerHTML === '<p><strong>bold</strong></p>', 'preview rendered on load')
+        await waitFor(() => rendered.innerHTML === '<p><strong>bold</strong></p>', 'preview rendered on load')
         assert(code.textContent === '<p><strong>bold</strong></p>\\n', 'HTML view should show rendered HTML text')
+        await waitFor(() => astText().includes('*bold*'), 'AST view reflects the initial source')
+        assert(JSON.parse(astText()).type === 'document', 'AST view should contain a parseable document node')
+        assert(buttons.length >= 3, 'copy buttons should exist for source, HTML, and AST panes')
+        assert(
+          buttons.some((button) => button.type === 'button' && button.getAttribute('aria-label') === 'Copy Carve source'),
+          'source copy button should be a labeled button',
+        )
+        assert(
+          buttons.some((button) => button.type === 'button' && button.getAttribute('aria-label') === 'Copy rendered HTML source'),
+          'HTML copy button should be a labeled button',
+        )
 
         document.body.append(el)
         await delay(50)
         assert(textarea.value === '*bold*', 'reconnecting should not clear the editor')
 
-        textarea.value = '/changed/'
+        textarea.value = '::: details\\nbody\\n:::'
         textarea.dispatchEvent(new Event('input', { bubbles: true }))
-        await waitFor(() => preview.innerHTML === '<p><em>changed</em></p>', 'typing updates the preview')
-        assert(code.textContent === '<p><em>changed</em></p>\\n', 'HTML view should update as text')
-        finish({ ok: true, textareaLength: textarea.value.length, preview: preview.innerHTML, htmlText: code.textContent })
+        await waitFor(() => rendered.innerHTML.includes('<details>'), 'typing an extension construct updates the preview')
+        assert(rendered.innerHTML.includes('<summary>Details</summary>'), 'details extension should render distinguishing markup')
+        assert(code.textContent.includes('<details>'), 'HTML view should update as text')
+        await waitFor(() => astText().includes('details'), 'AST view reflects the edited source')
+        assert(JSON.parse(astText()).type === 'document', 'AST view should stay parseable after an edit')
+        finish({
+          ok: true,
+          textareaLength: textarea.value.length,
+          preview: rendered.innerHTML,
+          htmlText: code.textContent,
+          astRootType: JSON.parse(astText()).type,
+          buttons: buttons.map((button) => ({ tag: button.tagName, type: button.type, label: button.getAttribute('aria-label') })),
+        })
       } catch (error) {
         finish({ ok: false, message: error instanceof Error ? error.message : String(error) })
       }
@@ -145,6 +170,10 @@ class FakeElement extends FakeNode {
     this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener])
   }
 
+  setAttribute(name: string, value: string) {
+    this.attributes.set(name, value)
+  }
+
   querySelector(selector: string): FakeElement | null {
     return findElement(this, selector)
   }
@@ -187,14 +216,92 @@ const realGlobals = {
   document: globalThis.document,
   HTMLElement: globalThis.HTMLElement,
   HTMLTemplateElement: globalThis.HTMLTemplateElement,
+  navigator: Object.getOwnPropertyDescriptor(globalThis, 'navigator'),
   window: globalThis.window,
 }
 
 afterEach(() => {
-  Object.assign(globalThis, realGlobals)
+  Object.assign(globalThis, {
+    customElements: realGlobals.customElements,
+    document: realGlobals.document,
+    HTMLElement: realGlobals.HTMLElement,
+    HTMLTemplateElement: realGlobals.HTMLTemplateElement,
+    window: realGlobals.window,
+  })
+  if (realGlobals.navigator) Object.defineProperty(globalThis, 'navigator', realGlobals.navigator)
 })
 
 describe('playground client', () => {
+  it('classifies every current engine export for the playground extension stack', async () => {
+    const mod = await import(`${pathToFileURL(resolve(import.meta.dirname, '../theme/playground.js')).href}?classify=${Date.now()}`)
+    const classify = mod.classifyEngineExport as (name: string, value: unknown) => { kind: string; reason?: string }
+    const build = mod.buildPlaygroundExtensions as (engine: Record<string, unknown>) => Array<{ name: string }>
+    const exclusions = mod.PLAYGROUND_EXTENSION_EXCLUSIONS as Record<string, string>
+    const unclassified = Object.entries(carveEngine)
+      .filter(([name, value]) => {
+        const result = classify(name, value)
+        return result.kind === 'unclassified'
+      })
+      .map(([name]) => name)
+
+    expect(unclassified).toEqual([])
+    expect(exclusions.mermaid).toMatch(/Mermaid/)
+    expect(build(carveEngine as Record<string, unknown>).map((extension) => extension.name)).toEqual([
+      'autolink',
+      'citations',
+      'codeCallouts',
+      'code-group',
+      'color',
+      'details',
+      'external-links',
+      'glossary',
+      'heading-level-shift',
+      'headingNumbers',
+      'heading-permalinks',
+      'heading-reference',
+      'img-fence',
+      'index',
+      'list-table',
+      'math-block',
+      'spoiler',
+      'table-of-contents',
+      'tabs',
+      'toc',
+      'wikilinks',
+    ])
+  })
+
+  it('fails the drift guard for an unclassified engine export', async () => {
+    const mod = await import(`${pathToFileURL(resolve(import.meta.dirname, '../theme/playground.js')).href}?drift=${Date.now()}`)
+    const classify = mod.classifyEngineExport as (name: string, value: unknown) => { kind: string }
+
+    expect(classify('newPublicHelper', () => ({ nope: true }))).toEqual({ kind: 'unclassified' })
+  })
+
+  it('skips an extension whose construction throws', async () => {
+    const mod = await import(`${pathToFileURL(resolve(import.meta.dirname, '../theme/playground.js')).href}?throws=${Date.now()}`)
+    const build = mod.buildPlaygroundExtensions as (engine: Record<string, unknown>) => Array<{ name: string }>
+    const errors: unknown[] = []
+    const realConsoleError = console.error
+    console.error = (...args: unknown[]) => {
+      errors.push(args)
+    }
+
+    try {
+      const extensions = build({
+        details: carveEngine.details,
+        broken() {
+          throw new Error('boom')
+        },
+      })
+      expect(extensions.map((extension) => extension.name)).toEqual(['details'])
+      expect(errors).toHaveLength(1)
+      expect(String((errors[0] as unknown[])[0])).toContain('broken')
+    } finally {
+      console.error = realConsoleError
+    }
+  })
+
   it('seeds the editor from template content before replacing server-rendered children', async () => {
     const source = '*bold*'
     const rendered = '<p><strong>bold</strong></p>'
@@ -204,6 +311,7 @@ describe('playground client', () => {
     expect(playgroundMarkup).toContain(`<template data-carve-playground-source>${source}</template>`)
 
     const registry = new Map<string, CustomElementConstructor>()
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {} })
     Object.assign(globalThis, {
       HTMLElement: FakeElement,
       HTMLTemplateElement: FakeTemplateElement,
@@ -271,10 +379,23 @@ describe('playground client', () => {
     await writeFile(
       enginePath,
       `
-export function carveToHtml(source) {
+export function carveToHtml(source, opts = {}) {
   if (source === '*bold*') return '<p><strong>bold</strong></p>'
-  if (source === '/changed/') return '<p><em>changed</em></p>'
+  if (source === '::: details\\nbody\\n:::') {
+    return opts.extensions?.some((extension) => extension.name === 'details')
+      ? '<details>\\n  <summary>Details</summary>\\n  <p>body</p>\\n</details>'
+      : '<div class="details">\\n  <p>body</p>\\n</div>'
+  }
   return ''
+}
+export function carveToAstJson(source) {
+  return { type: 'document', children: [{ type: 'text', value: source }] }
+}
+export function details() {
+  return { name: 'details', blockRenderers: {} }
+}
+export function broken() {
+  throw new Error('boom')
 }
 `,
     )
@@ -313,10 +434,14 @@ export function carveToHtml(source) {
       expect(parsed.message ?? 'ok').toBe('ok')
       expect(parsed).toMatchObject({
         ok: true,
-        textareaLength: 9,
-        preview: '<p><em>changed</em></p>',
-        htmlText: '<p><em>changed</em></p>\n',
+        // Derived, not a literal: a hand-written length silently stops matching
+        // the moment the typed source changes.
+        textareaLength: '::: details\nbody\n:::'.length,
+        preview: '<details>\n  <summary>Details</summary>\n  <p>body</p>\n</details>',
+        htmlText: '<details>\n  <summary>Details</summary>\n  <p>body</p>\n</details>\n',
+        astRootType: 'document',
       })
+      expect(parsed).toHaveProperty('buttons')
     } finally {
       await rm(userDataDir, { force: true, recursive: true })
       await rm(fixtureDir, { force: true, recursive: true })

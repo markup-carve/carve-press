@@ -1,4 +1,4 @@
-import { carveToHtml, type Attrs, type CarveExtension } from '@markup-carve/carve'
+import { carveToAstJson, carveToHtml, type Attrs, type CarveExtension } from '@markup-carve/carve'
 
 interface CodeBlockNode {
   type: string
@@ -47,6 +47,8 @@ export function playgroundExtension(): CarveExtension {
         const group = `playground-${++counter}`
         const renderedId = ctx.uniqueId(`${group}-rendered`)
         const htmlId = ctx.uniqueId(`${group}-html`)
+        const astId = ctx.uniqueId(`${group}-ast`)
+        const ast = JSON.stringify(carveToAstJson(source), null, 2)
         const attrs = ctx.renderAttrs(withBaseClasses(node.attrs, 'carve-playground'))
 
         const sourcePane = `<div class="carve-playground__source" data-carve-playground-source-view>${ctx.renderChildren(
@@ -58,8 +60,11 @@ export function playgroundExtension(): CarveExtension {
           `<label for="${renderedId}" class="carve-playground__label">Rendered</label>`,
           `<input type="radio" name="${group}" id="${htmlId}" class="carve-playground__radio">`,
           `<label for="${htmlId}" class="carve-playground__label">HTML</label>`,
+          `<input type="radio" name="${group}" id="${astId}" class="carve-playground__radio">`,
+          `<label for="${astId}" class="carve-playground__label">AST</label>`,
           `<div class="carve-playground__pane carve-playground__live" data-carve-playground-rendered>${rendered}</div>`,
           `<div class="carve-playground__pane"><pre><code data-carve-playground-html>${ctx.escapeHtml(rendered)}\n</code></pre></div>`,
+          `<div class="carve-playground__pane carve-playground__pane--ast"><pre><code data-carve-playground-ast>${ctx.escapeHtml(ast)}\n</code></pre></div>`,
         ].join('')
 
         return `<carve-playground${attrs}>${renderSourceTemplate(
