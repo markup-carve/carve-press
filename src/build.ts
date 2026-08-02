@@ -19,6 +19,7 @@ const defaultThemePath = require.resolve('../theme/default.css')
 const defaultSearchScriptPath = require.resolve('../theme/search.js')
 const defaultPlaygroundScriptPath = require.resolve('../theme/playground.js')
 const defaultTableScrollScriptPath = require.resolve('../theme/table-scroll.js')
+const defaultOutlineScriptPath = require.resolve('../theme/outline.js')
 const carveGrammarPath = require.resolve('@markup-carve/carve-grammars/textmate/carve.tmLanguage.json')
 const carveEngineDistPath = resolve(dirname(carveGrammarPath), '../../carve/dist')
 
@@ -97,6 +98,12 @@ async function writeTableScrollScript(outDir: string): Promise<void> {
   await copyFile(defaultTableScrollScriptPath, outPath)
 }
 
+async function writeOutlineScript(outDir: string): Promise<void> {
+  const outPath = resolve(outDir, 'assets/outline.js')
+  await mkdir(dirname(outPath), { recursive: true })
+  await copyFile(defaultOutlineScriptPath, outPath)
+}
+
 async function writePlaygroundAssets(outDir: string): Promise<void> {
   const scriptPath = resolve(outDir, 'assets/playground.js')
   await mkdir(dirname(scriptPath), { recursive: true })
@@ -139,6 +146,7 @@ export async function buildSite(opts: {
   await writeThemeCss({ root: opts.root, outDir, css: config.theme.css })
   if (config.search !== false) await writeSearchScript(outDir)
   await writeTableScrollScript(outDir)
+  await writeOutlineScript(outDir)
 
   const discovered = await discoverPages(srcDir, config.srcExclude)
   const { pages } = await bus.emit('contentDiscovered', { pages: discovered })

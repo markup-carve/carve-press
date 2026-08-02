@@ -64,6 +64,13 @@ describe('buildSite', () => {
     expect(actual).toBe(expected)
   })
 
+  it('writes the shipped outline client script', async () => {
+    const { outDir } = await build()
+    const actual = await readFile(resolve(outDir, 'assets/outline.js'), 'utf8')
+    const expected = await readFile(resolve(import.meta.dirname, '../theme/outline.js'), 'utf8')
+    expect(actual).toBe(expected)
+  })
+
   it('writes playground assets only when a page contains a playground', async () => {
     const root = await mkdtemp(resolve(tmpdir(), 'cp-playground-'))
     const srcDir = resolve(root, 'docs')

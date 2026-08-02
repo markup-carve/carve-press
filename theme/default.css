@@ -528,9 +528,22 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
   color: var(--brass);
   margin-bottom: 0.7rem;
 }
-.outline a { display: block; padding: 0.22rem 0; color: var(--ink-soft); text-decoration: none; }
-.outline a:hover { color: var(--verdigris); }
-.outline__item--l3 a { padding-left: 0.9rem; font-size: 0.76rem; }
+.outline a {
+  display: block;
+  padding: 0.22rem 0 0.22rem 1.5rem;
+  margin-left: -1.5rem;
+  color: var(--ink-soft);
+  text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: color 0.14s ease, border-color 0.14s ease;
+}
+.outline a:hover { color: var(--verdigris); border-left-color: var(--rule); }
+.outline a[aria-current='true'] {
+  color: var(--verdigris);
+  font-weight: 600;
+  border-left-color: var(--verdigris);
+}
+.outline__item--l3 a { padding-left: 2.4rem; font-size: 0.76rem; }
 
 /* ----------------------------------------------------------------- content */
 
