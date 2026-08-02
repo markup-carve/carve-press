@@ -68,7 +68,6 @@ function fixtureHtml(playgroundMarkup: string): string {
           }
           throw new Error('timed out waiting for: ' + what)
         }
-
         await import('./assets/playground.js')
         await customElements.whenDefined('carve-playground')
         const el = document.querySelector('carve-playground')
@@ -194,6 +193,124 @@ function wasmFixtureHtml(playgroundMarkup: string, mode: 'success' | 'fail'): st
     </script>
   </body>
 </html>`
+}
+
+function runtimeFixtureHtml(playgroundMarkup: string, script: string): string {
+  const safeScript = script.replace(/<\/script/gi, '<\\/script')
+  return `<!doctype html>
+<html>
+  <head></head>
+  <body>
+    ${playgroundMarkup}
+    <script type="module">
+      const delay = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms))
+      const assert = (condition, message) => {
+        if (!condition) throw new Error(message)
+      }
+      const finish = (result) => {
+        const node = document.createElement('pre')
+        node.id = 'result'
+        node.textContent = JSON.stringify(result)
+        document.body.append(node)
+      }
+      const waitFor = async (predicate, what) => {
+        for (let i = 0; i < 120; i++) {
+          if (predicate()) return
+          await delay(50)
+        }
+        throw new Error('timed out waiting for: ' + what)
+      }
+
+      try {
+        await import('./assets/playground.js')
+        await customElements.whenDefined('carve-playground')
+        ${safeScript}
+      } catch (error) {
+        finish({ ok: false, message: error instanceof Error ? error.message : String(error) })
+      }
+    </script>
+  </body>
+</html>`
+}
+
+function decodeDumpedResult(stdout: string): string | undefined {
+  const raw = stdout.match(/<pre id="result">(?<json>.*?)<\/pre>/s)?.groups?.json
+  return raw
+    ?.replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+}
+
+
+/**
+ * Chrome dumps the DOM when its virtual-time budget is exhausted, and virtual
+ * time advances at full speed while the page is idle - including through the
+ * in-page poll loops, which burn tens of virtual seconds in an instant. The
+ * budget therefore has to sit far above the worst-case total polling time, or
+ * the page is cut off by its own waiting. Under CPU contention the
+ * page's real work - a module load, a diagram parse - can still be pending when
+ * the budget runs out, so the in-page script never writes its result and the
+ * failure reads as "no result" rather than as anything about the behavior. One
+ * retry turns that machine-load artifact back into a real signal; a genuine
+ * failure still produces a result, with its message, on the first run.
+ */
+async function dumpFixture(bin: string, htmlPath: string, userDataDir: string): Promise<string | undefined> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { stdout } = await execFileAsync(
+      bin,
+      [
+        ...chromeFlags,
+        `--user-data-dir=${userDataDir}`,
+        '--virtual-time-budget=600000',
+        '--dump-dom',
+        pathToFileURL(htmlPath).href,
+      ],
+      { maxBuffer: 1024 * 1024 * 5, timeout: 60000 },
+    )
+    const result = decodeDumpedResult(stdout)
+    if (result !== undefined) return result
+  }
+  return undefined
+}
+
+async function runRuntimeFixture(
+  playgroundMarkup: string,
+  fixtureScript: string,
+  assets: Record<string, string>,
+): Promise<Record<string, unknown>> {
+  const bin = chromeBin()
+  expect(bin, 'Chrome is required for the browser playground regression test').toBeDefined()
+  if (!bin || !(await canDriveChrome(bin))) return { skipped: true }
+
+  const playgroundScript = await readFile(resolve(import.meta.dirname, '../theme/playground.js'), 'utf8')
+  const userDataDir = await mkdtemp(resolve(tmpdir(), 'cp-chrome-'))
+  const fixtureDir = await mkdtemp(resolve(tmpdir(), 'cp-playground-runtime-'))
+  const htmlPath = resolve(fixtureDir, 'index.html')
+  const scriptPath = resolve(fixtureDir, 'assets/playground.js')
+  const enginePath = resolve(fixtureDir, 'assets/carve/index.js')
+
+  await mkdir(dirname(enginePath), { recursive: true })
+  await writeFile(htmlPath, runtimeFixtureHtml(playgroundMarkup, fixtureScript))
+  await writeFile(scriptPath, playgroundScript)
+  for (const [assetPath, contents] of Object.entries(assets)) {
+    const resolved = resolve(fixtureDir, assetPath)
+    await mkdir(dirname(resolved), { recursive: true })
+    await writeFile(resolved, contents)
+  }
+
+  try {
+    const result = await dumpFixture(bin, htmlPath, userDataDir)
+    expect(result).toBeDefined()
+    const parsed = JSON.parse(result ?? '{}') as Record<string, unknown> & { ok?: boolean; message?: string }
+    expect(parsed.message ?? 'ok').toBe('ok')
+    expect(parsed.ok).toBe(true)
+    return parsed
+  } finally {
+    await rm(userDataDir, { force: true, recursive: true })
+    await rm(fixtureDir, { force: true, recursive: true })
+  }
 }
 
 class FakeNode {
@@ -476,32 +593,9 @@ export function broken() {
     )
 
     try {
-      const { stdout } = await execFileAsync(
-        bin,
-        [
-          ...chromeFlags,
-          `--user-data-dir=${userDataDir}`,
-          '--virtual-time-budget=60000',
-          '--dump-dom',
-          pathToFileURL(htmlPath).href,
-        ],
-        { maxBuffer: 1024 * 1024 * 5, timeout: 60000 },
-      )
+      const dumped = await dumpFixture(bin, htmlPath, userDataDir)
 
-      const raw = stdout.match(/<pre id="result">(?<json>.*?)<\/pre>/s)?.groups?.json
-      // finish() writes the JSON with textContent, so --dump-dom serializes it
-      // with HTML escaping. Decode before parsing or every '<' in the captured
-      // HTML arrives as '&lt;' and the comparison fails on the harness's own
-      // round-trip rather than on the behavior under test.
-      const result =
-        raw === undefined
-          ? undefined
-          : raw
-              .replace(/&lt;/g, '<')
-              .replace(/&gt;/g, '>')
-              .replace(/&quot;/g, '"')
-              .replace(/&#39;/g, "'")
-              .replace(/&amp;/g, '&')
+      const result = dumped
       expect(result).toBeDefined()
       const parsed = JSON.parse(result ?? '{}') as { ok: boolean; message?: string }
       // Assert the harness message first: toMatchObject elides it, which turns a
@@ -521,6 +615,270 @@ export function broken() {
       await rm(userDataDir, { force: true, recursive: true })
       await rm(fixtureDir, { force: true, recursive: true })
     }
+  }, 90000)
+
+  it('loads Mermaid only for configured previews with matching blocks and renders both emitted forms', async () => {
+    const engineSource = `
+export function carveToHtml(source) {
+  if (source === 'none') return '<p>No diagram</p>'
+  if (source === 'code') return '<pre><code class="language-mermaid">graph LR; A-->B</code></pre>'
+  return '<pre class="mermaid">graph LR; A-->B</pre>'
+}
+export function carveToAstJson(source) {
+  return { type: 'document', source }
+}
+`
+    const mermaidSource = `
+window.__mermaidLoads = (window.__mermaidLoads ?? 0) + 1
+globalThis.mermaid = {
+  initialize(options) { window.__mermaidTheme = options.theme },
+  async render(id, definition) {
+    window.__mermaidRenders = (window.__mermaidRenders ?? 0) + 1
+    return { svg: '<svg data-id="' + id + '"><text>' + definition.replace(/</g, '&lt;') + '</text></svg>' }
+  },
+}
+`
+    const configured = carveToHtml(
+      [
+        '::: playground',
+        '```carve',
+        'pre',
+        '```',
+        ':::',
+        '::: playground',
+        '```carve',
+        'code',
+        '```',
+        ':::',
+        '::: playground',
+        '```carve',
+        'none',
+        '```',
+        ':::',
+      ].join('\n'),
+      { extensions: [playgroundExtension({ mermaid: './assets/mermaid.min.js' })] },
+    )
+    const parsed = await runRuntimeFixture(
+      configured,
+      `
+        const rendered = [...document.querySelectorAll('.carve-playground__rendered')]
+        await waitFor(() => rendered.filter((el) => el.querySelector('.mermaid-rendered')).length === 2, 'two mermaid blocks rendered')
+        finish({
+          ok: true,
+          loads: window.__mermaidLoads ?? 0,
+          renders: window.__mermaidRenders ?? 0,
+          first: rendered[0].innerHTML,
+          second: rendered[1].innerHTML,
+          third: rendered[2].innerHTML,
+          theme: window.__mermaidTheme,
+        })
+      `,
+      {
+        'assets/carve/index.js': engineSource,
+        'assets/mermaid.min.js': mermaidSource,
+      },
+    )
+    if (parsed.skipped) return
+    expect(parsed.loads).toBe(1)
+    expect(parsed.renders).toBe(2)
+    expect(parsed.first).toContain('mermaid-rendered')
+    expect(parsed.second).toContain('mermaid-rendered')
+    expect(parsed.third).toBe('<p>No diagram</p>')
+    expect(parsed.theme).toBe('default')
+
+    const absent = carveToHtml(['::: playground', '```carve', 'pre', '```', ':::'].join('\n'), {
+      extensions: [playgroundExtension()],
+    })
+    const absentParsed = await runRuntimeFixture(
+      absent,
+      `
+        const rendered = document.querySelector('.carve-playground__rendered')
+        await waitFor(() => rendered.innerHTML.includes('mermaid'), 'plain mermaid block rendered')
+        finish({
+          ok: true,
+          loads: window.__mermaidLoads ?? 0,
+          scriptCount: document.querySelectorAll('script[src$="mermaid.min.js"]').length,
+          html: rendered.innerHTML,
+        })
+      `,
+      {
+        'assets/carve/index.js': engineSource,
+        'assets/mermaid.min.js': mermaidSource,
+      },
+    )
+    if (absentParsed.skipped) return
+    expect(absentParsed.loads).toBe(0)
+    expect(absentParsed.scriptCount).toBe(0)
+    expect(absentParsed.html).toContain('<pre class="mermaid">')
+  }, 90000)
+
+  it('leaves Mermaid parse errors as readable source and discards stale async diagrams', async () => {
+    const engineSource = `
+export function carveToHtml(source) {
+  return '<pre class="mermaid">' + source.replace(/</g, '&lt;') + '</pre>'
+}
+export function carveToAstJson(source) {
+  return { type: 'document', source }
+}
+`
+    const mermaidSource = `
+window.__mermaidLoads = (window.__mermaidLoads ?? 0) + 1
+globalThis.mermaid = {
+  initialize() {},
+  async render(id, definition) {
+    window.__mermaidDefinitions = [...(window.__mermaidDefinitions ?? []), definition]
+    if (definition === 'bad') throw new Error('parse failed')
+    await new Promise((resolve) => setTimeout(resolve, definition === 'old' ? 500 : 0))
+    return { svg: '<svg><text>svg-' + definition + '</text></svg>' }
+  },
+}
+`
+    const parseError = carveToHtml(['::: playground', '```carve', 'bad', '```', ':::'].join('\n'), {
+      extensions: [playgroundExtension({ mermaid: './assets/mermaid.min.js' })],
+    })
+    const parseParsed = await runRuntimeFixture(
+      parseError,
+      `
+        const rendered = document.querySelector('.carve-playground__rendered')
+        await waitFor(() => (window.__mermaidDefinitions ?? []).includes('bad'), 'mermaid parse attempted')
+        finish({ ok: true, html: rendered.innerHTML, loads: window.__mermaidLoads ?? 0 })
+      `,
+      {
+        'assets/carve/index.js': engineSource,
+        'assets/mermaid.min.js': mermaidSource,
+      },
+    )
+    if (parseParsed.skipped) return
+    expect(parseParsed.loads).toBe(1)
+    expect(parseParsed.html).toContain('<pre class="mermaid">bad</pre>')
+
+    const stale = carveToHtml(['::: playground', '```carve', 'old', '```', ':::'].join('\n'), {
+      extensions: [playgroundExtension({ mermaid: './assets/mermaid.min.js' })],
+    })
+    const staleParsed = await runRuntimeFixture(
+      stale,
+      `
+        const el = document.querySelector('carve-playground')
+        const textarea = el.querySelector('textarea')
+        const rendered = el.querySelector('.carve-playground__rendered')
+        await waitFor(() => textarea.value === 'old', 'textarea ready')
+        textarea.value = 'new'
+        textarea.dispatchEvent(new Event('input', { bubbles: true }))
+        await waitFor(() => rendered.innerHTML.includes('svg-new'), 'new mermaid render committed')
+        await delay(650)
+        finish({ ok: true, html: rendered.innerHTML, definitions: window.__mermaidDefinitions })
+      `,
+      {
+        'assets/carve/index.js': engineSource,
+        'assets/mermaid.min.js': mermaidSource,
+      },
+    )
+    if (staleParsed.skipped) return
+    expect(staleParsed.html).toContain('svg-new')
+    expect(staleParsed.html).not.toContain('svg-old')
+  }, 90000)
+
+  it('renders Chart.js JSON configs, preserves invalid JSON, and destroys prior instances on re-render', async () => {
+    const engineSource = `
+export function carveToHtml(source) {
+  if (source === 'invalid') return '<div class="chart"><script type="application/json">{bad</script></div>'
+  return '<div class="chart"><script type="application/json">{"type":"bar","data":{"labels":["' + source + '"],"datasets":[{"data":[1]}]}}</script></div>'
+}
+export function carveToAstJson(source) {
+  return { type: 'document', source }
+}
+`
+    const chartSource = `
+window.__chartLoads = (window.__chartLoads ?? 0) + 1
+globalThis.Chart = function Chart(canvas, config) {
+  window.__chartConstructs = [...(window.__chartConstructs ?? []), config.data.labels[0]]
+  canvas.dataset.chartType = config.type
+  this.destroy = () => {
+    window.__chartDestroys = (window.__chartDestroys ?? 0) + 1
+  }
+}
+`
+    const valid = carveToHtml(['::: playground', '```carve', 'one', '```', ':::'].join('\n'), {
+      extensions: [playgroundExtension({ chart: './assets/chart.umd.js' })],
+    })
+    const validParsed = await runRuntimeFixture(
+      valid,
+      `
+        const el = document.querySelector('carve-playground')
+        const textarea = el.querySelector('textarea')
+        const rendered = el.querySelector('.carve-playground__rendered')
+        await waitFor(() => rendered.querySelector('canvas')?.dataset.chartType === 'bar', 'chart canvas rendered')
+        textarea.value = 'two'
+        textarea.dispatchEvent(new Event('input', { bubbles: true }))
+        await waitFor(() => (window.__chartConstructs ?? []).includes('two'), 'second chart constructed')
+        finish({
+          ok: true,
+          loads: window.__chartLoads ?? 0,
+          constructs: window.__chartConstructs,
+          destroys: window.__chartDestroys ?? 0,
+          canvasCount: rendered.querySelectorAll('canvas').length,
+        })
+      `,
+      {
+        'assets/carve/index.js': engineSource,
+        'assets/chart.umd.js': chartSource,
+      },
+    )
+    if (validParsed.skipped) return
+    expect(validParsed.loads).toBe(1)
+    expect(validParsed.constructs).toEqual(['one', 'two'])
+    expect(validParsed.destroys).toBe(1)
+    expect(validParsed.canvasCount).toBe(1)
+
+    const invalid = carveToHtml(['::: playground', '```carve', 'invalid', '```', ':::'].join('\n'), {
+      extensions: [playgroundExtension({ chart: './assets/chart.umd.js' })],
+    })
+    const invalidParsed = await runRuntimeFixture(
+      invalid,
+      `
+        const rendered = document.querySelector('.carve-playground__rendered')
+        await waitFor(() => rendered.querySelector('script[type="application/json"]'), 'raw chart script remains')
+        finish({
+          ok: true,
+          loads: window.__chartLoads ?? 0,
+          constructs: window.__chartConstructs ?? [],
+          html: rendered.innerHTML,
+        })
+      `,
+      {
+        'assets/carve/index.js': engineSource,
+        'assets/chart.umd.js': chartSource,
+      },
+    )
+    if (invalidParsed.skipped) return
+    expect(invalidParsed.loads).toBe(1)
+    expect(invalidParsed.constructs).toEqual([])
+    expect(invalidParsed.html).toContain('<script type="application/json">{bad</script>')
+
+    const absent = carveToHtml(['::: playground', '```carve', 'one', '```', ':::'].join('\n'), {
+      extensions: [playgroundExtension()],
+    })
+    const absentParsed = await runRuntimeFixture(
+      absent,
+      `
+        const rendered = document.querySelector('.carve-playground__rendered')
+        await waitFor(() => rendered.querySelector('div.chart'), 'raw chart block rendered')
+        finish({
+          ok: true,
+          loads: window.__chartLoads ?? 0,
+          scriptCount: document.querySelectorAll('script[src$="chart.umd.js"]').length,
+          html: rendered.innerHTML,
+        })
+      `,
+      {
+        'assets/carve/index.js': engineSource,
+        'assets/chart.umd.js': chartSource,
+      },
+    )
+    if (absentParsed.skipped) return
+    expect(absentParsed.loads).toBe(0)
+    expect(absentParsed.scriptCount).toBe(0)
+    expect(absentParsed.html).toContain('<div class="chart">')
   }, 90000)
 
   it('shows a Rust engine control only when WASM is configured and lazy-renders through toHtmlFull', async () => {
@@ -570,27 +928,8 @@ export function toHtmlFull(source) {
     )
 
     try {
-      const { stdout } = await execFileAsync(
-        bin,
-        [
-          ...chromeFlags,
-          `--user-data-dir=${userDataDir}`,
-          '--virtual-time-budget=60000',
-          '--dump-dom',
-          pathToFileURL(htmlPath).href,
-        ],
-        { maxBuffer: 1024 * 1024 * 5, timeout: 60000 },
-      )
-      const raw = stdout.match(/<pre id="result">(?<json>.*?)<\/pre>/s)?.groups?.json
-      const result =
-        raw === undefined
-          ? undefined
-          : raw
-              .replace(/&lt;/g, '<')
-              .replace(/&gt;/g, '>')
-              .replace(/&quot;/g, '"')
-              .replace(/&#39;/g, "'")
-              .replace(/&amp;/g, '&')
+      const dumped = await dumpFixture(bin, htmlPath, userDataDir)
+      const result = dumped
       expect(result).toBeDefined()
       const parsed = JSON.parse(result ?? '{}') as { ok: boolean; message?: string }
       expect(parsed.message ?? 'ok').toBe('ok')
@@ -650,27 +989,8 @@ export function toHtmlFull() {
     )
 
     try {
-      const { stdout } = await execFileAsync(
-        bin,
-        [
-          ...chromeFlags,
-          `--user-data-dir=${userDataDir}`,
-          '--virtual-time-budget=60000',
-          '--dump-dom',
-          pathToFileURL(htmlPath).href,
-        ],
-        { maxBuffer: 1024 * 1024 * 5, timeout: 60000 },
-      )
-      const raw = stdout.match(/<pre id="result">(?<json>.*?)<\/pre>/s)?.groups?.json
-      const result =
-        raw === undefined
-          ? undefined
-          : raw
-              .replace(/&lt;/g, '<')
-              .replace(/&gt;/g, '>')
-              .replace(/&quot;/g, '"')
-              .replace(/&#39;/g, "'")
-              .replace(/&amp;/g, '&')
+      const dumped = await dumpFixture(bin, htmlPath, userDataDir)
+      const result = dumped
       expect(result).toBeDefined()
       const parsed = JSON.parse(result ?? '{}') as { ok: boolean; message?: string; status?: string }
       expect(parsed.message ?? 'ok').toBe('ok')

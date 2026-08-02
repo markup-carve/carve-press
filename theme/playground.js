@@ -1,5 +1,8 @@
 const engine = import('./carve/index.js').catch((error) => ({ __carveImportError: error }))
 let nextId = 0
+let mermaidSeq = 0
+let chartSeq = 0
+const scriptPromises = new Map()
 
 const EXTENSION_HOOKS = new Set([
   'afterParse',
@@ -16,10 +19,10 @@ const EXTENSION_HOOKS = new Set([
 // not load. Enabling them would turn readable source into inert hydration shells.
 export const PLAYGROUND_EXTENSION_EXCLUSIONS = {
   abc: 'requires a client-side ABC renderer that the playground does not load',
-  chart: 'requires Chart.js, which is out of scope for the playground',
+  chart: 'requires Chart.js, enabled only when the site ships it',
   d2: 'requires an external D2 renderer',
   graphviz: 'requires an external Graphviz renderer',
-  mermaid: 'requires Mermaid, which is out of scope for the playground',
+  mermaid: 'requires Mermaid, enabled only when the site ships it',
   plantuml: 'requires a PlantUML renderer',
   presets: 'aggregates excluded diagram/chart factories',
   vegaLite: 'requires Vega-Lite/Vega renderer',
@@ -98,11 +101,15 @@ export function classifyEngineExport(name, value) {
   return { kind: 'unclassified' }
 }
 
-export function buildPlaygroundExtensions(mod) {
+export function buildPlaygroundExtensions(mod, available = {}) {
   const extensions = []
   for (const name of Object.keys(mod).sort()) {
     const classified = classifyEngineExport(name, mod[name])
-    if (classified.kind !== 'enabled' && classified.kind !== 'throws') continue
+    // An exclusion states a missing runtime library, not a permanent verdict.
+    // Once the site ships that library the extension is exactly what we want, so
+    // its real markup reaches the renderer instead of a plain code block.
+    const satisfied = classified.kind === 'excluded' && available[name] === true
+    if (!satisfied && classified.kind !== 'enabled' && classified.kind !== 'throws') continue
     try {
       extensions.push(mod[name]())
     } catch (error) {
@@ -122,6 +129,43 @@ function debounce(fn, delay) {
 
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error)
+}
+
+function loadClassicScript(src, globalName, doc = document) {
+  const resolved = new URL(src, doc.baseURI).href
+  const cacheKey = `${globalName}:${resolved}`
+  if (!scriptPromises.has(cacheKey)) {
+    scriptPromises.set(
+      cacheKey,
+      new Promise((resolve, reject) => {
+        const script = doc.createElement('script')
+        script.src = resolved
+        script.async = true
+        script.onload = () => {
+          const lib = globalThis[globalName]
+          if (lib === undefined) {
+            reject(new Error(`${globalName} global was not created by ${resolved}`))
+            return
+          }
+          resolve(lib)
+        }
+        script.onerror = () => reject(new Error(`Failed to load ${resolved}`))
+        doc.head.append(script)
+      }),
+    )
+  }
+  return scriptPromises.get(cacheKey)
+}
+
+function playgroundError(doc, message) {
+  const node = doc.createElement('div')
+  node.className = 'carve-playground__error'
+  node.textContent = message
+  return node
+}
+
+function mermaidTargetPre(el) {
+  return el.tagName === 'PRE' ? el : el.parentElement
 }
 
 function initialSource(playground) {
@@ -307,6 +351,7 @@ class CarvePlayground extends HTMLElementBase {
     let wasmToken = 0
     let wasmModule
     let wasmModulePromise
+    let charts = []
     // A failure has to outlive the re-render it triggers. render() reports the
     // active engine on every pass, so without this the message set here is
     // overwritten a tick later by a routine "JS engine" and the reader is left
@@ -342,8 +387,118 @@ class CarvePlayground extends HTMLElementBase {
       return wasmModulePromise
     }
 
+    const stillCurrent = (current) => current === token && this.isConnected
+
+    const destroyCharts = () => {
+      for (const chart of charts) {
+        try {
+          chart.destroy()
+        } catch (error) {
+          console.warn(`Carve playground chart cleanup failed: ${errorMessage(error)}`)
+        }
+      }
+      charts = []
+    }
+
+    const renderMermaid = async (current) => {
+      const mermaidUrl = this.dataset.playgroundMermaid
+      if (mermaidUrl === undefined) return
+      const blocks = Array.from(renderedContent.querySelectorAll('pre.mermaid, pre > code.language-mermaid'))
+      if (blocks.length === 0) return
+      let mermaid
+      try {
+        mermaid = await loadClassicScript(mermaidUrl, 'mermaid', this.ownerDocument)
+      } catch (error) {
+        if (!stillCurrent(current)) return
+        for (const el of blocks) {
+          const pre = mermaidTargetPre(el)
+          if (pre?.isConnected) pre.replaceWith(playgroundError(this.ownerDocument, errorMessage(error)))
+        }
+        return
+      }
+      if (!stillCurrent(current)) return
+      try {
+        const dark = this.ownerDocument.documentElement.dataset.theme === 'dark'
+        // Loose mode is acceptable here: the playground renders text the reader
+        // typed into their own browser plus authored samples from this site, not
+        // third-party content.
+        mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: dark ? 'dark' : 'default' })
+      } catch (error) {
+        if (!stillCurrent(current)) return
+        for (const el of blocks) {
+          const pre = mermaidTargetPre(el)
+          if (pre?.isConnected) pre.replaceWith(playgroundError(this.ownerDocument, errorMessage(error)))
+        }
+        return
+      }
+      for (const el of blocks) {
+        const pre = mermaidTargetPre(el)
+        if (pre === null || !renderedContent.contains(pre)) continue
+        const definition = el.textContent ?? ''
+        try {
+          const { svg } = await mermaid.render(`carve-mermaid-${mermaidSeq++}`, definition)
+          if (!stillCurrent(current) || !pre.isConnected || !renderedContent.contains(pre)) return
+          const figure = this.ownerDocument.createElement('div')
+          figure.className = 'mermaid-rendered'
+          figure.innerHTML = svg
+          pre.replaceWith(figure)
+        } catch {
+          // A broken diagram is still useful source; leave the code block in place.
+        }
+      }
+    }
+
+    const renderCharts = async (current) => {
+      const chartUrl = this.dataset.playgroundChart
+      if (chartUrl === undefined) return
+      const blocks = Array.from(renderedContent.querySelectorAll('div.chart'))
+      if (blocks.length === 0) return
+      let Chart
+      try {
+        Chart = await loadClassicScript(chartUrl, 'Chart', this.ownerDocument)
+      } catch (error) {
+        if (!stillCurrent(current)) return
+        for (const block of blocks) {
+          if (block.isConnected) block.replaceChildren(playgroundError(this.ownerDocument, errorMessage(error)))
+        }
+        return
+      }
+      if (!stillCurrent(current)) return
+      for (const block of blocks) {
+        if (!renderedContent.contains(block)) continue
+        const script = block.querySelector('script[type="application/json"]')
+        if (script === null) continue
+        let config
+        try {
+          config = JSON.parse(script.textContent ?? '')
+        } catch {
+          continue
+        }
+        const canvas = this.ownerDocument.createElement('canvas')
+        canvas.id = `carve-chart-${chartSeq++}`
+        block.replaceChildren(canvas)
+        try {
+          const chart = new Chart(canvas, config)
+          if (!stillCurrent(current) || !block.isConnected || !renderedContent.contains(block)) {
+            chart.destroy()
+            return
+          }
+          charts.push(chart)
+        } catch (error) {
+          block.replaceChildren(playgroundError(this.ownerDocument, errorMessage(error)))
+        }
+      }
+    }
+
+    const renderRuntimeAssets = async (current) => {
+      await renderMermaid(current)
+      if (!stillCurrent(current)) return
+      await renderCharts(current)
+    }
+
     const render = async () => {
       const current = ++token
+      destroyCharts()
       try {
         const mod = await engine
         if (mod.__carveImportError) throw mod.__carveImportError
@@ -351,7 +506,10 @@ class CarvePlayground extends HTMLElementBase {
         // been torn down - a navigation mid-render, or a test document being
         // disposed. Touching the DOM then throws an unhandled rejection.
         if (current !== token || !this.isConnected) return
-        extensions ??= buildPlaygroundExtensions(mod)
+        extensions ??= buildPlaygroundExtensions(mod, {
+          mermaid: this.dataset.playgroundMermaid !== undefined,
+          chart: this.dataset.playgroundChart !== undefined,
+        })
         const options = { extensions }
         const jsHtml = mod.carveToHtml(textarea.value, options)
         const ast = mod.carveToAstJson(textarea.value, options)
@@ -374,12 +532,10 @@ class CarvePlayground extends HTMLElementBase {
         renderedContent.innerHTML = previewHtml
         code.textContent = textWithFinalNewline(jsHtml)
         astCode.textContent = `${JSON.stringify(ast, null, 2)}\n`
+        await renderRuntimeAssets(current)
       } catch (error) {
         if (current !== token || !this.isConnected) return
-        const message = this.ownerDocument.createElement('div')
-        message.className = 'carve-playground__error'
-        message.textContent = errorMessage(error)
-        renderedContent.replaceChildren(message)
+        renderedContent.replaceChildren(playgroundError(this.ownerDocument, errorMessage(error)))
         code.textContent = `Error: ${errorMessage(error)}\n`
         astCode.textContent = `Error: ${errorMessage(error)}\n`
       }
