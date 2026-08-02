@@ -116,7 +116,7 @@ async function commandServe(root: string, argv: string[]): Promise<void> {
     port: portValue(argv, 4173),
     host: argValue(argv, '--host', '127.0.0.1'),
   })
-  console.log(`carve-press: serving ${outDir} at ${running.url}${config.base.slice(1)}`)
+  console.log(`carve-press: serving ${outDir} at ${running.url}${config.base}`)
   await waitForExit(running.close)
 }
 

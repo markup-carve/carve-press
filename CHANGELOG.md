@@ -1,1 +1,20 @@
 ## [Unreleased]
+
+### Added
+
+- Dogfood documentation site authored in Carve under `docs/`.
+- Root `carve-press.config.ts` for GitHub Pages output at `.site`.
+- Blog collection, generated tags, RSS feed, sitemap, and `llms.txt`.
+- Documentation pages covering setup, configuration, authoring, code blocks, Carve syntax, playground, theme, i18n, blog, deployment, extensions, CLI, config types, and comparison.
+- GitHub Pages workflow that builds and tests pull requests, and deploys only pushes to `main` or manual runs.
+- Public logo and site CSS overrides for the docs.
+
+### Changed
+
+- README now describes the implemented CLI, quick start, features, and docs site.
+- npm scripts include `docs:build`, `docs:dev`, and `docs:serve`.
+
+### Fixed
+
+- Documentation output no longer collides with compiled TypeScript output because the docs build writes `.site`.
+- `.site/` is ignored by Git.

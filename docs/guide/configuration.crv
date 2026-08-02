@@ -1,0 +1,104 @@
+---
+title: Configuration
+description: Every CarvePress config key, with type, default, and example.
+order: 2
+---
+
+# Configuration
+
+CarvePress loads `carve-press.config.ts`, `.js`, or `.mjs` from the project root. Use `defineConfig` for TypeScript help.
+
+```ts "carve-press.config.ts"
+import { defineConfig } from '@markup-carve/carve-press'
+
+export default defineConfig({
+  title: 'Docs',
+  srcDir: 'docs',
+})
+```
+
+## Site Keys
+
+| Key | Type | Default | Example |
+| --- | --- | --- | --- |
+| `title` | `string` | required | `'CarvePress'` |
+| `description` | `string` | `undefined` | `'Carve-native docs'` |
+| `hostname` | `string` | `undefined` | `'https://example.com'` |
+| `base` | `string` | `'/'` | `'/carve-press/'` |
+| `srcDir` | `string` | `'docs'` | `'docs'` |
+| `outDir` | `string` | `'dist'` | `'.site'` |
+| `publicDir` | `string` | `'public'` | `'docs/public'` |
+| `srcExclude` | `string[]` | `[]` | `['drafts/**']` |
+| `cleanUrls` | `boolean` | `true` | `false` |
+| `ignoreDeadLinks` | `boolean` | `false` | `true` |
+| `head` | `[string, Record<string, string>][]` | `[]` | `[['meta', { name: 'theme-color', content: '#111827' }]]` |
+| `redirects` | `Record<string, string>` | `{}` | `{ '/old/': '/new/' }` |
+| `layouts` | `Record<string, Layout>` | `{}` | `{ landing: myLayout }` |
+| `locales` | `Record<string, LocaleConfig>` | `{}` | `{ '/de/': { lang: 'de-DE', label: 'Deutsch' } }` |
+
+## Theme
+
+| Key | Type | Default | Example |
+| --- | --- | --- | --- |
+| `theme.css` | `string` | built-in theme | `'theme.css'` |
+| `theme.extraCss` | `string[]` | `undefined` | `['docs/public/site.css']` |
+| `themeConfig.nav` | `NavItem[]` | `[]` | `[{ text: 'Guide', link: '/guide/getting-started' }]` |
+| `themeConfig.sidebar` | `Record<string, SidebarConfigGroup[]>` | `{}` | `{ '/guide/': [{ text: 'Guide', items: [] }] }` |
+| `themeConfig.socialLinks` | `SocialLink[]` | `[]` | `[{ icon: 'github', link: 'https://github.com/markup-carve/carve-press' }]` |
+| `themeConfig.logo` | `string | { light: string; dark: string; alt?: string }` | `undefined` | `'/logo.svg'` |
+| `themeConfig.siteTitle` | `string | false` | site title | `false` |
+| `themeConfig.editLink` | `{ pattern: string; text: string }` | `undefined` | `{ pattern: 'https://github.com/org/repo/edit/main/docs/:path', text: 'Edit' }` |
+| `themeConfig.footer` | `{ message: string; copyright: string }` | `undefined` | `{ message: 'Built with CarvePress', copyright: 'MIT' }` |
+| `themeConfig.lastUpdated` | `boolean` | `undefined` | `true` |
+| `themeConfig.socialImage` | `string` | `undefined` | `'/social.png'` |
+| `themeConfig.outline` | `{ level: [number, number] }` | `{ level: [2, 3] }` | `{ level: [2, 4] }` |
+| `themeConfig.labels` | `Partial<ThemeLabels>` | English labels | `{ search: 'Search' }` |
+
+Generated sidebar groups use `generate: '/prefix/'`; hand-written groups use `items`. See [Theme][].
+
+## Carve And Shiki
+
+| Key | Type | Default | Example |
+| --- | --- | --- | --- |
+| `carve.extensions` | `CarveExtension[]` | `[]` | `[myExtension()]` |
+| `carve.profile` | `'full' | 'article' | 'comment' | 'minimal' | Profile` | `undefined` | `'full'` |
+| `carve.preset` | `'minimal' | 'docs' | 'full'` | `'docs'` | `'full'` |
+| `shiki.langs` | `(string | LanguageRegistration)[]` | built-in list plus Carve grammar | `['tsx']` |
+| `shiki.themes.light` | `string` | `'github-light'` | `'github-light'` |
+| `shiki.themes.dark` | `string` | `'github-dark'` | `'github-dark'` |
+| `shiki.lineNumbers` | `boolean | number` | `false` | `true` |
+
+## Search, Blog, Feed
+
+| Key | Type | Default | Example |
+| --- | --- | --- | --- |
+| `search` | `false | SearchIndexOptions` | `{ filename: 'search-index.json', exclude: [] }` | `{ exclude: ['/404'] }` |
+| `blog.dir` | `string` | required when `blog` is set | `'blog'` |
+| `blog.route` | `string` | route from `dir` | `'/blog/'` |
+| `blog.title` | `string` | `'Blog'` | `'News'` |
+| `blog.description` | `string` | `''` | `'Project updates'` |
+| `blog.perPage` | `number` | `10` | `20` |
+| `blog.tagsRoute` | `string` | `blog.route + 'tags/'` | `'/blog/tags/'` |
+| `feed` | `false | FeedOptions` | `false` | `{ filename: 'feed.xml' }` |
+| `feed.filename` | `string` | `'feed.xml'` | `'atom.xml'` |
+| `feed.title` | `string` | `''` | `'Docs Blog'` |
+| `feed.description` | `string` | `''` | `'Updates'` |
+| `feed.limit` | `number` | `20` | `10` |
+| `feed.type` | `'rss' | 'atom'` | `'rss'` | `'atom'` |
+| `extensions` | `SiteExtension[]` | built from blog, search, feed, redirects, then user extensions | `[sitemap({ hostname: 'https://example.com' })]` |
+
+## Locale Config
+
+| Key | Type | Default | Example |
+| --- | --- | --- | --- |
+| `lang` | `string` | required | `'en-US'` |
+| `label` | `string` | required | `'English'` |
+| `title` | `string` | site title | `'CarvePress DE'` |
+| `description` | `string` | site description | `'Lokalisierte Docs'` |
+| `themeConfig.nav` | `NavItem[]` | root nav | `[{ text: 'Start', link: '/de/' }]` |
+| `themeConfig.sidebar` | `Record<string, SidebarConfigGroup[]>` | root sidebar | `{ '/de/': [{ text: 'Guide', items: [] }] }` |
+| `themeConfig.footer` | footer object | root footer | `{ message: '...', copyright: '...' }` |
+| `themeConfig.editLink` | edit-link object | root edit link | `{ pattern: '...', text: 'Bearbeiten' }` |
+| `themeConfig.outline` | `{ level: false | number | [number, number] | 'deep' }` | root outline | `{ level: 'deep' }` |
+| `themeConfig.labels` | `Partial<ThemeLabels>` | root labels | `{ search: 'Suchen' }` |
+

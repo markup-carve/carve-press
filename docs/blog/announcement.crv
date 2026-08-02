@@ -1,0 +1,17 @@
+---
+title: CarvePress Dogfood Site
+description: The CarvePress documentation site is now authored in Carve and built by CarvePress.
+date: '2026-08-02'
+tags: [release, dogfood]
+excerpt: The documentation now doubles as a working demo of CarvePress features.
+author: CarvePress Maintainers
+---
+
+# CarvePress Dogfood Site
+
+The CarvePress documentation is now a CarvePress site. The pages under `docs/` are `.crv` source, the build writes `.site`, and GitHub Pages serves the result.
+
+This matters because documentation examples are no longer decorative. The site uses home layout data, navigation, sidebars, generated blog pages, search, feed output, sitemap output, `llms.txt`, Shiki, compare blocks, playground blocks, includes, and link validation.
+
+See [Getting Started](/guide/getting-started) for the shortest path to a new site.
+

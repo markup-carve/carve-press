@@ -1,0 +1,16 @@
+---
+title: Why Carve Instead Of Markdown
+description: CarvePress chooses Carve because its markup semantics are explicit and lintable.
+date: '2026-08-01'
+tags: [carve, authoring]
+excerpt: Carve uses deliberate delimiters and cross-reference syntax so docs can fail loudly before publishing.
+author: CarvePress Maintainers
+---
+
+# Why Carve Instead Of Markdown
+
+Markdown is familiar, but its dialect surface makes technical documentation easy to misread. CarvePress chooses Carve because the syntax is explicit enough for the engine and linter to catch silent failures.
+
+For example, Carve bold is `*bold*`, emphasis is `/italic/`, underline is `_underline_`, strike is `~strike~`, and highlight is `=highlight=`. A Markdown habit like `**bold**` is not accepted as a synonym; it renders as literal text and `carve lint` reports it.
+
+The [Carve Syntax](/guide/carve-syntax) page shows the important differences as live compare blocks.

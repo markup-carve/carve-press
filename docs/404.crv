@@ -1,0 +1,14 @@
+---
+title: Page Not Found
+description: The CarvePress documentation could not find the requested page.
+layout: page
+editLink: false
+lastUpdated: false
+---
+
+# Page Not Found
+
+That route is not in this CarvePress build.
+
+Try the [home page](/), [Getting Started](/guide/getting-started), or the [CLI reference](/reference/cli).
+

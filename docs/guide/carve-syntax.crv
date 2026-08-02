@@ -1,0 +1,159 @@
+---
+title: Carve Syntax
+description: A live source and rendered tour of the Carve syntax that differs from Markdown.
+order: 5
+---
+
+# Carve Syntax
+
+This page uses `::: compare` so the Carve source and rendered HTML stay beside each other.
+
+## Inline Delimiters
+
+::: compare
+```carve
+/italic/, *bold*, _underline_, ~strike~, and =highlight=.
+```
+```html
+<p><em>italic</em>, <strong>bold</strong>, <u>underline</u>, <s>strike</s>, and <mark>highlight</mark>.</p>
+```
+:::
+
+## Markdown Collisions
+
+`**bold**` and `~~strike~~` are literal Carve text, not emphasis.
+
+::: compare
+```carve
+**bold** and ~~strike~~ stay visible.
+```
+```html
+<p>**bold** and ~~strike~~ stay visible.</p>
+```
+:::
+
+## Heading Attributes
+
+Attributes go on the line above the heading.
+
+::: compare
+```carve
+{#custom-id .tracked}
+## Addressable Heading
+
+See </#custom-id>.
+```
+```html
+<h2 id="custom-id" class="tracked">Addressable Heading</h2>
+<p>See <a href="#custom-id">Addressable Heading</a>.</p>
+```
+:::
+
+## Superscript And Subscript
+
+Superscript and subscript are braced-only.
+
+::: compare
+```carve
+Area is m{^2^}; water is H{,2,}O.
+```
+```html
+<p>Area is m<sup>2</sup>; water is H<sub>2</sub>O.</p>
+```
+:::
+
+## Lists And Continuation
+
+Bullets are `-` and `*`. A lone `+` continues the current list item.
+
+::: compare
+```carve
+- first
++ continued paragraph
+- second
+
+* also a bullet
+```
+```html
+<ul>
+<li>
+<p>first</p>
+<p>continued paragraph</p>
+</li>
+<li>
+<p>second</p>
+</li>
+<li>
+<p>also a bullet</p>
+</li>
+</ul>
+```
+:::
+
+## Definition Lists
+
+::: compare
+```carve
+:: Carve
+:  The source markup.
+
+:: CarvePress
+:  The static site generator.
+```
+```html
+<dl>
+<dt>Carve</dt>
+<dd>The source markup.</dd>
+<dt>CarvePress</dt>
+<dd>The static site generator.</dd>
+</dl>
+```
+:::
+
+## Comments
+
+Comments start with `%%` and render nothing.
+
+::: compare
+```carve
+Visible.
+%% Hidden from output.
+Still visible.
+```
+```html
+<p>Visible.
+Still visible.</p>
+```
+:::
+
+## Admonitions And Nesting
+
+Longer fences can contain shorter fences.
+
+:::: note "Outer"
+This outer block contains a shorter note.
+
+::: tip "Inner"
+Nested content.
+:::
+::::
+
+## Cross-References
+
+This paragraph links to </#inline-delimiters> and uses the implicit reference [Inline Delimiters][].
+
+## Details And Tabs
+
+::: details "Native disclosure"
+The docs preset renders `::: details` as a `<details>` widget.
+:::
+
+::: tabs
+::: tab [Source]
+Tabs are Carve admonitions.
+:::
+::: tab [Rendered]
+The tabs extension turns them into CSS-only tab panels.
+:::
+:::
+

@@ -1,0 +1,58 @@
+---
+title: Deploying
+description: Deploy CarvePress to GitHub Pages, Netlify, Cloudflare Pages, or any static host.
+order: 10
+---
+
+# Deploying
+
+CarvePress writes static files to `outDir`. This repo builds to `.site` and publishes that directory to GitHub Pages.
+
+## GitHub Pages
+
+The workflow in this repository runs on pushes to `main`, never deploys pull requests, and still builds pull requests so broken docs fail checks.
+
+```yaml ".github/workflows/pages.yml"
+name: Pages
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+```
+
+The job uses Node 22, runs `npm ci`, `npm run build`, `npm test`, and `npm run docs:build`, then uploads `.site` with `actions/upload-pages-artifact` and deploys with `actions/deploy-pages`.
+
+## Base Path
+
+Project pages need `base: '/carve-press/'` because the site is served below `https://markup-carve.github.io/carve-press/`. Keep authored internal links rooted at the site route, such as `/guide/getting-started`; CarvePress rewrites rendered URLs with the configured base.
+
+## Netlify And Cloudflare Pages
+
+Set the build command to:
+
+```bash "static host build"
+npm ci
+npm run docs:build
+```
+
+Publish `.site`. CarvePress can also write a Netlify-style redirects file from the `redirects` config; this dogfood site maps `/old-guide/` to `/guide/getting-started`.
+
+If you use clean URLs with a host that needs explicit fallback routing, add redirects in `publicDir`:
+
+```txt "_redirects"
+/* /404.html 404
+```
+
+## Any Static Host
+
+Upload the contents of `.site` to the configured base path. If you disable `cleanUrls`, links include concrete `.html` files.

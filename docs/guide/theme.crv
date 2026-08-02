@@ -1,0 +1,107 @@
+---
+title: Theme
+description: Configure navigation, sidebars, outline, logos, social icons, CSS, and custom layouts.
+order: 7
+---
+
+# Theme
+
+The default theme renders a header, optional sidebar, content area, optional outline, footer navigation, edit link, last-updated timestamp, search, social links, and theme toggle.
+
+## Navigation
+
+```ts "nav"
+themeConfig: {
+  nav: [
+    { text: 'Guide', link: '/guide/getting-started' },
+    {
+      text: 'Reference',
+      items: [
+        { text: 'CLI', link: '/reference/cli' },
+        { text: 'Config', link: '/reference/config' },
+      ],
+    },
+  ],
+}
+```
+
+## Sidebar
+
+Use hand-written groups when order matters.
+
+```ts "manual sidebar"
+sidebar: {
+  '/guide/': [
+    {
+      text: 'Guide',
+      items: [{ text: 'Getting Started', link: '/guide/getting-started' }],
+    },
+    {
+      text: 'Reference',
+      collapsed: true,
+      items: [{ text: 'CLI', link: '/reference/cli' }],
+    },
+  ],
+}
+```
+
+Generated groups collect pages by route prefix and sort by `order`, index page first, then title.
+
+```ts "generated sidebar"
+sidebar: {
+  '/blog/': [{ text: 'Blog', generate: '/blog/' }],
+}
+```
+
+## Outline
+
+Set `themeConfig.outline.level` globally, then override a page with frontmatter:
+
+```yaml "frontmatter"
+outline: deep
+aside: false
+sidebar: false
+```
+
+## Logo And Social Icons
+
+```ts "branding"
+themeConfig: {
+  logo: '/logo.svg',
+  socialLinks: [
+    { icon: 'github', link: 'https://github.com/markup-carve/carve-press' },
+  ],
+}
+```
+
+Built-in icons include `github`, `gitlab`, `x`, `mastodon`, `bluesky`, `discord`, `slack`, `npm`, `linkedin`, `youtube`, and `rss`. Custom SVG icons are sanitized before being inlined.
+
+## Custom CSS
+
+Use `theme.extraCss` when you only need overrides:
+
+```ts "extra CSS"
+theme: {
+  extraCss: ['docs/public/site.css'],
+}
+```
+
+Use `theme.css` only when replacing the default theme completely.
+
+## Custom Layouts
+
+Register a layout function by name:
+
+```ts "layout"
+import type { Layout } from '@markup-carve/carve-press'
+
+const landing: Layout = (ctx) => ctx.rendered.html
+
+export default defineConfig({
+  title: 'Docs',
+  layouts: { landing },
+})
+```
+
+Then select it in page frontmatter with `layout: landing`.
+

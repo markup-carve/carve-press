@@ -1,0 +1,48 @@
+---
+title: CLI
+description: CarvePress command-line commands and flags generated from the implemented CLI behavior.
+order: 1
+---
+
+# CLI
+
+Run CarvePress with `carve-press <command> [options]`. If the first argument is an option, `build` is assumed.
+
+## Commands
+
+| Command | Description |
+| --- | --- |
+| `build` | Build the site. |
+| `routes` | Print discovered routes and source files. |
+| `dev` | Build, serve, watch, and live reload. |
+| `serve` | Serve the existing `outDir`. |
+| `init` | Scaffold a new site. |
+| `new <path>` | Create a new page under `srcDir`. |
+| `help` | Print help. |
+
+## Flags
+
+| Flag | Applies To | Default | Description |
+| --- | --- | --- | --- |
+| `--root <dir>` | all commands | current working directory | Project root. |
+| `--port <n>` | `dev`, `serve` | `5173` for dev, `4173` for serve | Server port from `0` through `65535`; invalid values fall back. |
+| `--host <host>` | `dev`, `serve` | `127.0.0.1` | Server host. |
+| `--open` | `dev` | off | Open the dev server URL in a browser. |
+| `--force` | `init` | off | Allow scaffold files to be overwritten. |
+| `--title <title>` | `new` | title-cased file name | Page title for a new page. |
+| `--help` | all commands | off | Print help. |
+| `--version` | all commands | off | Print the package version. |
+
+## Examples
+
+```bash "common commands"
+carve-press build
+carve-press routes --root .
+carve-press dev --host 0.0.0.0 --port 5173
+carve-press serve --port 4173
+carve-press init --force
+carve-press new guide/install --title "Install"
+```
+
+Unknown commands print usage and exit with a non-zero status. User-facing build errors are formatted without raw stack traces.
+

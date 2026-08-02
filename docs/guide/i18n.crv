@@ -1,0 +1,32 @@
+---
+title: Internationalization
+description: Locale configuration and locale switcher behavior.
+order: 8
+---
+
+# Internationalization
+
+Locales are keyed by route prefix. The longest matching prefix supplies page labels, title, description, nav, sidebar, footer, edit link, and outline overrides.
+
+```ts "locales"
+locales: {
+  '/': { lang: 'en-US', label: 'English' },
+  '/de/': {
+    lang: 'de-DE',
+    label: 'Deutsch',
+    title: 'CarvePress',
+    description: 'Ein statischer Dokumentationsgenerator fuer Carve.',
+    themeConfig: {
+      labels: { search: 'Suchen' },
+      nav: [{ text: 'Start', link: '/de/' }],
+    },
+  },
+}
+```
+
+## Switcher
+
+When at least two locales are configured, the header shows a locale switcher. It preserves the current route if that localized route exists; otherwise it links to the locale root.
+
+This dogfood site includes a small [German landing page](/de/) so the switcher has a concrete target.
+

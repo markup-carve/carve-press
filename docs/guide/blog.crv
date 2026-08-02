@@ -1,0 +1,41 @@
+---
+title: Blog
+description: Blog, tag page, and feed configuration for CarvePress.
+order: 9
+---
+
+# Blog
+
+The blog extension turns dated pages under `blog.dir` into a listing route, tag index, tag detail pages, and feed entries.
+
+```ts "blog and feed"
+export default defineConfig({
+  title: 'Docs',
+  hostname: 'https://example.com',
+  blog: {
+    dir: 'blog',
+    route: '/blog/',
+    title: 'News',
+    description: 'Project updates',
+    tagsRoute: '/blog/tags/',
+  },
+  feed: {
+    filename: 'feed.xml',
+    type: 'rss',
+  },
+})
+```
+
+## Post Frontmatter
+
+```yaml "blog post"
+title: Build-Time Validation
+description: Why CarvePress validates routes before publishing.
+date: '2026-08-02'
+tags: [validation, docs]
+excerpt: Links fail in CI instead of in readers' tabs.
+author: CarvePress Maintainers
+```
+
+Posts are rendered with the `blog` layout by default. The generated [blog index](/blog/) and [tag index](/blog/tags/) are virtual pages.
+

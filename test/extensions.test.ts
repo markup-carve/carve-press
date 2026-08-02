@@ -25,12 +25,14 @@ describe('buildExtensionStack', () => {
     const minimal = await buildExtensionStack(resolveConfig({ title: 'x', carve: { preset: 'minimal' } }), shiki)
     const full = await buildExtensionStack(resolveConfig({ title: 'x', carve: { preset: 'full' } }), shiki)
     expect(minimal.map((e) => e.name)).not.toContain('tabs')
+    // Never in a preset: it injects a table of contents into every document,
+    // duplicating the theme's outline column. `::: toc` asks for one per page.
+    expect(full.map((e) => e.name)).not.toContain('table-of-contents')
     expect(full.map((e) => e.name)).toEqual(expect.arrayContaining([
       'tabs',
       'details',
       'math-block',
       'external-links',
-      'table-of-contents',
       'toc',
       'wikilinks',
       'headingNumbers',

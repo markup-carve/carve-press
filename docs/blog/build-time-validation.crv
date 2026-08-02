@@ -1,0 +1,16 @@
+---
+title: Build-Time Validation
+description: CarvePress treats broken links and cross-references as build failures.
+date: '2026-07-31'
+tags: [validation, ci]
+excerpt: Internal route drift, nav drift, and cross-reference mistakes fail before a page is published.
+author: CarvePress Maintainers
+---
+
+# Build-Time Validation
+
+Documentation breaks quietly when a page moves and old links keep shipping. CarvePress makes those failures explicit.
+
+The build validates internal links, nav items, sidebar items, `prev` and `next` frontmatter overrides, and Carve cross-references. The GitHub Pages workflow for this repo runs the docs build on pull requests without deploying them, so broken docs fail the check before publication.
+
+See [Writing Content](/guide/writing-content) for the author-facing rules.

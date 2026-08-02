@@ -1,0 +1,62 @@
+---
+title: Config Reference
+description: Type-level reference for CarvePress configuration objects.
+order: 2
+---
+
+# Config Reference
+
+This reference mirrors the exported TypeScript types from `src/config.ts`.
+
+## Root Config
+
+| Type | Keys |
+| --- | --- |
+| `UserConfig` | `title`, `description`, `hostname`, `base`, `srcDir`, `outDir`, `publicDir`, `srcExclude`, `cleanUrls`, `ignoreDeadLinks`, `head`, `theme`, `themeConfig`, `carve`, `shiki`, `search`, `blog`, `feed`, `redirects`, `extensions`, `layouts`, `locales` |
+| `CarvePressConfig` | Normalized form of `UserConfig`; all defaulted keys are present. |
+
+## Navigation Types
+
+| Type | Shape |
+| --- | --- |
+| `NavItem` | `{ text: string; link?: string; items?: NavItem[] }` |
+| `SidebarItem` | `{ text: string; link?: string; items?: SidebarItem[] }` |
+| `SidebarGroup` | `{ text: string; collapsed?: boolean; items: SidebarItem[] }` |
+| `GeneratedSidebarGroup` | `{ text: string; generate: string; collapsed?: boolean; order?: number }` |
+| `SocialLink` | `{ icon: string | { svg: string }; link: string }` |
+
+## Theme Types
+
+| Type | Shape |
+| --- | --- |
+| `ThemeLogo` | `string | { light: string; dark: string; alt?: string }` |
+| `OutlineSetting` | `false | number | [number, number] | 'deep'` |
+| `ThemeAssetsConfig` | `{ css?: string; extraCss?: string[] }` |
+| `ThemeLabels` | `search`, `previous`, `next`, `lastUpdated`, `onThisPage`, `pageNotFound`, `copy`, `copied`, `menu` |
+| `ThemeConfig` | nav, sidebar, social links, logo, site title, edit link, footer, last updated, social image, outline, and labels. |
+
+## Content Types
+
+| Type | Shape |
+| --- | --- |
+| `HeadTag` | `[tag: string, attrs: Record<string, string>]` |
+| `CarvePreset` | `'minimal' | 'docs' | 'full'` |
+| `ShikiLanguage` | `string | LanguageRegistration` |
+| `ShikiConfig` | `{ langs: ShikiLanguage[]; themes: { light: string; dark: string }; lineNumbers: boolean | number }` |
+| `SearchConfig` | `false | { filename: string; exclude: string[] }` |
+
+## Locale Types
+
+| Type | Shape |
+| --- | --- |
+| `LocaleConfig` | `{ lang: string; label: string; title?: string; description?: string; themeConfig?: LocaleThemeConfig }` |
+| `LocaleThemeConfig` | Optional locale overrides for nav, sidebar, footer, edit link, outline, and labels. |
+
+## Extension Types
+
+| Type | Shape |
+| --- | --- |
+| `SiteExtension` | `{ name: string; setup(bus: BuildEventBus): void }` |
+| `Layout` | `(ctx: LayoutContext) => string` |
+
+For defaults and examples, use [Configuration](/guide/configuration).

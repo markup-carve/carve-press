@@ -474,6 +474,13 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
     border-left: 2px solid var(--rule);
     box-shadow: none;
   }
+  /* The header is one row on desktop and two on a phone: brand and controls on
+     the first, search across the full width of the second. Without wrapping,
+     the title, the locale switcher, and the search box overlap each other. */
+  .site-header { flex-wrap: wrap; row-gap: 0.65rem; }
+  .site-title { margin-right: auto; }
+  .site-header__right { flex-wrap: wrap; row-gap: 0.65rem; margin-left: auto; }
+  .locale-switcher { order: 9; }
   .site-search { order: 10; width: 100%; }
   .site-search__panel { left: 0; right: auto; }
   .layout { grid-template-columns: minmax(0, 1fr); gap: 2rem; padding: 1.5rem 1.25rem 5rem; }

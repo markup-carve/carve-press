@@ -42,6 +42,9 @@
   },
   "scripts": {
     "build": "tsc",
+    "docs:build": "npm run build && node dist/cli.js build",
+    "docs:dev": "npm run build && node dist/cli.js dev",
+    "docs:serve": "npm run build && node dist/cli.js serve",
     "prepare": "npm run build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"

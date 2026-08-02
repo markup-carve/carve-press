@@ -1,0 +1,29 @@
+---
+title: Comparison
+description: A hand-maintained capability comparison between CarvePress and common documentation site generators.
+layout: comparison
+---
+
+# Comparison
+
+This table is a hand-maintained snapshot, not a benchmark. Check the project docs directly: [VitePress](https://vitepress.dev/), [Docusaurus](https://docusaurus.io/), [Astro Starlight](https://starlight.astro.build/), and [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/). Corrections are welcome in [an issue](https://github.com/markup-carve/carve-press/issues).
+
+| Capability | CarvePress | VitePress | Docusaurus | Astro Starlight | MkDocs Material |
+| --- | --- | --- | --- | --- | --- |
+| Markup language | Carve `.crv`. | Markdown compiled as Vue components. | Markdown and MDX. | Markdown and MDX by default; Markdoc can be added. | Markdown. |
+| Client framework in output | No client framework; small scripts for search, nav, copy, outline, and playground when used. | Vue-powered site; VitePress documents static HTML first visit and SPA navigation after hydration. | React-based site. | Astro output; UI islands are available through Astro integrations. | Static MkDocs output with theme JavaScript for features. |
+| Dev server | Yes, `carve-press dev`. | Yes, Vite dev server. | Yes. | Yes, Astro dev server. | Yes, `mkdocs serve`. |
+| Built-in search | Yes, MiniSearch index. | Local MiniSearch or Algolia DocSearch. | Commonly Algolia through theme config; local search requires plugin choices. | Pagefind is the default search provider. | Built-in client-side search enabled by default. |
+| i18n | Prefix locales and switcher; no translation extraction tooling. | Built-in locale config. | Built-in localization workflow. | Built-in i18n configuration. | Theme translations and a language selector; separate builds per language. |
+| Blog | Built-in generated listing, tags, and feed. | Possible with custom theme/data loading, not a default docs feature. | Built-in blog. | Through Astro content collections or a community plugin. | Built-in blog plugin. |
+| Doc versioning | Not built in. | Not a primary built-in feature. | Built-in docs versioning CLI and routes. | Not a primary built-in feature. | Through the separate mike tool, not the theme itself. |
+| Code-block affordances | Shiki, titles, copy, line numbers, `hl`, notation diff/focus/error/highlight, code groups. | Strong Markdown code-block support with Shiki and VitePress extensions. | Strong code-block support in MDX/Prism ecosystem. | Expressive Code enabled by default. | Strong code annotations, copy, highlighting, and content tabs. |
+| Build-time link validation | Internal links, nav, sidebar, page nav, and Carve crossrefs are fatal by default. | `ignoreDeadLinks` defaults to false, so dead links fail by default. | `onBrokenLinks` defaults to throw in production builds; Markdown link handling is configurable. | Not documented as a built-in equivalent. | Not documented as a built-in; available through plugins. |
+| Live source/render compare | Built-in `::: compare`. | Not a documented default capability. | Not a documented default capability. | Not a documented default capability. | Not a documented default capability. |
+| `llms.txt` | Built-in extension. | Their own docs publish one; generating it for your site is not a documented default. | Not documented as a default. | Not documented as a default. | Not documented as a default. |
+| Ecosystem size | Early and small. | Larger Vite and Vue ecosystem. | Larger React and plugin ecosystem. | Larger Astro integration ecosystem. | Larger Python and MkDocs plugin ecosystem. |
+| Component islands | Not built in. | Vue components in Markdown. | React components in MDX. | Astro islands and integrations. | Markdown plus theme/plugin extensions; not an islands-first model. |
+
+::: note "How to read this"
+Rows are coarse capabilities, not fine print, and every project here moves faster than a hand-written table. Where a cell says "not documented", it means the project's own documentation does not present it as a built-in - a plugin may well cover it. Where CarvePress is behind, the row says so.
+:::

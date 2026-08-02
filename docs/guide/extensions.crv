@@ -1,0 +1,53 @@
+---
+title: Extensions
+description: Presets, the Carve extension stack, and the site-extension event bus.
+order: 11
+---
+
+# Extensions
+
+CarvePress has two extension layers: Carve engine extensions that render markup, and site extensions that subscribe to build events.
+
+## Presets
+
+| Preset | Included Carve engine factories |
+| --- | --- |
+| `minimal` | heading permalinks plus CarvePress code, compare, playground, images, and table scrolling |
+| `docs` | `tabs`, `details`, `mathBlock`, `externalLinks`, `tableOfContents`, `tocPlacement`, `wikilinks` |
+| `full` | all `docs` factories plus `headingNumbers`, `glossary`, `index`, `citations`, `codeCallouts`, `colorSwatch`, `spoiler`, `listTable`, `imgFence`, `defaultAttributes` |
+
+CarvePress always wraps the preset with Shiki, table scrolling, compare, playground, code groups, heading permalinks, and image defaults.
+
+## Site Extension Events
+
+| Event | Payload | Use |
+| --- | --- | --- |
+| `buildStarted` | `{ config }` | Validate settings or capture normalized config. |
+| `contentDiscovered` | `{ pages }` | Add virtual pages or filter pages. |
+| `rendererCreated` | `{ extensions }` | Add Carve render extensions. |
+| `pageRendered` | `{ rendered, html }` | Post-process rendered HTML. |
+| `pageWritten` | `{ rendered, outPath }` | Track emitted files. |
+| `buildCompleted` | `{ rendered, outDir }` | Write derived artifacts. |
+
+## Worked Example
+
+```ts "site extension"
+import type { SiteExtension } from '@markup-carve/carve-press'
+import { writeFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
+
+export function routeManifest(): SiteExtension {
+  return {
+    name: 'route-manifest',
+    setup(bus) {
+      bus.on('buildCompleted', async ({ rendered, outDir }) => {
+        const routes = rendered.map((page) => page.searchDoc.route)
+        await writeFile(resolve(outDir, 'routes.json'), JSON.stringify(routes, null, 2))
+      }, 'route-manifest')
+    },
+  }
+}
+```
+
+Built-in site extensions include `searchIndex`, `sitemap`, `llmsTxt`, `blog`, `feed`, and `redirects`.
+

@@ -14,7 +14,6 @@ import {
   listTable,
   mathBlock,
   spoiler,
-  tableOfContents,
   tabs,
   tocPlacement,
   wikilinks,
@@ -33,7 +32,10 @@ function presetExtensions(preset: CarvePressConfig['carve']['preset']): CarveExt
     details(),
     mathBlock(),
     externalLinks(),
-    tableOfContents({ minLevel: 2, maxLevel: 3 }),
+    // tocPlacement only, deliberately: tableOfContents() injects a nav into
+    // every document, which on this theme means a bare list of links above the
+    // H1 duplicating the outline column. A page that wants one asks for it with
+    // a ::: toc block.
     tocPlacement(),
     wikilinks(),
   ]

@@ -1,0 +1,64 @@
+---
+title: Writing Content
+description: Frontmatter, includes, cross-references, and link validation in CarvePress.
+order: 3
+---
+
+# Writing Content
+
+Every page is a `.crv` file with optional YAML frontmatter followed by Carve content.
+
+## Frontmatter Reference
+
+| Key | Type | Default | Effect |
+| --- | --- | --- | --- |
+| `title` | `string` | first H1 or path | Page title and search title. |
+| `description` | `string` | site description | Meta description and social description. |
+| `layout` | `string` | `'doc'` | Selects `doc`, `page`, `home`, `blog`, or a custom layout. |
+| `hero` | object | none | Home layout hero data. |
+| `features` | array | none | Home layout feature cards. |
+| `head` | head tuple array | `[]` | Extra tags for this page. |
+| `image` | `string` | none | Social image URL. |
+| `ogImage` | `string` | none | Alias used when `image` is absent. |
+| `outline` | `false | number | [number, number] | 'deep'` | site outline | Per-page outline level. |
+| `aside` | `false` | visible | Hides the outline. |
+| `sidebar` | `false` | visible when matched | Hides the sidebar. |
+| `prev` | `false | { text: string; link: string }` | computed | Footer previous link override. |
+| `next` | `false | { text: string; link: string }` | computed | Footer next link override. |
+| `editLink` | `false` | visible when configured | Hides the edit link. |
+| `lastUpdated` | `false` | visible when configured | Hides the timestamp. |
+| `order` | `number` | title sort | Sort key for generated sidebars. |
+| `draft` | `boolean` | `false` | Draft pages are excluded from public derived outputs. |
+| `date` | `string` | required for blog posts | Blog and feed date. |
+| `tags` | `string[]` | `[]` | Blog tag pages. |
+| `excerpt` | `string` | description or first prose | Blog listing and feed summary. |
+| `author` | `string | string[]` | none | Blog post byline. |
+| `virtual` | `boolean` | internal | Marks generated pages. |
+
+## Includes
+
+Include directives are comments, so they render nothing after expansion:
+
+```carve "include a snippet"
+%% @include: ./snippets/install.crv
+```
+
+This page includes one real line from a shared snippet:
+
+%% @include: ../snippets/install.crv{1,1}
+
+You can include a range with `{2,4}`, an open range with `{2,}`, or a heading section with `#heading-id`.
+
+## Cross-References
+
+Use heading attributes on the line above the heading, then reference them with `</#id>`.
+
+{#cross-reference-target}
+### Cross-Reference Target
+
+This sentence links back to </#cross-reference-target>. Reference links also work: [Cross-Reference Target][].
+
+## Link Validation
+
+CarvePress validates site-internal absolute links such as [Code Blocks](/guide/code-blocks), nav entries, sidebar entries, and frontmatter `prev` or `next` links. Hash fragments are allowed, while missing route paths fail the build.
+
