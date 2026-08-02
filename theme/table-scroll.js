@@ -41,7 +41,7 @@
       // matters most: a web font swapping in widens the table inside a shell
       // that stays exactly the same size.
       const content = block.firstElementChild
-      if (content instanceof Element) observer.observe(content)
+      if (content) observer.observe(content)
     }
   } else {
     window.addEventListener('resize', scheduleMeasure)

@@ -91,13 +91,16 @@ class CarvePlayground extends HTMLElement {
       const current = ++token
       try {
         const mod = await engine
+        // The engine import is async, so this can resolve after the element has
+        // been torn down - a navigation mid-render, or a test document being
+        // disposed. Touching the DOM then throws an unhandled rejection.
+        if (current !== token || !this.isConnected) return
         const html = mod.carveToHtml(textarea.value)
-        if (current !== token) return
         preview.innerHTML = html
         code.textContent = html.endsWith('\n') ? html : `${html}\n`
       } catch (error) {
-        if (current !== token) return
-        const message = document.createElement('div')
+        if (current !== token || !this.isConnected) return
+        const message = this.ownerDocument.createElement('div')
         message.className = 'carve-playground__error'
         message.textContent = errorMessage(error)
         preview.replaceChildren(message)
