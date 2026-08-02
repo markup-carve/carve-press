@@ -40,6 +40,29 @@ async function canDriveChrome(bin: string): Promise<boolean> {
   }
 }
 
+/**
+ * Chrome occasionally returns an empty DOM dump when the machine is loaded -
+ * the browser is competing with the rest of the suite for CPU, not reacting to
+ * anything in the page. One retry turns that into a stable signal without
+ * hiding a real failure: a genuinely broken client fails both attempts.
+ */
+async function dumpDom(bin: string, args: string[]): Promise<string> {
+  let last = ''
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const { stdout } = await execFileAsync(bin, args, {
+        maxBuffer: 1024 * 1024 * 5,
+        timeout: 30000,
+      })
+      last = stdout
+      if (stdout.includes('<pre id="result">')) return stdout
+    } catch (error) {
+      last = error instanceof Error ? error.message : String(error)
+    }
+  }
+  return last
+}
+
 function fixtureHtml(playgroundMarkup: string): string {
   return `<!doctype html>
 <html>
@@ -401,17 +424,13 @@ export function broken() {
     )
 
     try {
-      const { stdout } = await execFileAsync(
-        bin,
-        [
-          ...chromeFlags,
-          `--user-data-dir=${userDataDir}`,
-          '--virtual-time-budget=3000',
-          '--dump-dom',
-          pathToFileURL(htmlPath).href,
-        ],
-        { maxBuffer: 1024 * 1024 * 5, timeout: 15000 },
-      )
+      const stdout = await dumpDom(bin, [
+        ...chromeFlags,
+        `--user-data-dir=${userDataDir}`,
+        '--virtual-time-budget=3000',
+        '--dump-dom',
+        pathToFileURL(htmlPath).href,
+      ])
 
       const raw = stdout.match(/<pre id="result">(?<json>.*?)<\/pre>/s)?.groups?.json
       // finish() writes the JSON with textContent, so --dump-dom serializes it

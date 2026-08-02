@@ -32,6 +32,11 @@ function routeWithoutHashOrQuery(href: string): string {
   return href.split('#')[0]!.split('?')[0]!
 }
 
+function stripBase(href: string, base: string): string {
+  if (base === '/' || !href.startsWith(base)) return href
+  return `/${href.slice(base.length)}`
+}
+
 /**
  * Every dead link is reported in one error. One-at-a-time reporting turns a
  * 42-page migration into 42 build cycles.
@@ -40,6 +45,7 @@ export function validateLinks(
   pages: RenderedPage[],
   routes: Set<string>,
   ignore: boolean,
+  base = '/',
 ): void {
   if (ignore) return
   const dead: string[] = []
@@ -47,8 +53,9 @@ export function validateLinks(
     for (const match of rendered.html.matchAll(RE_HREF)) {
       const href = match[1]!
       if (!isInternal(href)) continue
-      const route = routeWithoutHashOrQuery(href)
-      if (!routes.has(route)) dead.push(`${rendered.page.relPath}: ${href}`)
+      const authoredHref = stripBase(href, base)
+      const route = routeWithoutHashOrQuery(authoredHref)
+      if (!routes.has(route)) dead.push(`${rendered.page.relPath}: ${authoredHref}`)
     }
   }
   if (dead.length > 0) {

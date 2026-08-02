@@ -172,6 +172,38 @@ describe('buildSite', () => {
     expect(html).toContain('<h1>Home ')
   })
 
+  it('prefixes root-relative content links and images under a non-root base exactly once', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-base-'))
+    const srcDir = resolve(root, 'docs')
+    await mkdir(srcDir)
+    await writeFile(
+      resolve(srcDir, 'index.crv'),
+      ['---', 'title: Home', '---', '', '# Home', '', '[Start](/start)', '', '![Logo](/logo.png)'].join('\n'),
+    )
+    await writeFile(resolve(srcDir, 'start.crv'), ['---', 'title: Start', '---', '', '# Start'].join('\n'))
+
+    const { outDir } = await build({ srcDir, base: '/carve-press/', themeConfig: { sidebar: {} } }, root)
+    const html = await readFile(resolve(outDir, 'index.html'), 'utf8')
+
+    expect(html).toContain('<a href="/carve-press/start">Start</a>')
+    expect(html).toContain('<img src="/carve-press/logo.png" alt="Logo">')
+    expect(html).not.toContain('/carve-press/carve-press/')
+  })
+
+  it('reports a dead content link as authored under a non-root base', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-base-dead-'))
+    const srcDir = resolve(root, 'docs')
+    await mkdir(srcDir)
+    await writeFile(
+      resolve(srcDir, 'index.crv'),
+      ['---', 'title: Home', '---', '', '# Home', '', '[Missing](/missing)'].join('\n'),
+    )
+
+    await expect(
+      build({ srcDir, base: '/carve-press/', themeConfig: { sidebar: {} } }, root),
+    ).rejects.toThrow(/index\.crv: \/missing/)
+  })
+
   it('emits a built-in 404 page outside the route table and search index', async () => {
     const { result, outDir } = await build()
     const html = await readFile(resolve(outDir, '404.html'), 'utf8')

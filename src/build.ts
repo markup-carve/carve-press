@@ -213,12 +213,13 @@ async function collectLastUpdatedTimes(root: string, srcDir: string, pages: Page
 }
 
 /** Load `carve-press.config.{ts,js,mjs}` from a project root. */
-export async function loadConfig(root: string): Promise<UserConfig> {
+export async function loadConfig(root: string, opts: { bustCache?: boolean } = {}): Promise<UserConfig> {
   for (const name of ['carve-press.config.ts', 'carve-press.config.js', 'carve-press.config.mjs']) {
     const path = resolve(root, name)
     if (!(await configExists(path))) continue
 
-    const mod = (await import(pathToFileURL(path).href)) as { default?: UserConfig }
+    const href = `${pathToFileURL(path).href}${opts.bustCache === true ? `?t=${Date.now()}` : ''}`
+    const mod = (await import(href)) as { default?: UserConfig }
     if (mod.default === undefined) {
       throw new BuildError(`${name} has no default export`)
     }
@@ -273,6 +274,7 @@ export async function buildSite(opts: {
       extensions: stack,
       outlineLevels: config.themeConfig.outline.level,
       includeRoots: [srcDir, opts.root],
+      base: config.base,
       profile: config.carve.profile,
       profileBaseHost: host,
     })
@@ -284,6 +286,7 @@ export async function buildSite(opts: {
     extensions: stack,
     outlineLevels: config.themeConfig.outline.level,
     includeRoots: [srcDir, opts.root],
+    base: config.base,
     profile: config.carve.profile,
     profileBaseHost: host,
   })
@@ -296,8 +299,8 @@ export async function buildSite(opts: {
 
   validateNav(config.themeConfig, routes)
   validateCrossrefs(pages)
-  validateLinks(rendered, routes, config.ignoreDeadLinks)
-  validateLinks([notFoundRendered], routes, config.ignoreDeadLinks)
+  validateLinks(rendered, routes, config.ignoreDeadLinks, config.base)
+  validateLinks([notFoundRendered], routes, config.ignoreDeadLinks, config.base)
 
   for (const result of rendered) {
     const sidebar = resolveSidebar(result.page.route, config.themeConfig.sidebar)
