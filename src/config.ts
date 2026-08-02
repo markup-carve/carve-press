@@ -54,7 +54,14 @@ export interface ShikiConfig {
 }
 
 export interface ThemeAssetsConfig {
+  /** Replaces the built-in theme wholesale. */
   css?: string
+  /**
+   * Appended after the theme. This is what a site wants when it only needs a
+   * few extra rules - pointing `css` at a partial stylesheet silently discards
+   * the entire built-in theme, and the build still succeeds.
+   */
+  extraCss?: string[]
 }
 
 export type SearchConfig = false | Required<SearchIndexOptions>
@@ -163,7 +170,10 @@ export function resolveConfig(user: UserConfig): CarvePressConfig {
     cleanUrls: user.cleanUrls ?? true,
     ignoreDeadLinks: user.ignoreDeadLinks ?? false,
     head: user.head ?? [],
-    theme: user.theme?.css === undefined ? {} : { css: user.theme.css },
+    theme: {
+      ...(user.theme?.css === undefined ? {} : { css: user.theme.css }),
+      ...(user.theme?.extraCss === undefined ? {} : { extraCss: user.theme.extraCss }),
+    },
     themeConfig: {
       nav: user.themeConfig?.nav ?? [],
       sidebar: user.themeConfig?.sidebar ?? {},

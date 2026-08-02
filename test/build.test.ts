@@ -112,6 +112,36 @@ describe('buildSite', () => {
     )
   })
 
+  it('appends extraCss after the shipped theme instead of replacing it', async () => {
+    // Pointing `css` at a partial stylesheet silently discards the whole theme
+    // and still builds successfully, so a site that only needs extra rules has
+    // to be able to say that.
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-extra-'))
+    await writeFile(resolve(root, 'pages.css'), '.impl-chart { display: grid; }\n')
+
+    const { outDir } = await build({ srcDir: SITE, theme: { extraCss: ['pages.css'] } }, root)
+    const css = await readFile(resolve(outDir, 'assets/style.css'), 'utf8')
+
+    expect(css).toContain('.impl-chart { display: grid; }')
+    expect(css).toContain('--verdigris')
+  })
+
+  it('appends every extraCss entry in order, after a replaced theme', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-extra-order-'))
+    await writeFile(resolve(root, 'theme.css'), 'body { color: rebeccapurple; }\n')
+    await writeFile(resolve(root, 'a.css'), '.a {}\n')
+    await writeFile(resolve(root, 'b.css'), '.b {}\n')
+
+    const { outDir } = await build(
+      { srcDir: SITE, theme: { css: 'theme.css', extraCss: ['a.css', 'b.css'] } },
+      root,
+    )
+    const css = await readFile(resolve(outDir, 'assets/style.css'), 'utf8')
+
+    expect(css.indexOf('rebeccapurple')).toBeLessThan(css.indexOf('.a {}'))
+    expect(css.indexOf('.a {}')).toBeLessThan(css.indexOf('.b {}'))
+  })
+
   it('copies publicDir contents into the output root', async () => {
     const root = await mkdtemp(resolve(tmpdir(), 'cp-public-'))
     await mkdir(resolve(root, 'static/images'), { recursive: true })

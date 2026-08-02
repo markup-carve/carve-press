@@ -81,9 +81,18 @@ async function copyDirectoryContents(src: string, dest: string): Promise<void> {
   }
 }
 
-async function writeThemeCss(opts: { root: string; outDir: string; css?: string }): Promise<void> {
+async function writeThemeCss(opts: {
+  root: string
+  outDir: string
+  css?: string
+  extraCss?: string[]
+}): Promise<void> {
   const source = opts.css === undefined ? defaultThemePath : resolve(opts.root, opts.css)
-  const css = await readFile(source, 'utf8')
+  const parts = [await readFile(source, 'utf8')]
+  for (const extra of opts.extraCss ?? []) {
+    parts.push(await readFile(resolve(opts.root, extra), 'utf8'))
+  }
+  const css = parts.join('\n')
   const outPath = resolve(opts.outDir, 'assets/style.css')
   await mkdir(dirname(outPath), { recursive: true })
   await writeFile(outPath, css, 'utf8')
@@ -192,7 +201,12 @@ export async function buildSite(opts: {
   if (await directoryExists(publicDir)) {
     await copyDirectoryContents(publicDir, outDir)
   }
-  await writeThemeCss({ root: opts.root, outDir, css: config.theme.css })
+  await writeThemeCss({
+    root: opts.root,
+    outDir,
+    css: config.theme.css,
+    extraCss: config.theme.extraCss,
+  })
   if (config.search !== false) await writeSearchScript(outDir)
   await writeTableScrollScript(outDir)
   await writeOutlineScript(outDir)
