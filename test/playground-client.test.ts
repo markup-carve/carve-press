@@ -62,7 +62,14 @@ function fixtureHtml(playgroundMarkup: string): string {
           // Poll rather than sleeping a fixed amount: the debounce plus a real
           // render takes longer on a loaded machine, and a fixed delay turns
           // that into a flaky failure rather than a real one.
-          for (let i = 0; i < 100; i++) {
+          //
+          // The bound is generous because these ticks are virtual: Chrome runs
+          // with a virtual time budget, so the clock races ahead of the real
+          // work (a dynamic import, a WASM instantiation, a Mermaid parse) that
+          // the predicate is waiting on. A tight bound expires in milliseconds
+          // of wall time on a loaded CI runner and reports a timeout for work
+          // that was still in flight.
+          for (let i = 0; i < 600; i++) {
             if (predicate()) return
             await delay(50)
           }
@@ -140,7 +147,7 @@ function wasmFixtureHtml(playgroundMarkup: string, mode: 'success' | 'fail'): st
 
       try {
         const waitFor = async (predicate, what) => {
-          for (let i = 0; i < 100; i++) {
+          for (let i = 0; i < 600; i++) {
             if (predicate()) return
             await delay(50)
           }
