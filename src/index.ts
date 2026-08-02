@@ -6,6 +6,7 @@ export {
   docLayout,
   homeLayout,
   pageLayout,
+  blogLayout,
   LAYOUTS,
   htmlDocument,
   headerHtml,
@@ -24,6 +25,9 @@ export {
 export { searchIndex } from './extensions/search-index.js'
 export { sitemap } from './extensions/sitemap.js'
 export { llmsTxt } from './extensions/llms-txt.js'
+export { blog } from './extensions/blog.js'
+export { feed } from './extensions/feed.js'
+export { redirects } from './extensions/redirects.js'
 export type {
   CarvePressConfig,
   UserConfig,
@@ -42,6 +46,7 @@ export type {
   ThemeLogo,
   SiteExtension,
   SearchConfig,
+  CarvePreset,
   ShikiConfig,
   ShikiLanguage,
 } from './config.js'
@@ -56,4 +61,6 @@ export type {
 } from './extensions/search-index.js'
 export type { SitemapOptions } from './extensions/sitemap.js'
 export type { LlmsTxtOptions } from './extensions/llms-txt.js'
+export type { BlogOptions } from './extensions/blog.js'
+export type { FeedOptions } from './extensions/feed.js'
 export { SourceError, BuildError } from './errors.js'

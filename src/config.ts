@@ -2,10 +2,14 @@ import { Profile, type CarveExtension } from '@markup-carve/carve'
 import type { LanguageRegistration } from '@shikijs/types'
 import { BuildError } from './errors.js'
 import type { BuildEventBus } from './events.js'
+import { blog, type BlogOptions } from './extensions/blog.js'
+import { feed, type FeedOptions } from './extensions/feed.js'
+import { redirects } from './extensions/redirects.js'
 import { searchIndex, type SearchIndexOptions } from './extensions/search-index.js'
 import type { Layout } from './layout/doc.js'
 
 export type HeadTag = [tag: string, attrs: Record<string, string>]
+export type CarvePreset = 'minimal' | 'docs' | 'full'
 
 export interface NavItem {
   text: string
@@ -65,6 +69,7 @@ export interface ThemeConfig {
   editLink?: { pattern: string; text: string }
   footer?: { message: string; copyright: string }
   lastUpdated?: boolean
+  socialImage?: string
   outline: { level: [number, number] }
   labels: ThemeLabels
 }
@@ -127,9 +132,12 @@ export interface CarvePressConfig {
   head: HeadTag[]
   theme: ThemeAssetsConfig
   themeConfig: ThemeConfig
-  carve: { extensions: CarveExtension[]; profile?: Profile }
+  carve: { extensions: CarveExtension[]; profile?: Profile; preset: CarvePreset }
   shiki: ShikiConfig
   search: SearchConfig
+  blog?: Required<BlogOptions>
+  feed: false | Required<FeedOptions>
+  redirects: Record<string, string>
   extensions: SiteExtension[]
   layouts: Record<string, Layout>
   locales: Record<string, LocaleConfig>
@@ -141,9 +149,12 @@ export type UserConfig = Partial<
   title: string
   theme?: Partial<ThemeAssetsConfig>
   themeConfig?: Partial<Omit<ThemeConfig, 'labels'>> & { labels?: Partial<ThemeLabels> }
-  carve?: { extensions?: CarveExtension[]; profile?: string | Profile }
+  carve?: { extensions?: CarveExtension[]; profile?: string | Profile; preset?: CarvePreset }
   shiki?: Partial<Omit<ShikiConfig, 'themes'>> & { themes?: Partial<ShikiConfig['themes']> }
   search?: false | SearchIndexOptions
+  blog?: BlogOptions
+  feed?: false | FeedOptions
+  redirects?: Record<string, string>
   layouts?: Record<string, Layout>
   locales?: Record<string, LocaleConfig>
 }
@@ -233,6 +244,37 @@ function resolveProfile(profile: string | Profile | undefined): Profile | undefi
   return resolved.onDisallowed(Profile.ACTION_ERROR)
 }
 
+function normalizeRoute(route: string): string {
+  const withLeading = route.startsWith('/') ? route : `/${route}`
+  return withLeading.endsWith('/') ? withLeading : `${withLeading}/`
+}
+
+function normalizeBlog(blogConfig: BlogOptions | undefined): Required<BlogOptions> | undefined {
+  if (blogConfig === undefined) return undefined
+  const dir = typeof blogConfig.dir === 'string' ? blogConfig.dir.replace(/^\/+|\/+$/g, '') : ''
+  if (dir === '') throw new BuildError('config: blog.dir is required')
+  const route = normalizeRoute(blogConfig.route ?? `/${dir}/`)
+  return {
+    dir,
+    route,
+    title: blogConfig.title ?? 'Blog',
+    description: blogConfig.description ?? '',
+    perPage: blogConfig.perPage ?? 10,
+    tagsRoute: normalizeRoute(blogConfig.tagsRoute ?? `${route}tags/`),
+  }
+}
+
+function normalizeFeed(feedConfig: false | FeedOptions | undefined): false | Required<FeedOptions> {
+  if (feedConfig === false || feedConfig === undefined) return false
+  return {
+    filename: feedConfig.filename ?? 'feed.xml',
+    title: feedConfig.title ?? '',
+    description: feedConfig.description ?? '',
+    limit: feedConfig.limit ?? 20,
+    type: feedConfig.type ?? 'rss',
+  }
+}
+
 function normalizeLocaleKey(key: string): string {
   const trimmed = key.replace(/^\/+/, '').replace(/\/+$/, '')
   return trimmed === '' ? '/' : `/${trimmed}/`
@@ -249,6 +291,8 @@ export function resolveConfig(user: UserConfig): CarvePressConfig {
           filename: user.search?.filename ?? 'search-index.json',
           exclude: user.search?.exclude ?? [],
         }
+  const blogConfig = normalizeBlog(user.blog)
+  const feedConfig = normalizeFeed(user.feed)
   return {
     title: user.title,
     description: user.description,
@@ -274,11 +318,13 @@ export function resolveConfig(user: UserConfig): CarvePressConfig {
       editLink: user.themeConfig?.editLink,
       footer: user.themeConfig?.footer,
       lastUpdated: user.themeConfig?.lastUpdated,
+      socialImage: user.themeConfig?.socialImage,
       outline: user.themeConfig?.outline ?? { level: [2, 3] },
       labels: { ...DEFAULT_LABELS, ...(user.themeConfig?.labels ?? {}) },
     },
     carve: {
       extensions: user.carve?.extensions ?? [],
+      preset: user.carve?.preset ?? 'docs',
       profile: resolveProfile(user.carve?.profile),
     },
     shiki: {
@@ -293,7 +339,16 @@ export function resolveConfig(user: UserConfig): CarvePressConfig {
       lineNumbers: user.shiki?.lineNumbers ?? DEFAULT_SHIKI.lineNumbers,
     },
     search,
-    extensions: [...(search === false ? [] : [searchIndex(search)]), ...(user.extensions ?? [])],
+    blog: blogConfig,
+    feed: feedConfig,
+    redirects: user.redirects ?? {},
+    extensions: [
+      ...(blogConfig === undefined ? [] : [blog(blogConfig)]),
+      ...(search === false ? [] : [searchIndex(search)]),
+      ...(feedConfig === false ? [] : [feed(feedConfig)]),
+      ...(Object.keys(user.redirects ?? {}).length === 0 ? [] : [redirects(user.redirects ?? {})]),
+      ...(user.extensions ?? []),
+    ],
     layouts: user.layouts ?? {},
     locales: Object.fromEntries(
       Object.entries(user.locales ?? {}).map(([key, locale]) => [normalizeLocaleKey(key), locale]),

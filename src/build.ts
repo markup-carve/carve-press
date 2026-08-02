@@ -17,7 +17,7 @@ import {
   type UserConfig,
 } from './config.js'
 import { discoverPages, type Page } from './content/discover.js'
-import { outPathForRoute } from './content/route.js'
+import { outPathForRoute, routeKey } from './content/route.js'
 import { buildExtensionStack } from './render/extensions.js'
 import type { ShikiOptions } from './render/shiki.js'
 import { renderPage, type RenderedPage } from './render/page.js'
@@ -152,6 +152,20 @@ function partitionNotFoundPage(pages: Page[]): { pages: Page[]; notFoundPage?: P
   const notFound = pages.find((page) => page.relPath === '404.crv' || page.relPath === '404.carve')
   if (notFound === undefined) return { pages }
   return { pages: pages.filter((page) => page !== notFound), notFoundPage: notFound }
+}
+
+function validateUniqueRoutes(pages: Page[]): void {
+  const seen = new Map<string, string>()
+  for (const page of pages) {
+    const key = routeKey(page.route)
+    const previous = seen.get(key)
+    if (previous !== undefined) {
+      throw new BuildError(`duplicate route ${key}`, [
+        `${previous} and ${page.relPath} both resolve to ${key}`,
+      ])
+    }
+    seen.set(key, page.relPath)
+  }
 }
 
 function builtInNotFoundPage(srcDir: string, title: string): Page {
@@ -525,13 +539,14 @@ export async function buildSite(opts: {
 
   const discovered = await discoverPages(srcDir, config.srcExclude)
   const discoveredContent = await bus.emit('contentDiscovered', { pages: discovered })
+  validateUniqueRoutes(discoveredContent.pages)
   const { pages, notFoundPage } = partitionNotFoundPage(discoveredContent.pages)
   const lastUpdated =
     shouldCollectLastUpdated(config)
       ? await collectLastUpdatedTimes(opts.root, srcDir, pages)
       : new Map<string, Date>()
 
-  const extensions = await buildExtensionStack(config, opts.shiki ?? config.shiki)
+  const extensions = await buildExtensionStack(config, opts.shiki ?? config.shiki, opts.root)
   const stack = (await bus.emit('rendererCreated', { extensions })).extensions
   const host = profileBaseHost(config.hostname)
 

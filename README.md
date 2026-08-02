@@ -17,6 +17,22 @@ npm install --save-dev @markup-carve/carve-press
 
 Planned, not yet implemented: `init`, `new`, `dev`, `serve`.
 
+## Render Extension Presets
+
+`carve.preset` controls CarvePress' built-in Carve engine extension stack. The default is `docs`.
+`carve.extensions` is appended after the preset, so site-specific extensions can override earlier renderers.
+
+| Preset | Engine factories |
+|---|---|
+| `minimal` | `codeGroup`, `headingPermalinks` |
+| `docs` | `codeGroup`, `headingPermalinks`, `tabs`, `details`, `mathBlock`, `externalLinks`, `tableOfContents`, `tocPlacement`, `wikilinks` |
+| `full` | all `docs` factories plus `headingNumbers`, `glossary`, `index`, `citations`, `codeCallouts`, `colorSwatch`, `spoiler`, `listTable`, `imgFence`, `defaultAttributes` |
+
+CarvePress always adds its own Shiki, table-scroll, compare, playground, and image-default extensions around
+those engine factories. Executable or remote-content diagram factories such as `mermaid`, `d2`, `graphviz`,
+`wavedrom`, `abc`, `plantuml`, `vegaLite`, `chart`, and `fencedRender` are deliberately left out of every
+preset because they can require extra runtimes, execute renderers, or embed remote-capable content.
+
 ## `::: compare` renders live HTML
 
 The `::: compare` admonition shows a Carve fence next to its rendered output. The "Rendered" pane injects the block's `html` fence **verbatim and unescaped** - by design, so the live view can never drift from the HTML shown beside it. This is the one place in the render pipeline where Carve's dangerous-attribute and URL-scheme filtering does not apply.

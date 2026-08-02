@@ -1,9 +1,58 @@
-import { codeGroup, headingPermalinks, type CarveExtension } from '@markup-carve/carve'
+import {
+  citations,
+  codeCallouts,
+  codeGroup,
+  colorSwatch,
+  defaultAttributes,
+  details,
+  externalLinks,
+  glossary,
+  headingNumbers,
+  headingPermalinks,
+  imgFence,
+  index as indexTerms,
+  listTable,
+  mathBlock,
+  spoiler,
+  tableOfContents,
+  tabs,
+  tocPlacement,
+  wikilinks,
+  type CarveExtension,
+} from '@markup-carve/carve'
 import type { CarvePressConfig } from '../config.js'
 import { createShikiExtensionFromHighlighter, createShikiHighlighter, type ShikiOptions } from './shiki.js'
 import { compareExtension } from './compare.js'
+import { imageDefaultsExtension } from './images.js'
 import { playgroundExtension } from './playground.js'
 import { tableScrollExtension } from './table-scroll.js'
+
+function presetExtensions(preset: CarvePressConfig['carve']['preset']): CarveExtension[] {
+  const docs = [
+    tabs(),
+    details(),
+    mathBlock(),
+    externalLinks(),
+    tableOfContents({ minLevel: 2, maxLevel: 3 }),
+    tocPlacement(),
+    wikilinks(),
+  ]
+  const full = [
+    ...docs,
+    headingNumbers({ minLevel: 2 }),
+    glossary(),
+    indexTerms(),
+    citations(),
+    codeCallouts(),
+    colorSwatch(),
+    spoiler(),
+    listTable(),
+    imgFence(),
+    defaultAttributes(),
+  ]
+  if (preset === 'minimal') return []
+  return preset === 'full' ? full : docs
+}
 
 /**
  * The render stack. Built-ins come first so a user extension appended from
@@ -12,6 +61,7 @@ import { tableScrollExtension } from './table-scroll.js'
 export async function buildExtensionStack(
   config: CarvePressConfig,
   shiki: ShikiOptions,
+  root = process.cwd(),
 ): Promise<CarveExtension[]> {
   const highlighter = await createShikiHighlighter(shiki)
   return [
@@ -21,6 +71,8 @@ export async function buildExtensionStack(
     playgroundExtension(),
     codeGroup({ highlighter }),
     headingPermalinks(),
+    imageDefaultsExtension({ root, publicDir: config.publicDir }),
+    ...presetExtensions(config.carve.preset),
     ...config.carve.extensions,
   ]
 }

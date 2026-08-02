@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import type { CarvePressConfig, SiteExtension } from '../config.js'
+import { publicRenderedPages } from './derived.js'
 import { absoluteRouteUrl, escapeXml } from './url.js'
 
 export interface SitemapOptions {
@@ -33,7 +34,7 @@ export function sitemap(opts: SitemapOptions): SiteExtension {
         async ({ rendered, outDir }) => {
           if (config === undefined) return
           const siteConfig = config
-          const urls = rendered
+          const urls = publicRenderedPages(rendered)
             .filter((page) => !excluded.has(page.searchDoc.route))
             .map((page) => absoluteRouteUrl(options.hostname, siteConfig.base, page.searchDoc.route))
           const body = urls.map((url) => `  <url><loc>${escapeXml(url)}</loc></url>`).join('\n')

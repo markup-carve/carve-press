@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import type { CarvePressConfig, SiteExtension } from '../config.js'
+import { publicRenderedPages } from './derived.js'
 import { routeUrl } from './url.js'
 
 export interface LlmsTxtOptions {
@@ -56,7 +57,7 @@ export function llmsTxt(opts: LlmsTxtOptions = {}): SiteExtension {
           if (summary !== undefined && summary !== '') {
             lines.push(`> ${markdownText(summary)}`, '')
           }
-          for (const page of rendered.filter((item) => !excluded.has(item.searchDoc.route))) {
+          for (const page of publicRenderedPages(rendered).filter((item) => !excluded.has(item.searchDoc.route))) {
             const url = routeUrl(config.base, page.searchDoc.route)
             const description = markdownText(pageDescription(page.page.frontmatter))
             const suffix = description === '' ? '' : `: ${description}`

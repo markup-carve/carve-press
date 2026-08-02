@@ -410,6 +410,18 @@ function hasOgUrl(head: HeadTag[]): boolean {
   )
 }
 
+function hasMeta(head: HeadTag[], key: 'name' | 'property', value: string): boolean {
+  return head.some(
+    ([tag, attrs]) => tag.toLowerCase() === 'meta' && attrs[key]?.toLowerCase() === value,
+  )
+}
+
+function hasAlternateFeed(head: HeadTag[]): boolean {
+  return head.some(
+    ([tag, attrs]) => tag.toLowerCase() === 'link' && attrs.rel?.toLowerCase() === 'alternate' && attrs.type?.includes('xml'),
+  )
+}
+
 function pageUrlHead(ctx: LayoutContext): HeadTag[] {
   const url = absolutePageUrl(ctx)
   if (url === undefined) return []
@@ -420,18 +432,49 @@ function pageUrlHead(ctx: LayoutContext): HeadTag[] {
   return tags
 }
 
-function pageImageHead(ctx: LayoutContext): HeadTag[] {
-  const image = ctx.meta?.image
-  if (image === undefined) return []
-  const content = image.startsWith('/') ? withBase(ctx.config.base, image) : image
-  return [
-    ['meta', { property: 'og:image', content }],
-    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
-  ]
+function absoluteAssetUrl(ctx: LayoutContext, value: string): string {
+  const path = value.startsWith('/') ? withBase(ctx.config.base, value) : value
+  const hostname = ctx.config.hostname?.replace(/\/+$/, '')
+  return hostname === undefined || hostname === '' || /^[a-z][a-z0-9+.-]*:/i.test(path) || path.startsWith('//')
+    ? path
+    : `${hostname}${path}`
+}
+
+function socialHead(ctx: LayoutContext): HeadTag[] {
+  const explicit = [...ctx.config.head, ...(ctx.meta?.head ?? [])]
+  const description = pageDescription(ctx)
+  const image = ctx.meta?.image ?? themeConfig(ctx).socialImage
+  const tags: HeadTag[] = []
+  if (!hasMeta(explicit, 'property', 'og:title')) tags.push(['meta', { property: 'og:title', content: ctx.rendered.searchDoc.title }])
+  if (description !== undefined && !hasMeta(explicit, 'property', 'og:description')) {
+    tags.push(['meta', { property: 'og:description', content: description }])
+  }
+  if (!hasMeta(explicit, 'property', 'og:type')) {
+    tags.push(['meta', { property: 'og:type', content: ctx.rendered.page.frontmatter.layout === 'blog' ? 'article' : 'website' }])
+  }
+  if (!hasMeta(explicit, 'property', 'og:site_name')) tags.push(['meta', { property: 'og:site_name', content: siteTitle(ctx) }])
+  if (image === undefined) return tags
+  const content = absoluteAssetUrl(ctx, image)
+  if (!hasMeta(explicit, 'property', 'og:image')) tags.push(['meta', { property: 'og:image', content }])
+  if (!hasMeta(explicit, 'name', 'twitter:card')) tags.push(['meta', { name: 'twitter:card', content: 'summary_large_image' }])
+  if (!hasMeta(explicit, 'name', 'twitter:title')) tags.push(['meta', { name: 'twitter:title', content: ctx.rendered.searchDoc.title }])
+  if (description !== undefined && !hasMeta(explicit, 'name', 'twitter:description')) {
+    tags.push(['meta', { name: 'twitter:description', content: description }])
+  }
+  if (!hasMeta(explicit, 'name', 'twitter:image')) tags.push(['meta', { name: 'twitter:image', content }])
+  return tags
+}
+
+function feedHead(ctx: LayoutContext): HeadTag[] {
+  if (ctx.config.feed === false) return []
+  const explicit = [...ctx.config.head, ...(ctx.meta?.head ?? [])]
+  if (hasAlternateFeed(explicit)) return []
+  const type = ctx.config.feed.type === 'atom' ? 'application/atom+xml' : 'application/rss+xml'
+  return [['link', { rel: 'alternate', type, href: withBase(ctx.config.base, `/${ctx.config.feed.filename}`) }]]
 }
 
 function extraHead(ctx: LayoutContext): HeadTag[] {
-  return [...pageUrlHead(ctx), ...pageImageHead(ctx), ...(ctx.meta?.head ?? [])]
+  return [...pageUrlHead(ctx), ...socialHead(ctx), ...feedHead(ctx), ...(ctx.meta?.head ?? [])]
 }
 
 function localizedHtml(ctx: LayoutContext): string {
@@ -546,6 +589,58 @@ ${themeToggleScript()}${labelsScript(ctx)}${searchScript(ctx)}${navScript(ctx)}$
   })
 }
 
+function postMetaHtml(ctx: LayoutContext): string {
+  const date = typeof ctx.rendered.page.frontmatter.date === 'string' ? ctx.rendered.page.frontmatter.date : undefined
+  const tags = Array.isArray(ctx.rendered.page.frontmatter.tags)
+    ? ctx.rendered.page.frontmatter.tags.filter((tag): tag is string => typeof tag === 'string')
+    : []
+  const author = ctx.rendered.page.frontmatter.author
+  const authors = typeof author === 'string'
+    ? [author]
+    : Array.isArray(author)
+      ? author.filter((item): item is string => typeof item === 'string')
+      : []
+  const tagRoute = ctx.config.blog?.tagsRoute ?? '/tags/'
+  const items = [
+    date === undefined ? '' : `<time datetime="${escapeAttr(date)}">${escapeText(date)}</time>`,
+    authors.length === 0 ? '' : `<span>${escapeText(authors.join(', '))}</span>`,
+    tags.length === 0 ? '' : `<span>${tags.map((tag) => `<a href="${escapeAttr(withBase(ctx.config.base, `${tagRoute.replace(/\/$/, '')}/${tag.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'tag'}/`))}">${escapeText(tag)}</a>`).join(' ')}</span>`,
+  ].filter((item) => item !== '').join('')
+  return items === '' ? '' : `<p class="blog-post__meta">${items}</p>`
+}
+
+export const blogLayout: Layout = (ctx) => {
+  const content = localizedHtml(ctx)
+  const layoutClasses = ['layout']
+  if (ctx.meta?.aside === false || ctx.rendered.outline.length === 0) layoutClasses.push('layout--no-aside')
+  if (ctx.sidebar.length === 0) layoutClasses.push('layout--no-sidebar')
+  const body = `    ${headerHtml(ctx)}
+    <div class="${layoutClasses.join(' ')}">
+      ${sidebarHtml(ctx.sidebar, ctx.config.base, ctx.rendered.page.route)}
+      <main class="content blog-post">
+        ${postMetaHtml(ctx)}
+${content}
+        ${editLink(ctx)}
+        ${lastUpdatedHtml(ctx)}
+        ${footerNav(ctx)}
+      </main>
+      ${outlineHtml(ctx)}
+    </div>
+    ${siteFooter(ctx)}
+    <div class="drawer-scrim" data-drawer-scrim hidden></div>
+${themeToggleScript()}${labelsScript(ctx)}${searchScript(ctx)}${navScript(ctx)}${tableScrollScript(ctx)}${codeCopyScript(ctx)}${outlineScript(ctx)}${playgroundScript(ctx)}`
+
+  return htmlDocument({
+    lang: localeLang(ctx),
+    title: documentTitle(ctx),
+    description: pageDescription(ctx),
+    head: ctx.config.head,
+    extraHead: extraHead(ctx),
+    base: ctx.config.base,
+    body,
+  })
+}
+
 function actionHtml(action: HomeHeroAction, base: string): string {
   const text = stringValue(action.text)
   const link = stringValue(action.link)
@@ -631,4 +726,4 @@ ${themeToggleScript()}${labelsScript(ctx)}${searchScript(ctx)}${navScript(ctx)}$
   })
 }
 
-export const LAYOUTS: Record<string, Layout> = { doc: docLayout, home: homeLayout, page: pageLayout }
+export const LAYOUTS: Record<string, Layout> = { doc: docLayout, home: homeLayout, page: pageLayout, blog: blogLayout }

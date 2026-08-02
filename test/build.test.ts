@@ -200,7 +200,7 @@ describe('buildSite', () => {
     const html = await readFile(resolve(outDir, 'index.html'), 'utf8')
 
     expect(html).toContain('<a href="/carve-press/start">Start</a>')
-    expect(html).toContain('<img src="/carve-press/logo.png" alt="Logo">')
+    expect(html).toContain('<img src="/carve-press/logo.png" alt="Logo" loading="lazy" decoding="async">')
     expect(html).not.toContain('/carve-press/carve-press/')
   })
 
@@ -474,7 +474,7 @@ describe('buildSite', () => {
     await writeFile(resolve(srcDir, 'index.crv'), ['---', 'title: Custom', 'layout: missing', '---', '', '# Custom'].join('\n'))
 
     await expect(build({ srcDir, themeConfig: { sidebar: {} } }, root)).rejects.toThrow(
-      /unknown layout "missing" \(known layouts: doc, home, page\)/,
+      /unknown layout "missing" \(known layouts: blog, doc, home, page\)/,
     )
   })
 

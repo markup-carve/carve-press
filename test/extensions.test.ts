@@ -16,6 +16,34 @@ describe('buildExtensionStack', () => {
       'code-group',
       'heading-permalinks',
     ])
+    expect(names).toContain('tabs')
+    expect(names).toContain('details')
+    expect(names).toContain('math-block')
+  })
+
+  it('resolves minimal and full presets', async () => {
+    const minimal = await buildExtensionStack(resolveConfig({ title: 'x', carve: { preset: 'minimal' } }), shiki)
+    const full = await buildExtensionStack(resolveConfig({ title: 'x', carve: { preset: 'full' } }), shiki)
+    expect(minimal.map((e) => e.name)).not.toContain('tabs')
+    expect(full.map((e) => e.name)).toEqual(expect.arrayContaining([
+      'tabs',
+      'details',
+      'math-block',
+      'external-links',
+      'table-of-contents',
+      'toc',
+      'wikilinks',
+      'headingNumbers',
+      'glossary',
+      'index',
+      'citations',
+      'codeCallouts',
+      'color',
+      'spoiler',
+      'list-table',
+      'img-fence',
+      'default-attributes',
+    ]))
   })
 
   it('appends user extensions last so they can override built-ins', async () => {
