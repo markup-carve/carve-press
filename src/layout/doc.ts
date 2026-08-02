@@ -361,6 +361,13 @@ export function footerNav(ctx: LayoutContext): string {
     : `<nav class="page-nav" aria-label="Page navigation">${prev}${next}</nav>`
 }
 
+/** Falls back to the authored string when the date does not parse. */
+function formatDate(value: string, lang: string): string {
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return value
+  return new Intl.DateTimeFormat(lang, { year: 'numeric', month: 'long', day: 'numeric' }).format(parsed)
+}
+
 export function lastUpdatedHtml(ctx: LayoutContext): string {
   if (themeConfig(ctx).lastUpdated !== true || ctx.meta?.lastUpdated === false || ctx.lastUpdated === undefined) return ''
   const iso = ctx.lastUpdated.toISOString()
@@ -589,24 +596,63 @@ ${themeToggleScript()}${labelsScript(ctx)}${searchScript(ctx)}${navScript(ctx)}$
   })
 }
 
+function tagSlug(tag: string): string {
+  return (
+    tag
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'tag'
+  )
+}
+
+function tagListHtml(tags: string[], ctx: LayoutContext): string {
+  if (tags.length === 0) return ''
+  const tagRoute = (ctx.config.blog?.tagsRoute ?? '/tags/').replace(/\/$/, '')
+  const items = tags
+    .map(
+      (tag) =>
+        `<li><a class="tag" href="${escapeAttr(
+          withBase(ctx.config.base, `${tagRoute}/${tagSlug(tag)}/`),
+        )}">${escapeText(tag)}</a></li>`,
+    )
+    .join('')
+  return `<ul class="tag-list">${items}</ul>`
+}
+
+/**
+ * The date, the byline, and the tags are three separate things, so they are
+ * three separate elements. Joining them into one string ran them together -
+ * "2026-07-31CarvePress Maintainersvalidation ci" - because nothing in the
+ * markup told the reader, or the stylesheet, where one ended.
+ */
 function postMetaHtml(ctx: LayoutContext): string {
-  const date = typeof ctx.rendered.page.frontmatter.date === 'string' ? ctx.rendered.page.frontmatter.date : undefined
+  const raw = ctx.rendered.page.frontmatter.date
+  const date = typeof raw === 'string' ? raw : undefined
   const tags = Array.isArray(ctx.rendered.page.frontmatter.tags)
     ? ctx.rendered.page.frontmatter.tags.filter((tag): tag is string => typeof tag === 'string')
     : []
   const author = ctx.rendered.page.frontmatter.author
-  const authors = typeof author === 'string'
-    ? [author]
-    : Array.isArray(author)
-      ? author.filter((item): item is string => typeof item === 'string')
-      : []
-  const tagRoute = ctx.config.blog?.tagsRoute ?? '/tags/'
-  const items = [
-    date === undefined ? '' : `<time datetime="${escapeAttr(date)}">${escapeText(date)}</time>`,
-    authors.length === 0 ? '' : `<span>${escapeText(authors.join(', '))}</span>`,
-    tags.length === 0 ? '' : `<span>${tags.map((tag) => `<a href="${escapeAttr(withBase(ctx.config.base, `${tagRoute.replace(/\/$/, '')}/${tag.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'tag'}/`))}">${escapeText(tag)}</a>`).join(' ')}</span>`,
-  ].filter((item) => item !== '').join('')
-  return items === '' ? '' : `<p class="blog-post__meta">${items}</p>`
+  const authors =
+    typeof author === 'string'
+      ? [author]
+      : Array.isArray(author)
+        ? author.filter((item): item is string => typeof item === 'string')
+        : []
+
+  const parts = [
+    date === undefined
+      ? ''
+      : `<time class="blog-meta__date" datetime="${escapeAttr(date)}">${escapeText(
+          formatDate(date, localeLang(ctx)),
+        )}</time>`,
+    authors.length === 0
+      ? ''
+      : `<span class="blog-meta__author">${escapeText(authors.join(', '))}</span>`,
+  ].filter((part) => part !== '')
+
+  const line = parts.length === 0 ? '' : `<p class="blog-meta__line">${parts.join('')}</p>`
+  const tagsHtml = tagListHtml(tags, ctx)
+  return line === '' && tagsHtml === '' ? '' : `<div class="blog-meta">${line}${tagsHtml}</div>`
 }
 
 export const blogLayout: Layout = (ctx) => {

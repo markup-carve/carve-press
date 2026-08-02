@@ -1400,3 +1400,118 @@ h1:hover .permalink, h2:hover .permalink, h3:hover .permalink,
 @media (max-width: 820px) {
   .site-footer { padding: 1.4rem 1.25rem; }
 }
+
+/* -------------------------------------------------------------------- blog */
+
+.blog-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin: 0 0 1.75rem;
+  padding-bottom: 1.1rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.blog-meta__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.9rem;
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--ink-soft);
+}
+
+/* A separator that belongs to the layout, not to the text: it disappears with
+   the element it separates instead of leaving a stray bullet behind. */
+.blog-meta__author::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  margin-right: 0.9rem;
+  border-radius: 50%;
+  background: var(--rule-strong, var(--rule));
+  vertical-align: middle;
+}
+
+.blog-meta__date { font-variant-numeric: tabular-nums; }
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tag {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  text-decoration: none;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.tag:hover,
+.tag:focus-visible {
+  border-color: var(--verdigris);
+  color: var(--verdigris);
+}
+
+.blog-card {
+  padding: 1.6rem 0 1.9rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.blog-card:last-of-type { border-bottom: 0; }
+
+.content .blog-card > h2 {
+  margin: 0 0 0.55rem;
+  padding: 0;
+  border: 0;
+  font-size: 1.5rem;
+}
+
+.content .blog-card > h2 a { text-decoration: none; }
+.content .blog-card > h2 a:hover { text-decoration: underline; }
+
+.content .blog-card__meta {
+  margin: 0 0 0.7rem;
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+
+.content .blog-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0 0 0.85rem;
+}
+
+.content .blog-card__tags a {
+  padding: 0.15rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.content .blog-card__tags a:hover { border-color: var(--verdigris); color: var(--verdigris); }
+
+.content .blog-card > p:last-of-type a {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tag { transition: none; }
+}

@@ -24,6 +24,33 @@ async function build(root: string, config: object = {}) {
 }
 
 describe('P2 site features', () => {
+  it('keeps the post date, byline, and tags as separate elements', async () => {
+    const { root } = await site({
+      'index.crv': '---\ntitle: Home\n---\n# Home\n',
+      'blog/a.crv':
+        '---\ntitle: A\ndate: 2026-01-01\ntags: [News, Release]\nauthor: Ada\n---\n# A\n\nAlpha body.\n',
+    })
+    const outDir = await build(root, { blog: { dir: 'blog', route: '/blog/' } })
+
+    const post = await readFile(resolve(outDir, 'blog/a/index.html'), 'utf8')
+    // Joining these into one string ran them together on the page, so the
+    // markup has to keep them apart.
+    expect(post).toContain('<time class="blog-meta__date" datetime="2026-01-01">January 1, 2026</time>')
+    expect(post).toContain('<span class="blog-meta__author">Ada</span>')
+    expect(post).toContain('<ul class="tag-list">')
+    expect(post).toContain('/blog/tags/news/')
+    expect(post).not.toContain('2026-01-01Ada')
+
+    const index = await readFile(resolve(outDir, 'blog/index.html'), 'utf8')
+    const heading = /<h2[^>]*>(.*?)<\/h2>/s.exec(index)?.[1] ?? ''
+    // Carve folds the lines under a heading into it, which is how the date and
+    // the tags ended up inside the card title.
+    expect(heading).toContain('A')
+    expect(heading).not.toContain('2026-01-01')
+    expect(index).toContain('blog-card__meta')
+    expect(index).toContain('blog-card__tags')
+  })
+
   it('injects blog index, pagination, tag pages, and excludes drafts from derived files', async () => {
     const { root } = await site({
       'index.crv': '---\ntitle: Home\n---\n# Home\n',

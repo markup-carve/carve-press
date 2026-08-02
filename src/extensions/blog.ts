@@ -81,13 +81,22 @@ function listSource(title: string, description: string, posts: BlogPost[], route
   const lines = [`# ${title}`, '']
   if (description !== '') lines.push(description, '')
   for (const post of posts) {
-    lines.push(`## [${markdownEscape(titleOf(post.page))}](${post.page.route})`)
-    lines.push(post.date.toISOString().slice(0, 10))
+    // A blank line after the heading is load-bearing: Carve folds the lines
+    // directly below a heading into it, which ran the title, the date, and the
+    // tags together as one oversized run-on line.
+    lines.push('{.blog-card}', '::: div', `## [${markdownEscape(titleOf(post.page))}](${post.page.route})`, '')
+    lines.push('{.blog-card__meta}', post.date.toISOString().slice(0, 10), '')
     if (post.tags.length > 0) {
-      lines.push(post.tags.map((tag) => `[${markdownEscape(tag)}](${routeJoin(route, `${tagSlug(tag)}/`)})`).join(' '))
+      lines.push('{.blog-card__tags}')
+      lines.push(
+        post.tags
+          .map((tag) => `[${markdownEscape(tag)}](${routeJoin(route, `${tagSlug(tag)}/`)})`)
+          .join(' '),
+      )
+      lines.push('')
     }
-    if (post.excerpt !== '') lines.push('', post.excerpt)
-    lines.push('')
+    if (post.excerpt !== '') lines.push(post.excerpt, '')
+    lines.push(`[Read more](${post.page.route})`, '', ':::', '')
   }
   return lines.join('\n')
 }
