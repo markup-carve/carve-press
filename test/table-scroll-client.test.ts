@@ -15,14 +15,34 @@ class FakeStyle {
   }
 }
 
+class FakeProbeElement {
+  style = { cssText: '' }
+  children: FakeProbeElement[] = []
+  removed = false
+
+  constructor(public offsetHeight = 0, public clientHeight = 0) {}
+
+  appendChild(child: FakeProbeElement): FakeProbeElement {
+    this.children.push(child)
+    return child
+  }
+
+  remove(): void {
+    this.removed = true
+  }
+}
+
 class FakeBlock {
   attributes = new Set<string>()
   style = new FakeStyle()
+
+  ownerDocument: unknown
 
   constructor(
     public scrollWidth: number,
     public clientWidth: number,
     private height = 40,
+    private left = 0,
   ) {}
 
   toggleAttribute(name: string, force?: boolean): boolean {
@@ -36,12 +56,15 @@ class FakeBlock {
     return this.attributes.has(name)
   }
 
-  getBoundingClientRect(): { height: number } {
-    return { height: this.height }
+  getBoundingClientRect(): { height: number; left: number } {
+    return { height: this.height, left: this.left }
   }
 }
 
-async function importScript(blocks: FakeBlock[]): Promise<{ flushFrames: () => void; resize: () => void }> {
+async function importScript(
+  blocks: FakeBlock[],
+  { viewportWidth = 10_000, scrollbarThickness = 15 } = {},
+): Promise<{ flushFrames: () => void; resize: () => void; rootStyle: FakeStyle }> {
   const frames: FrameRequestCallback[] = []
   let resizeCallback: (() => void) | undefined
 
@@ -53,10 +76,15 @@ async function importScript(blocks: FakeBlock[]): Promise<{ flushFrames: () => v
     observe(): void {}
   }
 
+  const rootStyle = new FakeStyle()
   const document = {
     fonts: { ready: Promise.resolve() },
     querySelectorAll: () => blocks,
+    documentElement: { clientWidth: viewportWidth, style: rootStyle },
+    body: new FakeProbeElement(),
+    createElement: () => new FakeProbeElement(scrollbarThickness, 0),
   }
+  for (const block of blocks) block.ownerDocument = document
   const window = {
     ResizeObserver: FakeResizeObserver,
     addEventListener: vi.fn(),
@@ -77,6 +105,7 @@ async function importScript(blocks: FakeBlock[]): Promise<{ flushFrames: () => v
     resize() {
       resizeCallback?.()
     },
+    rootStyle,
   }
 }
 
@@ -91,9 +120,7 @@ describe('table-scroll client', () => {
     flushFrames()
 
     expect(overflowing.hasAttribute('data-overflowing')).toBe(true)
-    expect(overflowing.style.values.get('--wide-block-height')).toBe('40px')
     expect(fitting.hasAttribute('data-overflowing')).toBe(false)
-    expect(fitting.style.values.has('--wide-block-height')).toBe(false)
   })
 
   it('removes the marker when a block stops overflowing', async () => {
@@ -128,4 +155,22 @@ describe('table-scroll client', () => {
       expect(selector, rule).toContain('[data-overflowing]')
     }
   })
+
+  it('does not offer expansion when the natural width would not fit', async () => {
+    // Expanding into less room than the content needs would re-wrap it into a
+    // differently tall layout - the height jump the design exists to avoid.
+    const cramped = new FakeBlock(900, 200, 40, 100)
+    const { flushFrames } = await importScript([cramped], { viewportWidth: 800 })
+
+    flushFrames()
+
+    expect(cramped.hasAttribute('data-overflowing')).toBe(false)
+  })
+
+  it('publishes the scrollbar thickness so the expanded state can compensate', async () => {
+    const { rootStyle } = await importScript([new FakeBlock(220, 200)], { scrollbarThickness: 15 })
+
+    expect(rootStyle.values.get('--scrollbar-h')).toBe('15px')
+  })
+
 })

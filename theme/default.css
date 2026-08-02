@@ -644,6 +644,17 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
   overflow-x: auto;
   margin: 1.4rem 0;
 }
+
+/*
+ * The table always lays out at its natural width and the shell clips it, so
+ * expanding reveals more of the SAME layout rather than re-wrapping into a
+ * different one. That is what keeps the height identical in both states - a
+ * table that re-wraps changes height, which reads as the box jumping.
+ */
+.table-scroll > table {
+  width: max-content;
+  min-width: 100%;
+}
 .table-scroll:focus-visible {
   outline: 2px solid var(--brass);
   outline-offset: 3px;
@@ -689,17 +700,20 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
 @media (min-width: 1181px) {
   .table-scroll[data-overflowing]:is(:hover, :focus-within),
   .carve-compare[data-overflowing]:is(:hover, :focus-within) {
-    min-height: var(--wide-block-height);
     overflow: visible;
+    /*
+     * Going from a scrolling box to a visible one removes the horizontal
+     * scrollbar, and with classic (space-taking) scrollbars that alone makes
+     * the box shorter. Pad by exactly the thickness the scrollbar occupied so
+     * the block's height is identical in both states. On platforms with
+     * overlay scrollbars the measured thickness is 0 and this is a no-op.
+     */
+    padding-bottom: var(--scrollbar-h, 0px);
   }
   .table-scroll[data-overflowing]:is(:hover, :focus-within) > table,
   .carve-compare[data-overflowing]:is(:hover, :focus-within) > .carve-compare__frame {
-    position: absolute;
-    top: 0;
-    left: 0;
+    position: relative;
     z-index: 5;
-    width: max-content;
-    max-width: calc(100vw - var(--sidebar-w) - 8rem);
     background: var(--paper);
     transform: translateY(-2px);
     box-shadow: 0 2px 24px -6px rgb(0 0 0 / 18%);
