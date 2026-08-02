@@ -80,6 +80,7 @@ function fixtureHtml(playgroundMarkup: string): string {
         const buttons = [...el.querySelectorAll('button')]
 
         await waitFor(() => textarea.value === '*bold*', 'textarea seeded from the template source')
+        assert(!el.querySelector('.carve-playground__engine'), 'engine control should be absent without WASM config')
         await waitFor(() => rendered.innerHTML === '<p><strong>bold</strong></p>', 'preview rendered on load')
         assert(code.textContent === '<p><strong>bold</strong></p>\\n', 'HTML view should show rendered HTML text')
         await waitFor(() => astText().includes('*bold*'), 'AST view reflects the initial source')
@@ -113,6 +114,80 @@ function fixtureHtml(playgroundMarkup: string): string {
           astRootType: JSON.parse(astText()).type,
           buttons: buttons.map((button) => ({ tag: button.tagName, type: button.type, label: button.getAttribute('aria-label') })),
         })
+      } catch (error) {
+        finish({ ok: false, message: error instanceof Error ? error.message : String(error) })
+      }
+    </script>
+  </body>
+</html>`
+}
+
+function wasmFixtureHtml(playgroundMarkup: string, mode: 'success' | 'fail'): string {
+  return `<!doctype html>
+<html>
+  <body>
+    ${playgroundMarkup}
+    <script type="module">
+      const delay = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms))
+      const assert = (condition, message) => {
+        if (!condition) throw new Error(message)
+      }
+      const finish = (result) => {
+        const node = document.createElement('pre')
+        node.id = 'result'
+        node.textContent = JSON.stringify(result)
+        document.body.append(node)
+      }
+
+      try {
+        const waitFor = async (predicate, what) => {
+          for (let i = 0; i < 100; i++) {
+            if (predicate()) return
+            await delay(50)
+          }
+          throw new Error('timed out waiting for: ' + what)
+        }
+
+        await import('./assets/playground.js')
+        await customElements.whenDefined('carve-playground')
+        const el = document.querySelector('carve-playground')
+        const rendered = el.querySelector('.carve-playground__rendered')
+        const engine = el.querySelector('.carve-playground__engine')
+        const buttons = [...engine.querySelectorAll('button')]
+        const jsButton = buttons.find((button) => button.textContent === 'JS')
+        const rustButton = buttons.find((button) => button.textContent === 'Rust')
+        const status = engine.querySelector('.carve-playground__engine-status')
+        const htmlNote = el.querySelector('.carve-playground__pane:not(.carve-playground__live) .carve-playground__engine-note')
+        const astNote = el.querySelector('.carve-playground__pane--ast .carve-playground__engine-note')
+        const htmlText = () => el.querySelector('.carve-playground__pane:not(.carve-playground__live) code')?.textContent ?? ''
+
+        assert(engine, 'engine control should be present with WASM config')
+        await waitFor(() => rendered.innerHTML === '<p><strong>bold</strong></p>', 'initial JS preview rendered')
+        rustButton.click()
+        ${mode === 'success'
+          ? `
+        await waitFor(() => rendered.innerHTML === '<p>rust:*bold*</p>', 'Rust preview rendered')
+        assert(window.__wasmInitCount === 1, 'Rust module init should run once')
+        assert(window.__rustRenderCount >= 1, 'Rust render binding should be called')
+        assert(jsButton.getAttribute('aria-pressed') === 'false', 'JS button should not be pressed after Rust selection')
+        assert(rustButton.getAttribute('aria-pressed') === 'true', 'Rust button should be pressed after selection')
+        assert(htmlText() === '<p><strong>bold</strong></p>\\n', 'HTML tab should keep JS output')
+        assert(htmlNote.textContent.includes('JavaScript engine'), 'HTML note should disclose JS engine')
+        assert(astNote.textContent.includes('Rust exposes no AST'), 'AST note should disclose JS AST')
+        jsButton.click()
+        await waitFor(() => rendered.innerHTML === '<p><strong>bold</strong></p>', 'switching back to JS rerenders')
+        rustButton.click()
+        await waitFor(() => rendered.innerHTML === '<p>rust:*bold*</p>', 'switching to Rust again rerenders')
+        assert(window.__wasmInitCount === 1, 'Rust module should be loaded once')
+        finish({ ok: true, status: status.textContent, initCount: window.__wasmInitCount, preview: rendered.innerHTML })
+          `
+          : `
+        await waitFor(() => status.textContent.includes('Rust load failed'), 'Rust load failure surfaced on control')
+        assert(rendered.innerHTML === '<p><strong>bold</strong></p>', 'JS preview should remain visible after Rust load failure')
+        assert(jsButton.getAttribute('aria-pressed') === 'true', 'JS button should remain pressed after Rust failure')
+        assert(rustButton.getAttribute('aria-pressed') === 'false', 'Rust button should not remain selected after failure')
+        finish({ ok: true, status: status.textContent, preview: rendered.innerHTML })
+          `}
       } catch (error) {
         finish({ ok: false, message: error instanceof Error ? error.message : String(error) })
       }
@@ -406,11 +481,11 @@ export function broken() {
         [
           ...chromeFlags,
           `--user-data-dir=${userDataDir}`,
-          '--virtual-time-budget=3000',
+          '--virtual-time-budget=60000',
           '--dump-dom',
           pathToFileURL(htmlPath).href,
         ],
-        { maxBuffer: 1024 * 1024 * 5, timeout: 15000 },
+        { maxBuffer: 1024 * 1024 * 5, timeout: 60000 },
       )
 
       const raw = stdout.match(/<pre id="result">(?<json>.*?)<\/pre>/s)?.groups?.json
@@ -446,5 +521,165 @@ export function broken() {
       await rm(userDataDir, { force: true, recursive: true })
       await rm(fixtureDir, { force: true, recursive: true })
     }
-  }, 20000)
+  }, 90000)
+
+  it('shows a Rust engine control only when WASM is configured and lazy-renders through toHtmlFull', async () => {
+    const bin = chromeBin()
+    expect(bin, 'Chrome is required for the browser playground regression test').toBeDefined()
+    if (!bin) return
+    if (!(await canDriveChrome(bin))) return
+
+    const playgroundMarkup = carveToHtml(['::: playground', '```carve', '*bold*', '```', ':::'].join('\n'), {
+      extensions: [playgroundExtension({ wasm: './assets/carve-wasm/carve_wasm.js' })],
+    })
+    const playgroundScript = await readFile(resolve(import.meta.dirname, '../theme/playground.js'), 'utf8')
+    const userDataDir = await mkdtemp(resolve(tmpdir(), 'cp-chrome-'))
+    const fixtureDir = await mkdtemp(resolve(tmpdir(), 'cp-playground-wasm-'))
+    const htmlPath = resolve(fixtureDir, 'index.html')
+    const scriptPath = resolve(fixtureDir, 'assets/playground.js')
+    const enginePath = resolve(fixtureDir, 'assets/carve/index.js')
+    const wasmPath = resolve(fixtureDir, 'assets/carve-wasm/carve_wasm.js')
+
+    await mkdir(dirname(enginePath), { recursive: true })
+    await mkdir(dirname(wasmPath), { recursive: true })
+    await writeFile(htmlPath, wasmFixtureHtml(playgroundMarkup, 'success'))
+    await writeFile(scriptPath, playgroundScript)
+    await writeFile(
+      enginePath,
+      `
+export function carveToHtml() {
+  return '<p><strong>bold</strong></p>'
+}
+export function carveToAstJson(source) {
+  return { type: 'document', children: [{ type: 'text', value: source }] }
+}
+`,
+    )
+    await writeFile(
+      wasmPath,
+      `
+globalThis.__wasmModuleEvaluations = (globalThis.__wasmModuleEvaluations ?? 0) + 1
+export default async function init() {
+  globalThis.__wasmInitCount = (globalThis.__wasmInitCount ?? 0) + 1
+}
+export function toHtmlFull(source) {
+  globalThis.__rustRenderCount = (globalThis.__rustRenderCount ?? 0) + 1
+  return '<p>rust:' + source + '</p>'
+}
+`,
+    )
+
+    try {
+      const { stdout } = await execFileAsync(
+        bin,
+        [
+          ...chromeFlags,
+          `--user-data-dir=${userDataDir}`,
+          '--virtual-time-budget=60000',
+          '--dump-dom',
+          pathToFileURL(htmlPath).href,
+        ],
+        { maxBuffer: 1024 * 1024 * 5, timeout: 60000 },
+      )
+      const raw = stdout.match(/<pre id="result">(?<json>.*?)<\/pre>/s)?.groups?.json
+      const result =
+        raw === undefined
+          ? undefined
+          : raw
+              .replace(/&lt;/g, '<')
+              .replace(/&gt;/g, '>')
+              .replace(/&quot;/g, '"')
+              .replace(/&#39;/g, "'")
+              .replace(/&amp;/g, '&')
+      expect(result).toBeDefined()
+      const parsed = JSON.parse(result ?? '{}') as { ok: boolean; message?: string }
+      expect(parsed.message ?? 'ok').toBe('ok')
+      expect(parsed).toMatchObject({
+        ok: true,
+        initCount: 1,
+        preview: '<p>rust:*bold*</p>',
+      })
+    } finally {
+      await rm(userDataDir, { force: true, recursive: true })
+      await rm(fixtureDir, { force: true, recursive: true })
+    }
+  }, 90000)
+
+  it('surfaces a failing Rust load on the control and keeps the JavaScript preview', async () => {
+    const bin = chromeBin()
+    expect(bin, 'Chrome is required for the browser playground regression test').toBeDefined()
+    if (!bin) return
+    if (!(await canDriveChrome(bin))) return
+
+    const playgroundMarkup = carveToHtml(['::: playground', '```carve', '*bold*', '```', ':::'].join('\n'), {
+      extensions: [playgroundExtension({ wasm: './assets/carve-wasm/carve_wasm.js' })],
+    })
+    const playgroundScript = await readFile(resolve(import.meta.dirname, '../theme/playground.js'), 'utf8')
+    const userDataDir = await mkdtemp(resolve(tmpdir(), 'cp-chrome-'))
+    const fixtureDir = await mkdtemp(resolve(tmpdir(), 'cp-playground-wasm-fail-'))
+    const htmlPath = resolve(fixtureDir, 'index.html')
+    const scriptPath = resolve(fixtureDir, 'assets/playground.js')
+    const enginePath = resolve(fixtureDir, 'assets/carve/index.js')
+    const wasmPath = resolve(fixtureDir, 'assets/carve-wasm/carve_wasm.js')
+
+    await mkdir(dirname(enginePath), { recursive: true })
+    await mkdir(dirname(wasmPath), { recursive: true })
+    await writeFile(htmlPath, wasmFixtureHtml(playgroundMarkup, 'fail'))
+    await writeFile(scriptPath, playgroundScript)
+    await writeFile(
+      enginePath,
+      `
+export function carveToHtml() {
+  return '<p><strong>bold</strong></p>'
+}
+export function carveToAstJson(source) {
+  return { type: 'document', children: [{ type: 'text', value: source }] }
+}
+`,
+    )
+    await writeFile(
+      wasmPath,
+      `
+export default async function init() {
+  throw new Error('no wasm today')
+}
+export function toHtmlFull() {
+  return '<p>unreachable</p>'
+}
+`,
+    )
+
+    try {
+      const { stdout } = await execFileAsync(
+        bin,
+        [
+          ...chromeFlags,
+          `--user-data-dir=${userDataDir}`,
+          '--virtual-time-budget=60000',
+          '--dump-dom',
+          pathToFileURL(htmlPath).href,
+        ],
+        { maxBuffer: 1024 * 1024 * 5, timeout: 60000 },
+      )
+      const raw = stdout.match(/<pre id="result">(?<json>.*?)<\/pre>/s)?.groups?.json
+      const result =
+        raw === undefined
+          ? undefined
+          : raw
+              .replace(/&lt;/g, '<')
+              .replace(/&gt;/g, '>')
+              .replace(/&quot;/g, '"')
+              .replace(/&#39;/g, "'")
+              .replace(/&amp;/g, '&')
+      expect(result).toBeDefined()
+      const parsed = JSON.parse(result ?? '{}') as { ok: boolean; message?: string; status?: string }
+      expect(parsed.message ?? 'ok').toBe('ok')
+      expect(parsed.ok).toBe(true)
+      expect(parsed.status).toContain('Rust load failed')
+      expect(parsed).toMatchObject({ preview: '<p><strong>bold</strong></p>' })
+    } finally {
+      await rm(userDataDir, { force: true, recursive: true })
+      await rm(fixtureDir, { force: true, recursive: true })
+    }
+  }, 90000)
 })

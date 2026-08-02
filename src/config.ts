@@ -1,3 +1,5 @@
+import { statSync } from 'node:fs'
+import { resolve } from 'node:path'
 import type { CarveExtension } from '@markup-carve/carve'
 import type { LanguageRegistration } from '@shikijs/types'
 import { BuildError } from './errors.js'
@@ -66,6 +68,14 @@ export interface ThemeAssetsConfig {
 
 export type SearchConfig = false | Required<SearchIndexOptions>
 
+export interface PlaygroundConfig {
+  /** Directory of wasm-pack output - carve_wasm.js plus carve_wasm_bg.wasm - copied verbatim. */
+  wasmEngine?: string
+  /** A self-contained classic script that assigns a global. Copied as-is. */
+  mermaid?: string
+  chart?: string
+}
+
 export interface CarvePressConfig {
   title: string
   description?: string
@@ -83,11 +93,12 @@ export interface CarvePressConfig {
   carve: { extensions: CarveExtension[]; profile?: string }
   shiki: ShikiConfig
   search: SearchConfig
+  playground: PlaygroundConfig
   extensions: SiteExtension[]
 }
 
 export type UserConfig = Partial<
-  Omit<CarvePressConfig, 'title' | 'theme' | 'themeConfig' | 'carve' | 'shiki' | 'search'>
+  Omit<CarvePressConfig, 'title' | 'theme' | 'themeConfig' | 'carve' | 'shiki' | 'search' | 'playground'>
 > & {
   title: string
   theme?: Partial<ThemeAssetsConfig>
@@ -95,6 +106,7 @@ export type UserConfig = Partial<
   carve?: Partial<CarvePressConfig['carve']>
   shiki?: Partial<Omit<ShikiConfig, 'themes'>> & { themes?: Partial<ShikiConfig['themes']> }
   search?: false | SearchIndexOptions
+  playground?: PlaygroundConfig
 }
 
 const DEFAULT_SHIKI: ShikiConfig = {
@@ -147,7 +159,56 @@ function normalizeBase(base: string): string {
   return trimmed === '' ? '/' : `/${trimmed}/`
 }
 
-export function resolveConfig(user: UserConfig): CarvePressConfig {
+function resolvePlaygroundPath(
+  root: string | undefined,
+  key: keyof PlaygroundConfig,
+  value: string | undefined,
+  kind: 'directory' | 'file',
+): string | undefined {
+  if (value === undefined) return undefined
+  const resolved = root === undefined ? value : resolve(root, value)
+  if (root === undefined) return resolved
+
+  let stats
+  try {
+    stats = statSync(resolved)
+  } catch (error) {
+    if (
+      error !== null &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+    ) {
+      throw new BuildError(`config playground.${key} does not exist: ${resolved}`)
+    }
+    const reason = error instanceof Error ? error.message : String(error)
+    throw new BuildError(`cannot inspect config playground.${key}: ${resolved}`, [reason])
+  }
+
+  if (kind === 'directory' ? !stats.isDirectory() : !stats.isFile()) {
+    throw new BuildError(`config playground.${key} must be a ${kind}: ${resolved}`)
+  }
+  return resolved
+}
+
+function resolvePlaygroundConfig(
+  playground: PlaygroundConfig | undefined,
+  root: string | undefined,
+): PlaygroundConfig {
+  return {
+    ...(playground?.wasmEngine === undefined
+      ? {}
+      : { wasmEngine: resolvePlaygroundPath(root, 'wasmEngine', playground.wasmEngine, 'directory') }),
+    ...(playground?.mermaid === undefined
+      ? {}
+      : { mermaid: resolvePlaygroundPath(root, 'mermaid', playground.mermaid, 'file') }),
+    ...(playground?.chart === undefined
+      ? {}
+      : { chart: resolvePlaygroundPath(root, 'chart', playground.chart, 'file') }),
+  }
+}
+
+export function resolveConfig(user: UserConfig, root?: string): CarvePressConfig {
   if (!user || typeof user.title !== 'string' || user.title === '') {
     throw new BuildError('config: title is required')
   }
@@ -198,6 +259,7 @@ export function resolveConfig(user: UserConfig): CarvePressConfig {
       },
     },
     search,
+    playground: resolvePlaygroundConfig(user.playground, root),
     extensions: [...(search === false ? [] : [searchIndex(search)]), ...(user.extensions ?? [])],
   }
 }

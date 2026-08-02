@@ -166,6 +166,15 @@ function copyButton(label, getText) {
   return button
 }
 
+function engineButton(text, pressed) {
+  const button = document.createElement('button')
+  button.type = 'button'
+  button.className = 'carve-playground__engine-button'
+  button.textContent = text
+  button.setAttribute('aria-pressed', pressed ? 'true' : 'false')
+  return button
+}
+
 const HTMLElementBase = globalThis.HTMLElement ?? class {}
 
 class CarvePlayground extends HTMLElementBase {
@@ -196,6 +205,23 @@ class CarvePlayground extends HTMLElementBase {
 
     const output = document.createElement('div')
     output.className = 'carve-playground__output'
+
+    const wasmUrl = this.dataset.playgroundWasm
+    let engineControl
+    let jsEngineButton
+    let rustEngineButton
+    let engineStatus
+    if (wasmUrl !== undefined) {
+      engineControl = document.createElement('div')
+      engineControl.className = 'carve-playground__engine'
+      engineControl.title = 'Rust rendering uses carve-rs built-in extensions; HTML and AST tabs use JavaScript.'
+      jsEngineButton = engineButton('JS', true)
+      rustEngineButton = engineButton('Rust', false)
+      engineStatus = document.createElement('span')
+      engineStatus.className = 'carve-playground__engine-status'
+      engineStatus.textContent = 'JS engine'
+      engineControl.append(jsEngineButton, rustEngineButton, engineStatus)
+    }
 
     const renderedRadio = document.createElement('input')
     renderedRadio.type = 'radio'
@@ -240,28 +266,82 @@ class CarvePlayground extends HTMLElementBase {
     preview.append(renderedCopy, renderedContent)
 
     const htmlPane = document.createElement('div')
-    htmlPane.className = 'carve-playground__pane'
+    htmlPane.className = 'carve-playground__pane carve-playground__pane--html'
+    const htmlNote = document.createElement('p')
+    htmlNote.className = 'carve-playground__engine-note'
     const pre = document.createElement('pre')
     const code = document.createElement('code')
     code.textContent = textWithFinalNewline(initialHtml)
     const htmlCopy = copyButton('Copy rendered HTML source', () => code.textContent ?? '')
     pre.append(code)
-    htmlPane.append(htmlCopy, pre)
+    htmlPane.append(htmlCopy, htmlNote, pre)
 
     const astPane = document.createElement('div')
     astPane.className = 'carve-playground__pane carve-playground__pane--ast'
+    const astNote = document.createElement('p')
+    astNote.className = 'carve-playground__engine-note'
     const astPre = document.createElement('pre')
     const astCode = document.createElement('code')
     astCode.textContent = '{}\n'
     const astCopy = copyButton('Copy AST JSON', () => astCode.textContent ?? '')
     astPre.append(astCode)
-    astPane.append(astCopy, astPre)
+    astPane.append(astCopy, astNote, astPre)
 
-    output.append(renderedRadio, renderedLabel, htmlRadio, htmlLabel, astRadio, astLabel, preview, htmlPane, astPane)
+    output.append(
+      ...(engineControl === undefined ? [] : [engineControl]),
+      renderedRadio,
+      renderedLabel,
+      htmlRadio,
+      htmlLabel,
+      astRadio,
+      astLabel,
+      preview,
+      htmlPane,
+      astPane,
+    )
     this.replaceChildren(sourcePane, output)
 
     let token = 0
     let extensions
+    let selectedEngine = 'js'
+    let wasmToken = 0
+    let wasmModule
+    let wasmModulePromise
+    // A failure has to outlive the re-render it triggers. render() reports the
+    // active engine on every pass, so without this the message set here is
+    // overwritten a tick later by a routine "JS engine" and the reader is left
+    // with no sign that anything went wrong.
+    let engineError
+
+    const setEngineControl = (status, isError = false) => {
+      jsEngineButton?.setAttribute('aria-pressed', selectedEngine === 'js' ? 'true' : 'false')
+      rustEngineButton?.setAttribute('aria-pressed', selectedEngine === 'rust' ? 'true' : 'false')
+      if (engineStatus !== undefined && status !== undefined) {
+        engineStatus.textContent = status
+        engineStatus.dataset.error = isError ? 'true' : 'false'
+      }
+      htmlNote.textContent =
+        selectedEngine === 'rust' ? 'HTML tab uses the JavaScript engine.' : ''
+      astNote.textContent =
+        selectedEngine === 'rust' ? 'AST tab uses the JavaScript engine; Rust exposes no AST binding.' : ''
+    }
+
+    const loadWasmModule = async () => {
+      if (wasmUrl === undefined) throw new Error('Rust engine is not configured')
+      // The URL comes from a data attribute, so it belongs to document space. A
+      // bare dynamic import would resolve a relative value against THIS module
+      // (assets/playground.js) instead, quietly turning ./assets/x into
+      // assets/assets/x.
+      const resolved = new URL(wasmUrl, this.ownerDocument.baseURI).href
+      wasmModulePromise ??= import(resolved).then(async (mod) => {
+        if (typeof mod.default !== 'function') throw new Error('Rust engine has no default init export')
+        await mod.default()
+        if (typeof mod.toHtmlFull !== 'function') throw new Error('Rust engine has no toHtmlFull export')
+        return mod
+      })
+      return wasmModulePromise
+    }
+
     const render = async () => {
       const current = ++token
       try {
@@ -273,10 +353,26 @@ class CarvePlayground extends HTMLElementBase {
         if (current !== token || !this.isConnected) return
         extensions ??= buildPlaygroundExtensions(mod)
         const options = { extensions }
-        const html = mod.carveToHtml(textarea.value, options)
+        const jsHtml = mod.carveToHtml(textarea.value, options)
         const ast = mod.carveToAstJson(textarea.value, options)
-        renderedContent.innerHTML = html
-        code.textContent = textWithFinalNewline(html)
+        let previewHtml = jsHtml
+        if (selectedEngine === 'rust' && wasmModule !== undefined) {
+          try {
+            previewHtml = wasmModule.toHtmlFull(textarea.value)
+            setEngineControl('Rust engine')
+          } catch (error) {
+            selectedEngine = 'js'
+            engineError = `Rust render failed: ${errorMessage(error)}`
+            setEngineControl(engineError, true)
+            previewHtml = jsHtml
+          }
+        } else if (engineError !== undefined) {
+          setEngineControl(engineError, true)
+        } else {
+          setEngineControl('JS engine')
+        }
+        renderedContent.innerHTML = previewHtml
+        code.textContent = textWithFinalNewline(jsHtml)
         astCode.textContent = `${JSON.stringify(ast, null, 2)}\n`
       } catch (error) {
         if (current !== token || !this.isConnected) return
@@ -288,6 +384,39 @@ class CarvePlayground extends HTMLElementBase {
         astCode.textContent = `Error: ${errorMessage(error)}\n`
       }
     }
+
+    jsEngineButton?.addEventListener('click', () => {
+      selectedEngine = 'js'
+      engineError = undefined
+      setEngineControl('JS engine')
+      void render()
+    })
+
+    rustEngineButton?.addEventListener('click', async () => {
+      const current = ++wasmToken
+      rustEngineButton.disabled = true
+      engineError = undefined
+      setEngineControl('Loading Rust...')
+      try {
+        const mod = await loadWasmModule()
+        if (current !== wasmToken || !this.isConnected) return
+        wasmModule = mod
+        selectedEngine = 'rust'
+        engineError = undefined
+        setEngineControl('Rust engine')
+        void render()
+      } catch (error) {
+        if (current !== wasmToken || !this.isConnected) return
+        wasmModulePromise = undefined
+        wasmModule = undefined
+        selectedEngine = 'js'
+        engineError = `Rust load failed: ${errorMessage(error)}`
+        setEngineControl(engineError, true)
+        void render()
+      } finally {
+        if (current === wasmToken && this.isConnected) rustEngineButton.disabled = false
+      }
+    })
 
     textarea.addEventListener('input', debounce(render, 180))
     void render()

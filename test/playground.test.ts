@@ -13,6 +13,30 @@ describe('playgroundExtension', () => {
     expect(html).toContain('<strong>bold</strong>')
   })
 
+  it('emits configured playground asset data attributes only when provided', () => {
+    const html = carveToHtml('::: playground\n:::', {
+      extensions: [
+        playgroundExtension({
+          wasm: '/base/assets/playground/carve-wasm/carve_wasm.js',
+          mermaid: '/base/assets/playground/mermaid.min.js',
+        }),
+      ],
+    })
+
+    expect(html).toContain('data-playground-wasm="/base/assets/playground/carve-wasm/carve_wasm.js"')
+    expect(html).toContain('data-playground-mermaid="/base/assets/playground/mermaid.min.js"')
+    expect(html).not.toContain('data-playground-chart')
+    expect(render('::: playground\n:::')).not.toContain('data-playground-wasm')
+  })
+
+  it('escapes configured playground asset data attributes', () => {
+    const html = carveToHtml('::: playground\n:::', {
+      extensions: [playgroundExtension({ wasm: '/assets/"bad"/carve_wasm.js' })],
+    })
+
+    expect(html).toContain('data-playground-wasm="/assets/&quot;bad&quot;/carve_wasm.js"')
+  })
+
   it('falls back to the built-in sample when no carve fence is present', () => {
     const html = render('::: playground\n:::')
     expect(html).toContain('/italic/')
