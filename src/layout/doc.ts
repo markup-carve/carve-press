@@ -1,4 +1,4 @@
-import type { CarvePressConfig, HeadTag, NavItem, SidebarGroup, SocialLink } from '../config.js'
+import type { CarvePressConfig, HeadTag, NavItem, SidebarGroup, SidebarItem, SocialLink } from '../config.js'
 import type { RenderedPage } from '../render/page.js'
 import type { FlatLink } from '../nav.js'
 import { htmlDocument, escapeAttr, escapeText, withBase } from './shell.js'
@@ -131,22 +131,39 @@ function headerHtml(ctx: LayoutContext): string {
   )}${searchHtml(ctx)}${socialLinksHtml(ctx.config.themeConfig.socialLinks)}${themeToggleHtml()}</div></header>`
 }
 
+function sidebarContainsCurrent(items: SidebarItem[], current: string): boolean {
+  for (const item of items) {
+    if (item.link === current || sidebarContainsCurrent(item.items ?? [], current)) return true
+  }
+  return false
+}
+
+function sidebarItemHtml(item: SidebarItem, base: string, current: string, depth: number): string {
+  const className = `sidebar__item sidebar__item--l${depth}`
+  const body =
+    item.link === undefined
+      ? `<span class="sidebar__text">${escapeText(item.text)}</span>`
+      : `<a href="${escapeAttr(withBase(base, item.link))}"${
+          item.link === current ? ' aria-current="page"' : ''
+        }>${escapeText(item.text)}</a>`
+  const children =
+    item.items === undefined || item.items.length === 0
+      ? ''
+      : `<ul>${item.items.map((child) => sidebarItemHtml(child, base, current, depth + 1)).join('')}</ul>`
+  return `<li class="${className}">${body}${children}</li>`
+}
+
 function sidebarHtml(groups: SidebarGroup[], base: string, current: string): string {
   if (groups.length === 0) return ''
   const items = groups
     .map((group) => {
-      const links = group.items
-        .map((item) =>
-          item.link === undefined
-            ? `<li>${escapeText(item.text)}</li>`
-            : `<li><a href="${escapeAttr(withBase(base, item.link))}"${
-                item.link === current ? ' aria-current="page"' : ''
-              }>${escapeText(item.text)}</a></li>`,
-        )
-        .join('')
-      return `<li class="sidebar-group"><span class="sidebar-group__title">${escapeText(
-        group.text,
-      )}</span><ul>${links}</ul></li>`
+      const links = group.items.map((item) => sidebarItemHtml(item, base, current, 1)).join('')
+      const title = escapeText(group.text)
+      if (group.collapsed === undefined) {
+        return `<li class="sidebar-group"><span class="sidebar-group__title">${title}</span><ul>${links}</ul></li>`
+      }
+      const open = group.collapsed === false || sidebarContainsCurrent(group.items, current) ? ' open' : ''
+      return `<li><details class="sidebar-group"${open}><summary class="sidebar-group__title">${title}</summary><ul>${links}</ul></details></li>`
     })
     .join('')
   return `<nav class="sidebar" aria-label="Documentation"><ul>${items}</ul></nav>`
@@ -246,7 +263,7 @@ function themeToggleScript(): string {
 function searchScript(ctx: LayoutContext): string {
   return ctx.config.search === false
     ? ''
-    : `\n    <script src="${escapeAttr(withBase(ctx.config.base, '/assets/search.js'))}" defer></script>`
+    : `\n    <script src="${escapeAttr(withBase(ctx.config.base, '/assets/search.js'))}" type="module"></script>`
 }
 
 function playgroundScript(ctx: LayoutContext): string {

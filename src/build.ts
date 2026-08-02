@@ -20,6 +20,7 @@ const require = createRequire(import.meta.url)
 const execFileAsync = promisify(execFile)
 const defaultThemePath = require.resolve('../theme/default.css')
 const defaultSearchScriptPath = require.resolve('../theme/search.js')
+const miniSearchScriptPath = resolveMiniSearchScriptPath()
 const defaultPlaygroundScriptPath = require.resolve('../theme/playground.js')
 const defaultTableScrollScriptPath = require.resolve('../theme/table-scroll.js')
 const defaultOutlineScriptPath = require.resolve('../theme/outline.js')
@@ -102,6 +103,48 @@ async function writeSearchScript(outDir: string): Promise<void> {
   const outPath = resolve(outDir, 'assets/search.js')
   await mkdir(dirname(outPath), { recursive: true })
   await copyFile(defaultSearchScriptPath, outPath)
+  await copyFile(miniSearchScriptPath, resolve(outDir, 'assets/minisearch.js'))
+}
+
+function resolveMiniSearchScriptPath(): string {
+  try {
+    return require.resolve('minisearch/dist/es/index.js')
+  } catch {
+    const entry = require.resolve('minisearch')
+    if (entry.endsWith('dist/cjs/index.cjs')) return resolve(dirname(entry), '../es/index.js')
+    return resolve(dirname(entry), 'dist/es/index.js')
+  }
+}
+
+function profileBaseHost(hostname: string | undefined): string | undefined {
+  if (hostname === undefined || hostname === '') return undefined
+  // Hostname, not host: the engine compares absolute link hosts with the port
+  // already stripped, so keeping `:3000` here rejects same-site links.
+  try {
+    return new URL(hostname).hostname
+  } catch {
+    return hostname
+      .replace(/^https?:\/\//, '')
+      .replace(/\/.*$/, '')
+      .replace(/:\d+$/, '')
+  }
+}
+
+function partitionNotFoundPage(pages: Page[]): { pages: Page[]; notFoundPage?: Page } {
+  const notFound = pages.find((page) => page.relPath === '404.crv' || page.relPath === '404.carve')
+  if (notFound === undefined) return { pages }
+  return { pages: pages.filter((page) => page !== notFound), notFoundPage: notFound }
+}
+
+function builtInNotFoundPage(srcDir: string): Page {
+  return {
+    route: '/404',
+    srcPath: resolve(srcDir, '404.crv'),
+    relPath: '404.crv',
+    frontmatter: { title: 'Page not found' },
+    source: 'The page you requested could not be found. [Return home](/).\n',
+    bodyStartLine: 1,
+  }
 }
 
 async function writeTableScrollScript(outDir: string): Promise<void> {
@@ -212,7 +255,8 @@ export async function buildSite(opts: {
   await writeOutlineScript(outDir)
 
   const discovered = await discoverPages(srcDir, config.srcExclude)
-  const { pages } = await bus.emit('contentDiscovered', { pages: discovered })
+  const discoveredContent = await bus.emit('contentDiscovered', { pages: discovered })
+  const { pages, notFoundPage } = partitionNotFoundPage(discoveredContent.pages)
   const lastUpdated =
     config.themeConfig.lastUpdated === true
       ? await collectLastUpdatedTimes(opts.root, srcDir, pages)
@@ -220,6 +264,7 @@ export async function buildSite(opts: {
 
   const extensions = await buildExtensionStack(config, opts.shiki ?? config.shiki)
   const stack = (await bus.emit('rendererCreated', { extensions })).extensions
+  const host = profileBaseHost(config.hostname)
 
   const routes = new Set(pages.map((p) => p.route))
   const rendered: RenderedPage[] = []
@@ -228,18 +273,31 @@ export async function buildSite(opts: {
       extensions: stack,
       outlineLevels: config.themeConfig.outline.level,
       includeRoots: [srcDir, opts.root],
+      profile: config.carve.profile,
+      profileBaseHost: host,
     })
     const after = await bus.emit('pageRendered', { rendered: result, html: result.html })
     rendered.push({ ...result, html: after.html })
   }
 
-  if (rendered.some((result) => result.html.includes('<carve-playground'))) {
+  const notFoundRendered = renderPage(notFoundPage ?? builtInNotFoundPage(srcDir), {
+    extensions: stack,
+    outlineLevels: config.themeConfig.outline.level,
+    includeRoots: [srcDir, opts.root],
+    profile: config.carve.profile,
+    profileBaseHost: host,
+  })
+
+  // The 404 page is written outside the normal loop but gets the same layout,
+  // so a playground that only appears there still needs the runtime shipped.
+  if ([...rendered, notFoundRendered].some((result) => result.html.includes('<carve-playground'))) {
     await writePlaygroundAssets(outDir)
   }
 
   validateNav(config.themeConfig, routes)
   validateCrossrefs(pages)
   validateLinks(rendered, routes, config.ignoreDeadLinks)
+  validateLinks([notFoundRendered], routes, config.ignoreDeadLinks)
 
   for (const result of rendered) {
     const sidebar = resolveSidebar(result.page.route, config.themeConfig.sidebar)
@@ -261,6 +319,15 @@ export async function buildSite(opts: {
     await writeFile(outPath, html, 'utf8')
     await bus.emit('pageWritten', { rendered: result, outPath })
   }
+
+  const notFoundHtml = docLayout({
+    config,
+    rendered: notFoundRendered,
+    sidebar: resolveSidebar(notFoundRendered.page.route, config.themeConfig.sidebar),
+  })
+  const notFoundOutPath = resolve(outDir, '404.html')
+  await mkdir(dirname(notFoundOutPath), { recursive: true })
+  await writeFile(notFoundOutPath, notFoundHtml, 'utf8')
 
   await bus.emit('buildCompleted', { rendered, outDir })
   return { rendered, outDir, routes: [...routes] }

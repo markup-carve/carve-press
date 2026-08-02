@@ -57,6 +57,12 @@ describe('buildSite', () => {
     expect(actual).toBe(expected)
   })
 
+  it('writes the MiniSearch browser module for the search client', async () => {
+    const { outDir } = await build()
+    const actual = await readFile(resolve(outDir, 'assets/minisearch.js'), 'utf8')
+    expect(actual).toContain('export { MiniSearch as default }')
+  })
+
   it('writes the shipped table overflow client script', async () => {
     const { outDir } = await build()
     const actual = await readFile(resolve(outDir, 'assets/table-scroll.js'), 'utf8')
@@ -97,6 +103,7 @@ describe('buildSite', () => {
     const { outDir } = await build({ search: false })
     await expect(readFile(resolve(outDir, 'assets/search-index.json'), 'utf8')).rejects.toThrow()
     await expect(readFile(resolve(outDir, 'assets/search.js'), 'utf8')).rejects.toThrow()
+    await expect(readFile(resolve(outDir, 'assets/minisearch.js'), 'utf8')).rejects.toThrow()
     const html = await readFile(resolve(outDir, 'start/index.html'), 'utf8')
     expect(html).not.toContain('class="site-search"')
     expect(html).not.toContain('/assets/search.js')
@@ -163,6 +170,38 @@ describe('buildSite', () => {
     const { outDir } = await build()
     const html = await readFile(resolve(outDir, 'index.html'), 'utf8')
     expect(html).toContain('<h1>Home ')
+  })
+
+  it('emits a built-in 404 page outside the route table and search index', async () => {
+    const { result, outDir } = await build()
+    const html = await readFile(resolve(outDir, '404.html'), 'utf8')
+    const search = JSON.parse(await readFile(resolve(outDir, 'assets/search-index.json'), 'utf8')) as {
+      records: { route: string }[]
+    }
+
+    expect(html).toContain('<title>Page not found | Fixture</title>')
+    expect(html).toContain('<p>The page you requested could not be found. <a href="/">Return home</a>.</p>')
+    expect(result.routes).not.toContain('/404')
+    expect(search.records.map((record) => record.route)).not.toContain('/404')
+  })
+
+  it('uses content 404.crv without adding it to normal outputs', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-404-'))
+    const srcDir = resolve(root, 'docs')
+    await mkdir(srcDir)
+    await writeFile(resolve(srcDir, 'index.crv'), ['---', 'title: Home', '---', '', '# Home'].join('\n'))
+    await writeFile(
+      resolve(srcDir, '404.crv'),
+      ['---', 'title: Missing', '---', '', 'Custom missing page. [Home](/).'].join('\n'),
+    )
+
+    const { result, outDir } = await build({ srcDir, themeConfig: { sidebar: {} } }, root)
+    const html = await readFile(resolve(outDir, '404.html'), 'utf8')
+
+    expect(html).toContain('<title>Missing | Fixture</title>')
+    expect(html).toContain('Custom missing page')
+    expect(result.routes).toEqual(['/'])
+    await expect(readFile(resolve(outDir, '404/index.html'), 'utf8')).rejects.toThrow()
   })
 
   it('renders prev/next from sidebar order', async () => {

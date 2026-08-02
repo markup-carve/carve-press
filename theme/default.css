@@ -486,6 +486,7 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
 
 .sidebar ul, .outline ul { list-style: none; margin: 0; padding: 0; }
 .sidebar-group { margin-bottom: 1.75rem; }
+.sidebar details.sidebar-group { margin-bottom: 1.75rem; }
 .sidebar-group__title {
   display: block;
   font-family: var(--body);
@@ -497,6 +498,22 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
   margin-bottom: 0.6rem;
   padding-bottom: 0.4rem;
   border-bottom: 1px solid var(--rule);
+}
+.sidebar details > .sidebar-group__title {
+  cursor: pointer;
+  list-style-position: outside;
+}
+.sidebar details > .sidebar-group__title::marker { color: var(--ink-soft); }
+.sidebar__item > ul { margin-top: 0.1rem; margin-bottom: 0.2rem; }
+.sidebar__item--l2 { padding-left: 0.8rem; }
+.sidebar__item--l3 { padding-left: 1.6rem; }
+.sidebar__item--l4 { padding-left: 2.4rem; }
+.sidebar__item--l5 { padding-left: 3.2rem; }
+.sidebar__text {
+  display: block;
+  padding: 0.24rem 0;
+  font-size: 0.875rem;
+  color: var(--ink-soft);
 }
 .sidebar a {
   display: block;

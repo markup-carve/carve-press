@@ -1,3 +1,4 @@
+import { Profile } from '@markup-carve/carve'
 import { describe, it, expect } from 'vitest'
 import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -73,6 +74,14 @@ describe('renderPage', () => {
   it('throws a SourceError when a page has no title and no H1', () => {
     const p = { ...page('just text\n'), frontmatter: {} }
     expect(() => renderPage(p, ctx)).toThrow(/no frontmatter title and no H1/)
+  })
+
+  it('throws a SourceError when a carve profile rejects the page', () => {
+    const profile = Profile.article().onDisallowed(Profile.ACTION_ERROR)
+
+    expect(() =>
+      renderPage(page('# T\n\n```=html\n<strong>raw</strong>\n```\n'), { ...ctx, profile }),
+    ).toThrow(/profile:/)
   })
 
   it('reports an include failure at the original file and line', () => {

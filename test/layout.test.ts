@@ -154,7 +154,7 @@ describe('docLayout', () => {
     expect(html).toContain('class="site-search"')
     expect(html).toContain('data-search-index="/carve/assets/search-index.json"')
     expect(html).toContain('<label class="site-search__label" for="site-search-input">Search</label>')
-    expect(html).toContain('<script src="/carve/assets/search.js" defer></script>')
+    expect(html).toContain('<script src="/carve/assets/search.js" type="module"></script>')
   })
 
   it('loads the table overflow client script', () => {
@@ -200,6 +200,46 @@ describe('docLayout', () => {
     const html = docLayout({ config, rendered, sidebar: [] })
     expect(html).toContain('href="#install"')
     expect(html).toContain('Install')
+  })
+
+  it('renders nested sidebar items recursively and marks the current route', () => {
+    const html = docLayout({
+      config,
+      rendered,
+      sidebar: [
+        {
+          text: 'Guide',
+          items: [
+            {
+              text: 'Start',
+              link: '/start',
+              items: [{ text: 'Deep', link: '/guide/deep' }],
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(html).toContain('<li class="sidebar__item sidebar__item--l1">')
+    expect(html).toContain('<li class="sidebar__item sidebar__item--l2">')
+    expect(html).toContain('<a href="/carve/start" aria-current="page">Start</a>')
+    expect(html).toContain('<a href="/carve/guide/deep">Deep</a>')
+  })
+
+  it('renders collapsed sidebar groups as details and opens the current group', () => {
+    const html = docLayout({
+      config,
+      rendered,
+      sidebar: [
+        { text: 'Closed', collapsed: true, items: [{ text: 'Home', link: '/' }] },
+        { text: 'Current', collapsed: true, items: [{ text: 'Start', link: '/start' }] },
+        { text: 'Open', collapsed: false, items: [{ text: 'Deep', link: '/guide/deep' }] },
+      ],
+    })
+
+    expect(html).toContain('<details class="sidebar-group"><summary class="sidebar-group__title">Closed</summary>')
+    expect(html).toContain('<details class="sidebar-group" open><summary class="sidebar-group__title">Current</summary>')
+    expect(html).toContain('<details class="sidebar-group" open><summary class="sidebar-group__title">Open</summary>')
   })
 
   it('renders prev and next links when present', () => {

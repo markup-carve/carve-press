@@ -81,6 +81,18 @@ describe('resolveConfig', () => {
     // @ts-expect-error deliberately invalid at runtime
     expect(() => resolveConfig({})).toThrow(/title is required/)
   })
+
+  it('resolves supported carve profile names', () => {
+    const c = resolveConfig({ title: 'Carve', carve: { profile: 'article' } })
+
+    expect(c.carve.profile?.getName()).toBe('article')
+  })
+
+  it('rejects unsupported carve profile names', () => {
+    expect(() => resolveConfig({ title: 'Carve', carve: { profile: 'unknown' } })).toThrow(
+      /unsupported carve\.profile/,
+    )
+  })
 })
 
 describe('shiki languages', () => {

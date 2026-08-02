@@ -1,4 +1,4 @@
-import type { CarveExtension } from '@markup-carve/carve'
+import { Profile, type CarveExtension } from '@markup-carve/carve'
 import type { LanguageRegistration } from '@shikijs/types'
 import { BuildError } from './errors.js'
 import type { BuildEventBus } from './events.js'
@@ -80,7 +80,7 @@ export interface CarvePressConfig {
   head: HeadTag[]
   theme: ThemeAssetsConfig
   themeConfig: ThemeConfig
-  carve: { extensions: CarveExtension[]; profile?: string }
+  carve: { extensions: CarveExtension[]; profile?: Profile }
   shiki: ShikiConfig
   search: SearchConfig
   extensions: SiteExtension[]
@@ -92,7 +92,7 @@ export type UserConfig = Partial<
   title: string
   theme?: Partial<ThemeAssetsConfig>
   themeConfig?: Partial<ThemeConfig>
-  carve?: Partial<CarvePressConfig['carve']>
+  carve?: { extensions?: CarveExtension[]; profile?: string | Profile }
   shiki?: Partial<Omit<ShikiConfig, 'themes'>> & { themes?: Partial<ShikiConfig['themes']> }
   search?: false | SearchIndexOptions
 }
@@ -147,6 +147,28 @@ function normalizeBase(base: string): string {
   return trimmed === '' ? '/' : `/${trimmed}/`
 }
 
+function resolveProfile(profile: string | Profile | undefined): Profile | undefined {
+  if (profile === undefined) return undefined
+  if (profile instanceof Profile) return profile.onDisallowed(Profile.ACTION_ERROR)
+  const name = profile.toLowerCase()
+  const resolved =
+    name === 'full'
+      ? Profile.full()
+      : name === 'article'
+        ? Profile.article()
+        : name === 'comment'
+          ? Profile.comment()
+          : name === 'minimal'
+            ? Profile.minimal()
+            : undefined
+  if (resolved === undefined) {
+    throw new BuildError(`config: unsupported carve.profile "${profile}"`, [
+      'supported profiles: full, article, comment, minimal',
+    ])
+  }
+  return resolved.onDisallowed(Profile.ACTION_ERROR)
+}
+
 export function resolveConfig(user: UserConfig): CarvePressConfig {
   if (!user || typeof user.title !== 'string' || user.title === '') {
     throw new BuildError('config: title is required')
@@ -185,7 +207,7 @@ export function resolveConfig(user: UserConfig): CarvePressConfig {
     },
     carve: {
       extensions: user.carve?.extensions ?? [],
-      profile: user.carve?.profile,
+      profile: resolveProfile(user.carve?.profile),
     },
     shiki: {
       // Additive, not a replacement. Naming one extra language should not cost a

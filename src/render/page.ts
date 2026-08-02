@@ -1,5 +1,14 @@
 import { dirname } from 'node:path'
-import { carveToHtml, parse, type CarveExtension, type Document } from '@markup-carve/carve'
+import {
+  ProfileViolationError,
+  applyProfile,
+  carveToHtml,
+  formatProfileViolation,
+  parse,
+  type CarveExtension,
+  type Document,
+  type Profile,
+} from '@markup-carve/carve'
 import type { Page } from '../content/discover.js'
 import { outlineFromAst, type OutlineEntry } from '../outline.js'
 import { expandIncludes } from '../include/expand.js'
@@ -30,6 +39,8 @@ export interface RenderContext {
   extensions: CarveExtension[]
   outlineLevels: [number, number]
   includeRoots: string[]
+  profile?: Profile
+  profileBaseHost?: string
 }
 
 interface AnyNode {
@@ -131,6 +142,15 @@ function searchSections(ast: Document, outline: OutlineEntry[]): SearchSection[]
   return sections
 }
 
+function profileError(page: Page, error: ProfileViolationError): SourceError {
+  const violation = error.violations[0]
+  const message =
+    violation === undefined
+      ? 'profile violation'
+      : `profile: ${formatProfileViolation(violation)}`
+  return new SourceError(page.relPath, 1, 1, message)
+}
+
 export function renderPage(page: Page, ctx: RenderContext): RenderedPage {
   let expanded: string
   try {
@@ -156,8 +176,23 @@ export function renderPage(page: Page, ctx: RenderContext): RenderedPage {
   // The public engine pipeline resolves heading ids and runs extension hooks
   // before rendering. Keep a second parsed AST for outline/search until the
   // engine exports applyTransforms and runProfile, which would allow one pass.
-  const html = carveToHtml(expanded, { extensions: ctx.extensions })
-  const ast = parse(expanded, { extensions: ctx.extensions })
+  let html: string
+  let ast: Document
+  try {
+    html = carveToHtml(expanded, {
+      extensions: ctx.extensions,
+      profile: ctx.profile,
+      profileBaseHost: ctx.profileBaseHost,
+    })
+    ast = parse(expanded, { extensions: ctx.extensions })
+    if (ctx.profile !== undefined) applyProfile(ast, ctx.profile, ctx.profileBaseHost)
+  } catch (error) {
+    if (error instanceof ProfileViolationError) throw profileError(page, error)
+    if (ctx.profile !== undefined && error instanceof RangeError) {
+      throw new SourceError(page.relPath, 1, 1, `profile: ${error.message}`)
+    }
+    throw error
+  }
   const outline = outlineFromAst(ast, ctx.outlineLevels)
 
   const fmTitle = page.frontmatter.title
