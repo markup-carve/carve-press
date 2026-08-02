@@ -13,12 +13,19 @@ function errorMessage(error) {
   return error instanceof Error ? error.message : String(error)
 }
 
+function initialSource(playground) {
+  const template = playground.querySelector('template[data-carve-playground-source]')
+  if (template instanceof HTMLTemplateElement) return template.content.textContent ?? ''
+
+  return playground.querySelector('[data-carve-playground-source-view]')?.textContent ?? ''
+}
+
 class CarvePlayground extends HTMLElement {
   connectedCallback() {
     if (this.dataset.enhanced === 'true') return
     this.dataset.enhanced = 'true'
 
-    const source = this.querySelector('[data-carve-playground-source]')?.textContent ?? ''
+    const source = initialSource(this)
     const initialHtml = this.querySelector('[data-carve-playground-rendered]')?.innerHTML ?? ''
     const id = `carve-playground-${++nextId}`
 
