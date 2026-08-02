@@ -212,6 +212,10 @@ function playgroundScript(ctx: LayoutContext): string {
     : ''
 }
 
+function tableScrollScript(ctx: LayoutContext): string {
+  return `\n    <script src="${escapeAttr(withBase(ctx.config.base, '/assets/table-scroll.js'))}" defer></script>`
+}
+
 function editLink(ctx: LayoutContext): string {
   const edit = ctx.config.themeConfig.editLink
   if (edit === undefined) return ''
@@ -231,7 +235,7 @@ ${ctx.rendered.html}
       ${outlineHtml(ctx)}
     </div>
     ${siteFooter(ctx)}
-${themeToggleScript()}${searchScript(ctx)}${playgroundScript(ctx)}`
+${themeToggleScript()}${searchScript(ctx)}${tableScrollScript(ctx)}${playgroundScript(ctx)}`
 
   return htmlDocument({
     lang: 'en-US',
@@ -313,7 +317,7 @@ export const homeLayout: Layout = (ctx) => {
       ${renderedBody}
     </main>
     ${siteFooter(ctx)}
-${themeToggleScript()}${searchScript(ctx)}${playgroundScript(ctx)}`
+${themeToggleScript()}${searchScript(ctx)}${tableScrollScript(ctx)}${playgroundScript(ctx)}`
 
   return htmlDocument({
     lang: 'en-US',

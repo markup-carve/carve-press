@@ -157,6 +157,11 @@ describe('docLayout', () => {
     expect(html).toContain('<script src="/carve/assets/search.js" defer></script>')
   })
 
+  it('loads the table overflow client script', () => {
+    const html = docLayout({ config, rendered, sidebar: [] })
+    expect(html).toContain('<script src="/carve/assets/table-scroll.js" defer></script>')
+  })
+
   it('omits search chrome when search is disabled', () => {
     const withoutSearch = resolveConfig({ title: 'Carve', search: false })
     const html = docLayout({ config: withoutSearch, rendered, sidebar: [] })

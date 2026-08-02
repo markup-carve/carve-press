@@ -541,14 +541,14 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
  */
 .content { min-width: 0; }
 .content > * { max-width: var(--measure); }
-.content > table,
+.content > .table-scroll,
 .content > .carve-compare,
 .content > .carve-playground,
 .content > .code-group,
 .content > pre,
 .content > figure { max-width: none; }
 .content > section > * { max-width: var(--measure); }
-.content > section > table,
+.content > section > .table-scroll,
 .content > section > .carve-compare,
 .content > section > .carve-playground,
 .content > section > .code-group,
@@ -637,12 +637,22 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
 }
 .content blockquote p:last-child { margin-bottom: 0; }
 
-.content table {
-  display: block;
+.table-scroll {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
   overflow-x: auto;
+  margin: 1.4rem 0;
+}
+.table-scroll:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 3px;
+}
+.content table {
+  display: table;
   border-collapse: collapse;
   width: 100%;
-  margin: 1.4rem 0;
+  margin: 0;
   font-size: 0.88rem;
 }
 .content th, .content td { border: 1px solid var(--rule); padding: 0.55rem 0.75rem; text-align: left; vertical-align: top; }
@@ -664,35 +674,43 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
 /* ------------------------------------------------- wide-block hover expand */
 
 /*
- * A wide comparison table still overflows its column on a laptop. On hover or
- * keyboard focus it lifts out over the outline gutter and takes the width its
- * content actually needs, so the reader can see the whole thing without
- * dragging a scrollbar.
- *
- * Width is not transitioned - animating it reflows the table and reads as jank.
- * Only the lift is animated, and reduced-motion drops that too. The expansion
- * itself still happens, because it is a legibility affordance, not decoration.
+ * The hovered/focused scroll shell stays in normal flow. Its child is overlaid
+ * for the expanded state so row rewrapping cannot resize the box carrying
+ * :hover/:focus-within and kick the pointer or focus target out from under it.
  */
-.content table,
-.content .carve-compare {
-  transition: box-shadow 0.16s ease;
+.table-scroll > table,
+.carve-compare__frame {
+  transform-origin: top left;
+  transition:
+    box-shadow 240ms ease-out,
+    transform 240ms ease-out;
+  transition-delay: 0s;
 }
 @media (min-width: 1181px) {
-  .content table:hover,
-  .content table:focus-within,
-  .content .carve-compare:hover,
-  .content .carve-compare:focus-within {
-    position: relative;
+  .table-scroll[data-overflowing]:is(:hover, :focus-within),
+  .carve-compare[data-overflowing]:is(:hover, :focus-within) {
+    min-height: var(--wide-block-height);
+    overflow: visible;
+  }
+  .table-scroll[data-overflowing]:is(:hover, :focus-within) > table,
+  .carve-compare[data-overflowing]:is(:hover, :focus-within) > .carve-compare__frame {
+    position: absolute;
+    top: 0;
+    left: 0;
     z-index: 5;
     width: max-content;
     max-width: calc(100vw - var(--sidebar-w) - 8rem);
     background: var(--paper);
+    transform: translateY(-2px);
     box-shadow: 0 2px 24px -6px rgb(0 0 0 / 18%);
+    transition-delay: 120ms;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .content table,
-  .content .carve-compare { transition: none; }
+  .table-scroll > table,
+  .carve-compare__frame {
+    transition: none;
+  }
 }
 
 /* -------------------------------------------------------------- admonition */
@@ -723,15 +741,22 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
 /* ------------------------------------------------- compare: the proof sheet */
 
 .carve-compare {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  margin: 1.8rem 0;
+  overflow-x: auto;
+}
+.carve-compare__frame {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  margin: 1.8rem 0;
+  width: 100%;
   border: 1px solid var(--rule);
   border-radius: 4px;
   overflow: hidden;
   background: var(--paper-sunk);
 }
-@media (max-width: 940px) { .carve-compare { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 940px) { .carve-compare__frame { grid-template-columns: minmax(0, 1fr); } }
 
 .carve-compare__source { position: relative; border-right: 1px solid var(--rule); align-self: stretch; background: var(--paper-sunk); }
 @media (max-width: 940px) { .carve-compare__source { border-right: 0; border-bottom: 1px solid var(--rule); } }

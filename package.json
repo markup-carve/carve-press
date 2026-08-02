@@ -20,6 +20,7 @@
     "dist",
     "theme/default.css",
     "theme/playground.js",
+    "theme/table-scroll.js",
     "theme/search.js",
     "README.md",
     "LICENSE"

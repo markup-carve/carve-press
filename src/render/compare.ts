@@ -148,9 +148,9 @@ export function compareExtension(): CarveExtension {
           `<div class="carve-compare__pane">${ctx.renderChildren([html] as never, ctx.level + 1)}</div>`,
         )
 
-        return `<div${attrs}>${source}<div class="carve-compare__output">${tabs.join(
+        return `<div${attrs}><div class="carve-compare__frame">${source}<div class="carve-compare__output">${tabs.join(
           '',
-        )}${panes.join('')}</div></div>`
+        )}${panes.join('')}</div></div></div>`
       },
     },
   }

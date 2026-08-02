@@ -3,6 +3,7 @@ import type { CarvePressConfig } from '../config.js'
 import { createShikiExtensionFromHighlighter, createShikiHighlighter, type ShikiOptions } from './shiki.js'
 import { compareExtension } from './compare.js'
 import { playgroundExtension } from './playground.js'
+import { tableScrollExtension } from './table-scroll.js'
 
 /**
  * The render stack. Built-ins come first so a user extension appended from
@@ -15,6 +16,7 @@ export async function buildExtensionStack(
   const highlighter = await createShikiHighlighter(shiki)
   return [
     createShikiExtensionFromHighlighter(highlighter),
+    tableScrollExtension(),
     compareExtension(),
     playgroundExtension(),
     codeGroup({ highlighter }),
