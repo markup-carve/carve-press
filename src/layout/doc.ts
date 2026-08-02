@@ -15,6 +15,50 @@ export interface LayoutContext {
 
 export type Layout = (ctx: LayoutContext) => string
 
+interface HomeHeroImage {
+  src?: unknown
+  alt?: unknown
+}
+
+interface HomeHeroAction {
+  theme?: unknown
+  text?: unknown
+  link?: unknown
+}
+
+interface HomeHero {
+  name?: unknown
+  text?: unknown
+  tagline?: unknown
+  image?: unknown
+  actions?: unknown
+}
+
+interface HomeFeature {
+  title?: unknown
+  details?: unknown
+}
+
+function objectValue(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value !== '' ? value : undefined
+}
+
+function homeHeroActionValue(value: unknown): HomeHeroAction | undefined {
+  const record = objectValue(value)
+  return record === undefined ? undefined : record
+}
+
+function homeFeatureValue(value: unknown): HomeFeature | undefined {
+  const record = objectValue(value)
+  return record === undefined ? undefined : record
+}
+
 function navLinkHtml(item: NavItem, base: string, current: string, className: string): string {
   if (item.link === undefined) return `<span class="${className}">${escapeText(item.text)}</span>`
   const href = item.link.startsWith('/') ? withBase(base, item.link) : item.link
@@ -141,6 +185,17 @@ function siteFooter(ctx: LayoutContext): string {
   )}</p><p class="site-footer__copyright">${escapeText(footer.copyright)}</p></footer>`
 }
 
+function pageDescription(ctx: LayoutContext): string | undefined {
+  return typeof ctx.rendered.page.frontmatter.description === 'string'
+    ? ctx.rendered.page.frontmatter.description
+    : ctx.config.description
+}
+
+function documentTitle(ctx: LayoutContext): string {
+  const pageTitle = ctx.rendered.searchDoc.title
+  return pageTitle === ctx.config.title ? pageTitle : `${pageTitle} | ${ctx.config.title}`
+}
+
 function themeToggleScript(): string {
   return `    <script>(()=>{const b=document.querySelector('[data-theme-toggle]');if(!b)return;const d=document.documentElement,k='carve-press-theme',m=matchMedia('(prefers-color-scheme: dark)'),p=()=>m.matches?'dark':'light',c=()=>d.dataset.theme||p(),u=()=>{const n=c()==='dark'?'light':'dark';b.setAttribute('aria-label','Switch to '+n+' theme');b.dataset.themeToggleState=c()};u();b.addEventListener('click',()=>{const n=c()==='dark'?'light':'dark';d.dataset.theme=n;try{localStorage.setItem(k,n)}catch{}u()});m.addEventListener('change',()=>{try{if(localStorage.getItem(k))return}catch{}u()})})()</script>`
 }
@@ -159,12 +214,6 @@ function editLink(ctx: LayoutContext): string {
 }
 
 export const docLayout: Layout = (ctx) => {
-  const pageTitle = ctx.rendered.searchDoc.title
-  const description =
-    typeof ctx.rendered.page.frontmatter.description === 'string'
-      ? ctx.rendered.page.frontmatter.description
-      : ctx.config.description
-
   const body = `    ${headerHtml(ctx)}
     <div class="layout">
       ${sidebarHtml(ctx.sidebar, ctx.config.base, ctx.rendered.page.route)}
@@ -180,12 +229,94 @@ ${themeToggleScript()}${searchScript(ctx)}`
 
   return htmlDocument({
     lang: 'en-US',
-    title: pageTitle === ctx.config.title ? pageTitle : `${pageTitle} | ${ctx.config.title}`,
-    description,
+    title: documentTitle(ctx),
+    description: pageDescription(ctx),
     head: ctx.config.head,
     base: ctx.config.base,
     body,
   })
 }
 
-export const LAYOUTS: Record<string, Layout> = { doc: docLayout }
+function actionHtml(action: HomeHeroAction, base: string): string {
+  const text = stringValue(action.text)
+  const link = stringValue(action.link)
+  if (text === undefined || link === undefined) return ''
+  const href = link.startsWith('/') ? withBase(base, link) : link
+  const theme = action.theme === 'brand' ? 'brand' : 'alt'
+  return `<a class="home-hero__action home-hero__action--${theme}" href="${escapeAttr(
+    href,
+  )}">${escapeText(text)}</a>`
+}
+
+function heroHtml(ctx: LayoutContext): string {
+  const hero = objectValue(ctx.rendered.page.frontmatter.hero) as HomeHero | undefined
+  if (hero === undefined) return ''
+  const name = stringValue(hero.name)
+  const text = stringValue(hero.text)
+  const tagline = stringValue(hero.tagline)
+  const image = objectValue(hero.image) as HomeHeroImage | undefined
+  const imageSrc = stringValue(image?.src)
+  const imageAlt = stringValue(image?.alt) ?? ''
+  const actions = Array.isArray(hero.actions)
+    ? hero.actions
+        .map((action) => homeHeroActionValue(action))
+        .filter((action): action is HomeHeroAction => action !== undefined)
+    : []
+  const actionList = actions.map((action) => actionHtml(action, ctx.config.base)).join('')
+  const media =
+    imageSrc === undefined
+      ? ''
+      : `<div class="home-hero__media"><img src="${escapeAttr(
+          imageSrc.startsWith('/') ? withBase(ctx.config.base, imageSrc) : imageSrc,
+        )}" alt="${escapeAttr(imageAlt)}"></div>`
+  const content = [
+    name === undefined ? '' : `<p class="home-hero__name">${escapeText(name)}</p>`,
+    text === undefined ? '' : `<p class="home-hero__text">${escapeText(text)}</p>`,
+    tagline === undefined ? '' : `<p class="home-hero__tagline">${escapeText(tagline)}</p>`,
+    actionList === '' ? '' : `<div class="home-hero__actions">${actionList}</div>`,
+  ].join('')
+  return `<section class="home-hero">${media}<div class="home-hero__content">${content}</div></section>`
+}
+
+function featuresHtml(ctx: LayoutContext): string {
+  const features = Array.isArray(ctx.rendered.page.frontmatter.features)
+    ? ctx.rendered.page.frontmatter.features
+        .map((feature) => homeFeatureValue(feature))
+        .filter((feature): feature is HomeFeature => feature !== undefined)
+    : []
+  const items = features
+    .map((feature) => {
+      const title = stringValue(feature.title)
+      const details = stringValue(feature.details)
+      if (title === undefined && details === undefined) return ''
+      return `<li class="home-feature">${
+        title === undefined ? '' : `<h2>${escapeText(title)}</h2>`
+      }${details === undefined ? '' : `<p>${escapeText(details)}</p>`}</li>`
+    })
+    .join('')
+  return items === '' ? '' : `<section class="home-features"><ul>${items}</ul></section>`
+}
+
+export const homeLayout: Layout = (ctx) => {
+  const renderedBody =
+    ctx.rendered.html.trim() === '' ? '' : `<div class="home-body content">${ctx.rendered.html}</div>`
+  const body = `    ${headerHtml(ctx)}
+    <main class="home-layout">
+      ${heroHtml(ctx)}
+      ${featuresHtml(ctx)}
+      ${renderedBody}
+    </main>
+    ${siteFooter(ctx)}
+${themeToggleScript()}${searchScript(ctx)}`
+
+  return htmlDocument({
+    lang: 'en-US',
+    title: documentTitle(ctx),
+    description: pageDescription(ctx),
+    head: ctx.config.head,
+    base: ctx.config.base,
+    body,
+  })
+}
+
+export const LAYOUTS: Record<string, Layout> = { doc: docLayout, home: homeLayout }

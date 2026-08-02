@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { splitFrontmatter } from '../src/content/frontmatter.js'
+import { SourceError } from '../src/errors.js'
 
 describe('splitFrontmatter', () => {
   it('splits a leading fence into data and body', () => {
@@ -40,18 +41,16 @@ describe('splitFrontmatter', () => {
     expect(r.data).toEqual({ title: 'X' })
   })
 
-  it('preserves a nested key as an opaque raw string', () => {
+  it('parses a nested key as real YAML structure', () => {
     const r = splitFrontmatter('---\nnav:\n  - a\n---\nBody\n')
-    expect(r.data).toEqual({ nav: 'nav:\n  - a' })
+    expect(r.data).toEqual({ nav: ['a'] })
     expect(r.body).toBe('Body\n')
     expect(r.bodyStartLine).toBe(5)
   })
 
-  it('reads an empty value as an empty string, not a nested value', () => {
-    // `subtitle:` with nothing after it is a legitimate empty scalar. Only an
-    // INDENTED following line means nesting.
+  it('reads an empty YAML value as null', () => {
     const r = splitFrontmatter('---\ntitle: X\nsubtitle:\nlayout: post\n---\n')
-    expect(r.data).toEqual({ title: 'X', subtitle: '', layout: 'post' })
+    expect(r.data).toEqual({ title: 'X', subtitle: null, layout: 'post' })
   })
 
   it('reads scalars correctly alongside a nested block', () => {
@@ -60,11 +59,37 @@ describe('splitFrontmatter', () => {
     )
     expect(r.data.title).toBe('Home')
     expect(r.data.description).toBe('Docs')
-    expect(r.data.hero).toBe('hero:\n  name: Carve\n  image:\n    src: /logo.svg')
+    expect(r.data.hero).toEqual({ name: 'Carve', image: { src: '/logo.svg' } })
     expect(r.bodyStartLine).toBe(9)
   })
 
-  it('still throws on a malformed top-level line', () => {
-    expect(() => splitFrontmatter('---\nnav\n---\n')).toThrow(/expected "key: value"/)
+  it('keeps bodyStartLine correct for nested values', () => {
+    const r = splitFrontmatter(
+      '---\nlayout: home\nhero:\n  name: Carve\nfeatures:\n  - title: Visual Mnemonics\n    details: See <details>\n---\n# Body\n',
+    )
+    expect(r.bodyStartLine).toBe(9)
+    expect(r.body).toBe('# Body\n')
+    expect(r.data).toEqual({
+      layout: 'home',
+      hero: { name: 'Carve' },
+      features: [{ title: 'Visual Mnemonics', details: 'See <details>' }],
+    })
+  })
+
+  it('throws a SourceError on malformed YAML with source-file line offsets', () => {
+    let caught: unknown
+    try {
+      splitFrontmatter('---\ntitle: X\nhero:\n  name: Carve\n bad\n---\n', 'docs/index.md')
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(SourceError)
+    expect((caught as SourceError).srcPath).toBe('docs/index.md')
+    expect((caught as SourceError).line).toBe(5)
+    expect((caught as SourceError).message).toMatch(/^frontmatter:/)
+  })
+
+  it('throws on frontmatter that is not a YAML mapping', () => {
+    expect(() => splitFrontmatter('---\n- nav\n---\n')).toThrow(/expected a YAML mapping/)
   })
 })

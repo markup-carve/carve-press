@@ -45,7 +45,8 @@
     "@markup-carve/carve": "github:markup-carve/carve-js#ef45a7484348e4d1cd84c1061e0b774038b16115",
     "@markup-carve/carve-grammars": "github:markup-carve/carve-grammars",
     "minisearch": "^7.2.0",
-    "shiki": "^1.24.0"
+    "shiki": "^1.24.0",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

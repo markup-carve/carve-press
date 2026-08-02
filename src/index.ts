@@ -2,8 +2,10 @@ export { defineConfig, resolveConfig } from './config.js'
 export { buildSite, loadConfig } from './build.js'
 export { resolveSidebar, flattenSidebar, resolvePrevNext } from './nav.js'
 export { BuildEventBus } from './events.js'
-export { docLayout, LAYOUTS, htmlDocument } from './layout/doc.js'
+export { docLayout, homeLayout, LAYOUTS, htmlDocument } from './layout/doc.js'
 export { searchIndex } from './extensions/search-index.js'
+export { sitemap } from './extensions/sitemap.js'
+export { llmsTxt } from './extensions/llms-txt.js'
 export type {
   CarvePressConfig,
   UserConfig,
@@ -25,4 +27,6 @@ export type {
   SearchIndexPayload,
   SearchIndexRecord,
 } from './extensions/search-index.js'
+export type { SitemapOptions } from './extensions/sitemap.js'
+export type { LlmsTxtOptions } from './extensions/llms-txt.js'
 export { SourceError, BuildError } from './errors.js'

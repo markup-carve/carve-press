@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { htmlDocument, docLayout } from '../src/layout/doc.js'
+import { htmlDocument, docLayout, homeLayout } from '../src/layout/doc.js'
 import { resolveConfig } from '../src/config.js'
 import type { RenderedPage } from '../src/render/page.js'
 
@@ -202,5 +202,27 @@ describe('docLayout', () => {
   it('omits the edit link when none is configured', () => {
     const bare = resolveConfig({ title: 'Carve' })
     expect(docLayout({ config: bare, rendered, sidebar: [] })).not.toContain('edit-link')
+  })
+})
+
+describe('homeLayout', () => {
+  it('escapes author-supplied feature details', () => {
+    const config = resolveConfig({ title: 'Carve' })
+    const homeRendered = {
+      ...rendered,
+      page: {
+        ...rendered.page,
+        route: '/',
+        frontmatter: {
+          title: 'Home',
+          features: [{ title: 'Feature', details: 'See <details>' }],
+        },
+      },
+      searchDoc: { ...rendered.searchDoc, route: '/', title: 'Home' },
+    } as unknown as RenderedPage
+
+    const html = homeLayout({ config, rendered: homeRendered, sidebar: [] })
+    expect(html).toContain('See &lt;details&gt;')
+    expect(html).not.toContain('<p>See <details></p>')
   })
 })
