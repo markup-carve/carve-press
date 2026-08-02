@@ -18,6 +18,37 @@ const carveGrammar = JSON.parse(
 const SPECIAL_LANGS = new Set(['ansi', 'text', 'plaintext', 'txt'])
 /** Fence languages that mean "no highlighting", so rendering plain is correct. */
 const PLAIN_TEXT_LANGS = new Set(['text', 'plaintext', 'txt'])
+const highlighterCache = new Map<string, Promise<Highlighter>>()
+
+function highlighterCacheKey(opts: ShikiOptions): string {
+  return JSON.stringify({
+    langs: [...new Set(opts.langs)].sort(),
+    themes: [opts.themes.light, opts.themes.dark],
+  })
+}
+
+function getCachedHighlighter(opts: ShikiOptions): Promise<Highlighter> {
+  const key = highlighterCacheKey(opts)
+  const cached = highlighterCache.get(key)
+  if (cached !== undefined) return cached
+
+  const highlighter = createHighlighter({
+    langs: languageRegistrations(opts.langs),
+    themes: [opts.themes.light, opts.themes.dark],
+  }).catch((error: unknown) => {
+    highlighterCache.delete(key)
+    throw error
+  })
+  highlighterCache.set(key, highlighter)
+  return highlighter
+}
+
+export function clearHighlighterCache(): void {
+  for (const highlighter of highlighterCache.values()) {
+    void highlighter.then((instance) => instance.dispose()).catch(() => {})
+  }
+  highlighterCache.clear()
+}
 
 function isKnownShikiLanguage(lang: string): boolean {
   return lang in bundledLanguages || lang in bundledLanguagesAlias || SPECIAL_LANGS.has(lang)
@@ -122,10 +153,7 @@ function mergeAttrsIntoPre(html: string, attrs: Attrs | undefined, ctx: BlockExt
  * between them. That gives dark-mode code with no second render.
  */
 export async function createShikiHighlighter(opts: ShikiOptions): Promise<ShikiHighlightCallback> {
-  const highlighter: Highlighter = await createHighlighter({
-    langs: languageRegistrations(opts.langs),
-    themes: [opts.themes.light, opts.themes.dark],
-  })
+  const highlighter: Highlighter = await getCachedHighlighter(opts)
   const loaded = new Set(highlighter.getLoadedLanguages())
   const warned = new Set<string>()
 

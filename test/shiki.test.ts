@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { carveToHtml } from '@markup-carve/carve'
 import { resolveConfig } from '../src/config.js'
 import { buildExtensionStack } from '../src/render/extensions.js'
-import { createShikiExtension } from '../src/render/shiki.js'
+import { clearHighlighterCache, createShikiExtension, createShikiHighlighter } from '../src/render/shiki.js'
 
 const ext = await createShikiExtension({
   langs: ['js'],
@@ -164,5 +164,31 @@ describe('code-group highlighting', () => {
     expect(panel).not.toContain('shiki')
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('brainfuck'))
     warn.mockRestore()
+  })
+})
+
+describe('Shiki highlighter cache', () => {
+  it('does not share unregistered-language warning state between highlight callbacks', async () => {
+    clearHighlighterCache()
+    const opts = {
+      langs: ['js'],
+      themes: { light: 'github-light', dark: 'github-dark' },
+    }
+    const first = await createShikiHighlighter(opts)
+    const second = await createShikiHighlighter(opts)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      first('+++', 'brainfuck')
+      first('+++', 'brainfuck')
+      second('+++', 'brainfuck')
+
+      expect(warn).toHaveBeenCalledTimes(2)
+      expect(warn).toHaveBeenNthCalledWith(1, expect.stringContaining('brainfuck'))
+      expect(warn).toHaveBeenNthCalledWith(2, expect.stringContaining('brainfuck'))
+    } finally {
+      warn.mockRestore()
+      clearHighlighterCache()
+    }
   })
 })
