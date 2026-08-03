@@ -34,6 +34,22 @@ async function build(over: object = {}, root = SITE) {
   return { result, outDir }
 }
 
+/**
+ * Assets are content-addressed by default, so a test that wants one has to look
+ * it up by its logical name rather than assume the emitted filename.
+ */
+async function assetName(outDir: string, logical: string): Promise<string | undefined> {
+  const [stem, ext] = [logical.slice(0, logical.lastIndexOf('.')), logical.slice(logical.lastIndexOf('.'))]
+  const names = await readdir(resolve(outDir, 'assets')).catch(() => [] as string[])
+  return names.find((name) => name === logical || new RegExp(`^${stem}\\.[0-9a-f]{8}\\${ext}$`).test(name))
+}
+
+async function readAsset(outDir: string, logical: string): Promise<string> {
+  const name = await assetName(outDir, logical)
+  if (name === undefined) throw new Error(`no asset emitted for ${logical}`)
+  return readFile(resolve(outDir, 'assets', name), 'utf8')
+}
+
 describe('buildSite', () => {
   it('writes an HTML file per route', async () => {
     const { result, outDir } = await build()
@@ -46,48 +62,50 @@ describe('buildSite', () => {
 
   it('writes the shipped theme stylesheet', async () => {
     const { outDir } = await build()
-    const actual = await readFile(resolve(outDir, 'assets/style.css'), 'utf8')
+    const actual = await readAsset(outDir, 'style.css')
     const expected = await readFile(resolve(import.meta.dirname, '../theme/default.css'), 'utf8')
     expect(actual).toBe(expected)
   })
 
   it('writes the shipped search client script', async () => {
     const { outDir } = await build()
-    const actual = await readFile(resolve(outDir, 'assets/search.js'), 'utf8')
-    const expected = await readFile(resolve(import.meta.dirname, '../theme/search.js'), 'utf8')
-    expect(actual).toBe(expected)
+    const actual = await readAsset(outDir, 'search.js')
+    const source = await readFile(resolve(import.meta.dirname, '../theme/search.js'), 'utf8')
+    // Identical but for the library import, which follows the hashed filename.
+    const library = await assetName(outDir, 'minisearch.js')
+    expect(actual).toBe(source.replace("'./minisearch.js'", `'./${library}'`))
   })
 
   it('writes the MiniSearch browser module for the search client', async () => {
     const { outDir } = await build()
-    const actual = await readFile(resolve(outDir, 'assets/minisearch.js'), 'utf8')
+    const actual = await readAsset(outDir, 'minisearch.js')
     expect(actual).toContain('export { MiniSearch as default }')
   })
 
   it('writes the shipped table overflow client script', async () => {
     const { outDir } = await build()
-    const actual = await readFile(resolve(outDir, 'assets/table-scroll.js'), 'utf8')
+    const actual = await readAsset(outDir, 'table-scroll.js')
     const expected = await readFile(resolve(import.meta.dirname, '../theme/table-scroll.js'), 'utf8')
     expect(actual).toBe(expected)
   })
 
   it('writes the shipped code copy client script', async () => {
     const { outDir } = await build()
-    const actual = await readFile(resolve(outDir, 'assets/code-copy.js'), 'utf8')
+    const actual = await readAsset(outDir, 'code-copy.js')
     const expected = await readFile(resolve(import.meta.dirname, '../theme/code-copy.js'), 'utf8')
     expect(actual).toBe(expected)
   })
 
   it('writes the shipped outline client script', async () => {
     const { outDir } = await build()
-    const actual = await readFile(resolve(outDir, 'assets/outline.js'), 'utf8')
+    const actual = await readAsset(outDir, 'outline.js')
     const expected = await readFile(resolve(import.meta.dirname, '../theme/outline.js'), 'utf8')
     expect(actual).toBe(expected)
   })
 
   it('writes the shipped mobile navigation client script', async () => {
     const { outDir } = await build()
-    const actual = await readFile(resolve(outDir, 'assets/nav.js'), 'utf8')
+    const actual = await readAsset(outDir, 'nav.js')
     const expected = await readFile(resolve(import.meta.dirname, '../theme/nav.js'), 'utf8')
     expect(actual).toBe(expected)
   })
@@ -104,13 +122,13 @@ describe('buildSite', () => {
     )
 
     const { outDir } = await build({ srcDir, themeConfig: { sidebar: {} } }, root)
-    const script = await readFile(resolve(outDir, 'assets/playground.js'), 'utf8')
+    const script = await readAsset(outDir, 'playground.js')
     expect(script).toBe(await readFile(resolve(import.meta.dirname, '../theme/playground.js'), 'utf8'))
     await expect(stat(resolve(outDir, 'assets/carve/index.js'))).resolves.toMatchObject({ size: expect.any(Number) })
-    await expect(readFile(resolve(outDir, 'index.html'), 'utf8')).resolves.toContain('/assets/playground.js')
+    await expect(readFile(resolve(outDir, 'index.html'), 'utf8')).resolves.toMatch(/\/assets\/playground\.[0-9a-f]{8}\.js/)
 
     const noPlayground = await build()
-    await expect(readFile(resolve(noPlayground.outDir, 'assets/playground.js'), 'utf8')).rejects.toThrow()
+    await expect(assetName(noPlayground.outDir, 'playground.js')).resolves.toBeUndefined()
     await expect(stat(resolve(noPlayground.outDir, 'assets/carve/index.js'))).rejects.toThrow()
   })
 
@@ -172,11 +190,11 @@ describe('buildSite', () => {
   it('does not emit search assets or chrome when search is disabled', async () => {
     const { outDir } = await build({ search: false })
     await expect(readFile(resolve(outDir, 'assets/search-index.json'), 'utf8')).rejects.toThrow()
-    await expect(readFile(resolve(outDir, 'assets/search.js'), 'utf8')).rejects.toThrow()
-    await expect(readFile(resolve(outDir, 'assets/minisearch.js'), 'utf8')).rejects.toThrow()
+    await expect(assetName(outDir, 'search.js')).resolves.toBeUndefined()
+    await expect(assetName(outDir, 'minisearch.js')).resolves.toBeUndefined()
     const html = await readFile(resolve(outDir, 'start/index.html'), 'utf8')
     expect(html).not.toContain('class="site-search"')
-    expect(html).not.toContain('/assets/search.js')
+    expect(html).not.toMatch(/\/assets\/search\./)
   })
 
   it('lets a configured stylesheet replace the shipped theme', async () => {
@@ -184,7 +202,7 @@ describe('buildSite', () => {
     await writeFile(resolve(root, 'theme.css'), 'body { color: rebeccapurple; }\n')
 
     const { outDir } = await build({ srcDir: SITE, theme: { css: 'theme.css' } }, root)
-    await expect(readFile(resolve(outDir, 'assets/style.css'), 'utf8')).resolves.toBe(
+    await expect(readAsset(outDir, 'style.css')).resolves.toBe(
       'body { color: rebeccapurple; }\n',
     )
   })
@@ -197,7 +215,7 @@ describe('buildSite', () => {
     await writeFile(resolve(root, 'pages.css'), '.impl-chart { display: grid; }\n')
 
     const { outDir } = await build({ srcDir: SITE, theme: { extraCss: ['pages.css'] } }, root)
-    const css = await readFile(resolve(outDir, 'assets/style.css'), 'utf8')
+    const css = await readAsset(outDir, 'style.css')
 
     expect(css).toContain('.impl-chart { display: grid; }')
     expect(css).toContain('--verdigris')
@@ -213,7 +231,7 @@ describe('buildSite', () => {
       { srcDir: SITE, theme: { css: 'theme.css', extraCss: ['a.css', 'b.css'] } },
       root,
     )
-    const css = await readFile(resolve(outDir, 'assets/style.css'), 'utf8')
+    const css = await readAsset(outDir, 'style.css')
 
     expect(css.indexOf('rebeccapurple')).toBeLessThan(css.indexOf('.a {}'))
     expect(css.indexOf('.a {}')).toBeLessThan(css.indexOf('.b {}'))
@@ -699,5 +717,53 @@ describe('generated sidebars and frontmatter navigation overrides', () => {
     await expect(
       buildSite({ root, config: { title: 'T', srcDir: root, outDir } }),
     ).rejects.toThrow(/dead frontmatter prev\/next link/)
+  })
+})
+
+describe('asset hashing', () => {
+  it('emits content-addressed assets and references them', async () => {
+    const { outDir } = await build()
+    const names = await readdir(resolve(outDir, 'assets'))
+    const html = await readFile(resolve(outDir, 'index.html'), 'utf8')
+
+    const style = names.find((name) => /^style\.[0-9a-f]{8}\.css$/.test(name))
+    const search = names.find((name) => /^search\.[0-9a-f]{8}\.js$/.test(name))
+    expect(style).toBeDefined()
+    expect(search).toBeDefined()
+    expect(names).not.toContain('style.css')
+    expect(html).toContain(`/assets/${style}`)
+
+    // The search client imports the library by name, so a hashed library has to
+    // be renamed inside the importer too or the module fails to load.
+    const client = await readFile(resolve(outDir, 'assets', search!), 'utf8')
+    const library = names.find((name) => /^minisearch\.[0-9a-f]{8}\.js$/.test(name))
+    expect(client).toContain(`'./${library}'`)
+  })
+
+  it('changes the emitted name when the content changes, and not otherwise', async () => {
+    const first = await build()
+    const again = await build()
+    const styleOf = async (outDir: string): Promise<string> =>
+      (await readdir(resolve(outDir, 'assets'))).find((name) => name.startsWith('style.'))!
+
+    expect(await styleOf(first.outDir)).toBe(await styleOf(again.outDir))
+
+    const cssDir = await mkdtemp(resolve(tmpdir(), 'cp-hash-'))
+    const extra = resolve(cssDir, 'extra.css')
+    await writeFile(extra, '.a { color: red }\n')
+    const withExtra = await build({ theme: { extraCss: [extra] } })
+
+    // Different bytes, different URL: that is the whole point of the hash.
+    expect(await styleOf(withExtra.outDir)).not.toBe(await styleOf(first.outDir))
+  })
+
+  it('keeps plain names when hashing is turned off', async () => {
+    const { outDir } = await build({ assets: { hash: false } })
+    const names = await readdir(resolve(outDir, 'assets'))
+    const html = await readFile(resolve(outDir, 'index.html'), 'utf8')
+
+    expect(names).toContain('style.css')
+    expect(names).toContain('search.js')
+    expect(html).toContain('/assets/style.css')
   })
 })

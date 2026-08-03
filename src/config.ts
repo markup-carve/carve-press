@@ -154,6 +154,15 @@ export interface DevConfig {
   incremental: boolean
 }
 
+export interface AssetsConfig {
+  /**
+   * Emit theme assets as `style.<hash>.css` so a deploy cannot be served from a
+   * stale cache. Off puts the plain names back for a site that references them
+   * by hand.
+   */
+  hash: boolean
+}
+
 export interface CarvePressConfig {
   title: string
   description?: string
@@ -168,6 +177,7 @@ export interface CarvePressConfig {
   routeManifest: string | false
   head: HeadTag[]
   theme: ThemeAssetsConfig
+  assets: AssetsConfig
   themeConfig: ThemeConfig
   carve: { extensions: CarveExtension[]; profile?: Profile; preset: CarvePreset }
   shiki: ShikiConfig
@@ -188,6 +198,7 @@ export type UserConfig = Partial<
 > & {
   title: string
   theme?: Partial<ThemeAssetsConfig>
+  assets?: Partial<AssetsConfig>
   themeConfig?: Partial<Omit<ThemeConfig, 'labels'>> & { labels?: Partial<ThemeLabels> }
   carve?: { extensions?: CarveExtension[]; profile?: string | Profile; preset?: CarvePreset }
   shiki?: Partial<Omit<ShikiConfig, 'themes'>> & { themes?: Partial<ShikiConfig['themes']> }
@@ -412,6 +423,7 @@ export function resolveConfig(user: UserConfig, root?: string): CarvePressConfig
     ignoreDeadLinks: user.ignoreDeadLinks ?? false,
     routeManifest: user.routeManifest ?? 'routes.json',
     head: user.head ?? [],
+    assets: { hash: user.assets?.hash ?? true },
     theme: {
       ...(user.theme?.css === undefined ? {} : { css: user.theme.css }),
       ...(user.theme?.extraCss === undefined ? {} : { extraCss: user.theme.extraCss }),

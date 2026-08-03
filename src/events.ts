@@ -21,7 +21,8 @@ export interface BuildEvents {
   /** `html` is mutable: a handler may post-process a page's output. */
   pageRendered: { rendered: RenderedPage; html: string }
   pageWritten: { rendered: RenderedPage; outPath: string }
-  buildCompleted: { rendered: RenderedPage[]; outDir: string }
+  /** `lastUpdated` is keyed by absolute source path; a page missing from it has no known time. */
+  buildCompleted: { rendered: RenderedPage[]; outDir: string; lastUpdated: Map<string, Date> }
 }
 
 type Handler<K extends keyof BuildEvents> = (payload: BuildEvents[K]) => void | Promise<void>

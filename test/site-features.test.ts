@@ -284,6 +284,41 @@ describe('P2 site features', () => {
     await expect(readFile(resolve(root, 'state/routes.json'), 'utf8')).resolves.toBe('[\n  "/"\n]\n')
   })
 
+  it('expands a prefix pattern into one stub per page, keeping the splat for hosts', async () => {
+    const { root } = await site({
+      'index.crv': '---\ntitle: Home\n---\n# Home\n',
+      'guide/a.crv': '---\ntitle: A\n---\n# A\n',
+      'guide/b.crv': '---\ntitle: B\n---\n# B\n',
+    })
+
+    const outDir = await build(root, { redirects: { '/docs/*': '/guide/*' } })
+
+    // A static host cannot match a pattern, so each page gets its own stub.
+    const a = await readFile(resolve(outDir, 'docs/a/index.html'), 'utf8')
+    const b = await readFile(resolve(outDir, 'docs/b/index.html'), 'utf8')
+    expect(a).toContain('url=/guide/a')
+    expect(b).toContain('url=/guide/b')
+
+    // The host file keeps one line, because a host that understands a splat
+    // should not be handed the expansion.
+    const hostFile = await readFile(resolve(outDir, '_redirects'), 'utf8')
+    expect(hostFile.trim()).toBe('/docs/* /guide/* 301')
+  })
+
+  it('rejects a prefix pattern whose target is not one, or which matches nothing', async () => {
+    const { root } = await site({
+      'index.crv': '---\ntitle: Home\n---\n# Home\n',
+      'guide/a.crv': '---\ntitle: A\n---\n# A\n',
+    })
+
+    await expect(build(root, { redirects: { '/docs/*': '/guide/a' } })).rejects.toThrow(
+      /target must be one too/,
+    )
+    await expect(build(root, { redirects: { '/docs/*': '/nothing/*' } })).rejects.toThrow(
+      /matches no pages/,
+    )
+  })
+
   it('rejects a redirect source that would write outside the output directory', async () => {
     const { root } = await site({ 'index.crv': '---\ntitle: Home\n---\n# Home\n' })
 

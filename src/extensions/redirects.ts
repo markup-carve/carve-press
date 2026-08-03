@@ -71,6 +71,47 @@ function pageEntries(pages: Page[]): RedirectEntry[] {
   )
 }
 
+/**
+ * `'/old/*': '/new/*'` expands against the routes that actually exist, one stub
+ * per page, because a static host cannot match a pattern at request time. A
+ * catch-all for paths nobody can enumerate is not expressible here; the
+ * `_redirects` line keeps its splat for hosts that do understand one.
+ */
+function expandWildcards(entries: RedirectEntry[], pages: Page[]): RedirectEntry[] {
+  const out: RedirectEntry[] = []
+  for (const entry of entries) {
+    if (!entry.source.endsWith('/*')) {
+      out.push(entry)
+      continue
+    }
+    if (!entry.target.endsWith('/*') || isAbsoluteUrl(entry.target)) {
+      throw new BuildError(
+        `redirect source ${entry.source} is a prefix pattern, so its target must be one too`,
+        [`${entry.claimant} maps ${entry.source} to ${entry.target}`],
+      )
+    }
+    const sourcePrefix = entry.source.slice(0, -1)
+    const targetPrefix = entry.target.slice(0, -1)
+    const matched = pages
+      .map((page) => page.route)
+      .filter((route) => route.startsWith(targetPrefix) && route !== targetPrefix)
+    if (matched.length === 0) {
+      throw new BuildError(
+        `redirect target ${entry.target} matches no pages`,
+        [`${entry.claimant} would emit nothing`],
+      )
+    }
+    for (const route of matched) {
+      out.push({
+        source: `${sourcePrefix}${route.slice(targetPrefix.length)}`,
+        target: route,
+        claimant: `${entry.claimant} via ${entry.source}`,
+      })
+    }
+  }
+  return out
+}
+
 function validateRedirects(entries: RedirectEntry[], pages: Page[]): void {
   const routes = new Set(pages.map((page) => routeKey(page.route)))
   const seen = new Map<string, RedirectEntry>()
@@ -100,6 +141,7 @@ function validateRedirects(entries: RedirectEntry[], pages: Page[]): void {
 export function redirects(entries: Record<string, string>): SiteExtension {
   let config: CarvePressConfig | undefined
   let collected: RedirectEntry[] = []
+  let hostLines: string[] = []
   const configured = configEntries(entries)
   return {
     name: 'redirects',
@@ -110,8 +152,12 @@ export function redirects(entries: Record<string, string>): SiteExtension {
       bus.on(
         'redirectsCollected',
         (payload) => {
-          collected = [...configured, ...pageEntries(payload.pages)]
+          const declared = [...configured, ...pageEntries(payload.pages)]
+          collected = expandWildcards(declared, payload.pages)
           validateRedirects(collected, payload.pages)
+          // The host file keeps the pattern rather than the expansion: a host
+          // that understands a splat should get one line, not five hundred.
+          hostLines = declared.map((entry) => `${entry.source} ${entry.target} 301`)
           payload.redirects.push(...collected)
         },
         'redirects',
@@ -126,8 +172,7 @@ export function redirects(entries: Record<string, string>): SiteExtension {
             await mkdir(dirname(outPath), { recursive: true })
             await writeFile(outPath, html(source, target, config), 'utf8')
           }
-          const lines = collected.map(({ source, target }) => `${source} ${target} 301`)
-          await writeFile(resolve(outDir, '_redirects'), `${lines.join('\n')}\n`, 'utf8')
+          await writeFile(resolve(outDir, '_redirects'), `${hostLines.join('\n')}\n`, 'utf8')
         },
         'redirects',
       )

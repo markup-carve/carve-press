@@ -39,6 +39,8 @@ export interface DocumentOptions {
   head: HeadTag[]
   extraHead?: HeadTag[]
   base: string
+  /** Emitted stylesheet URL; the caller resolves it through the asset manifest. */
+  stylesheet?: string
   body: string
 }
 
@@ -54,7 +56,7 @@ export function htmlDocument(opts: DocumentOptions): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>${escapeText(opts.title)}</title>${description}
     ${themeBootstrapScript()}
-    <link rel="stylesheet" href="${escapeAttr(withBase(opts.base, '/assets/style.css'))}">
+    <link rel="stylesheet" href="${escapeAttr(opts.stylesheet ?? withBase(opts.base, '/assets/style.css'))}">
     ${renderHead([...opts.head, ...(opts.extraHead ?? [])])}
   </head>
   <body>

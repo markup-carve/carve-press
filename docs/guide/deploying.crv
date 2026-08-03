@@ -64,3 +64,13 @@ If you use clean URLs with a host that needs explicit fallback routing, add redi
 ## Any Static Host
 
 Upload the contents of `.site` to the configured base path. If you disable `cleanUrls`, links include concrete `.html` files.
+
+## Redirecting A Whole Section
+
+A prefix pattern moves a renamed section in one entry:
+
+``` ts "carve-press.config.ts"
+redirects: { '/docs/*': '/guide/*' }
+```
+
+The pattern is expanded against the pages that actually exist, so each one gets its own stub - a static host cannot match a pattern at request time. The `_redirects` file keeps the single splat line for hosts that do understand one. A pattern whose target matches no page fails the build rather than emitting nothing.

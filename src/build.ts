@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { copyFile, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { basename, dirname, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -114,11 +115,42 @@ async function copyDirectoryContents(src: string, dest: string): Promise<void> {
   }
 }
 
+
+/**
+ * Content-addressed asset names. Without them a CDN with long cache headers
+ * keeps serving the previous deploy's CSS, and the site looks broken for
+ * exactly the readers whose cache is warmest.
+ */
+export type AssetManifest = Record<string, string>
+
+function hashed(name: string, content: string | Uint8Array, hash: boolean): string {
+  if (!hash) return name
+  const digest = createHash('sha256').update(content).digest('hex').slice(0, 8)
+  const dot = name.lastIndexOf('.')
+  return dot === -1 ? `${name}.${digest}` : `${name.slice(0, dot)}.${digest}${name.slice(dot)}`
+}
+
+async function emitAsset(
+  outDir: string,
+  name: string,
+  content: string | Uint8Array,
+  manifest: AssetManifest,
+  hash: boolean,
+): Promise<void> {
+  const emitted = hashed(name, content, hash)
+  const outPath = resolve(outDir, 'assets', emitted)
+  await mkdir(dirname(outPath), { recursive: true })
+  await writeFile(outPath, content)
+  manifest[name] = emitted
+}
+
 async function writeThemeCss(opts: {
   root: string
   outDir: string
   css?: string
   extraCss?: string[]
+  manifest: AssetManifest
+  hash: boolean
 }): Promise<void> {
   const source = opts.css === undefined ? defaultThemePath : resolve(opts.root, opts.css)
   const parts = [await readFile(source, 'utf8')]
@@ -126,16 +158,19 @@ async function writeThemeCss(opts: {
     parts.push(await readFile(resolve(opts.root, extra), 'utf8'))
   }
   const css = parts.join('\n')
-  const outPath = resolve(opts.outDir, 'assets/style.css')
-  await mkdir(dirname(outPath), { recursive: true })
-  await writeFile(outPath, css, 'utf8')
+  await emitAsset(opts.outDir, 'style.css', css, opts.manifest, opts.hash)
 }
 
-async function writeSearchScript(outDir: string): Promise<void> {
-  const outPath = resolve(outDir, 'assets/search.js')
-  await mkdir(dirname(outPath), { recursive: true })
-  await copyFile(defaultSearchScriptPath, outPath)
-  await copyFile(miniSearchScriptPath, resolve(outDir, 'assets/minisearch.js'))
+async function writeSearchScript(outDir: string, manifest: AssetManifest, hash: boolean): Promise<void> {
+  const library = await readFile(miniSearchScriptPath)
+  await emitAsset(outDir, 'minisearch.js', library, manifest, hash)
+  // The search client imports the library by name, so a hashed library has to
+  // be renamed inside the importer too or the module simply fails to load.
+  const client = (await readFile(defaultSearchScriptPath, 'utf8')).replace(
+    "'./minisearch.js'",
+    `'./${manifest['minisearch.js']}'`,
+  )
+  await emitAsset(outDir, 'search.js', client, manifest, hash)
 }
 
 function resolveMiniSearchScriptPath(): string {
@@ -356,8 +391,13 @@ function activeLocale(config: CarvePressConfig, route: string): ActiveLocale {
   }
 }
 
+/**
+ * The theme stamps pages with it, and the sitemap reports it as `lastmod`, so
+ * one git pass covers both. Collecting it for a site that shows neither would
+ * be a git log nobody reads.
+ */
 function shouldCollectLastUpdated(config: CarvePressConfig): boolean {
-  return config.themeConfig.lastUpdated === true
+  return config.themeConfig.lastUpdated === true || config.extensions.some((extension) => extension.name === 'sitemap')
 }
 
 function renderOutlineLevels(levels: [number, number] | false): [number, number] | false {
@@ -430,28 +470,20 @@ function expandSidebar(
   )
 }
 
-async function writeTableScrollScript(outDir: string): Promise<void> {
-  const outPath = resolve(outDir, 'assets/table-scroll.js')
-  await mkdir(dirname(outPath), { recursive: true })
-  await copyFile(defaultTableScrollScriptPath, outPath)
+async function writeTableScrollScript(outDir: string, manifest: AssetManifest, hash: boolean): Promise<void> {
+  await emitAsset(outDir, 'table-scroll.js', await readFile(defaultTableScrollScriptPath), manifest, hash)
 }
 
-async function writeCodeCopyScript(outDir: string): Promise<void> {
-  const outPath = resolve(outDir, 'assets/code-copy.js')
-  await mkdir(dirname(outPath), { recursive: true })
-  await copyFile(defaultCodeCopyScriptPath, outPath)
+async function writeCodeCopyScript(outDir: string, manifest: AssetManifest, hash: boolean): Promise<void> {
+  await emitAsset(outDir, 'code-copy.js', await readFile(defaultCodeCopyScriptPath), manifest, hash)
 }
 
-async function writeOutlineScript(outDir: string): Promise<void> {
-  const outPath = resolve(outDir, 'assets/outline.js')
-  await mkdir(dirname(outPath), { recursive: true })
-  await copyFile(defaultOutlineScriptPath, outPath)
+async function writeOutlineScript(outDir: string, manifest: AssetManifest, hash: boolean): Promise<void> {
+  await emitAsset(outDir, 'outline.js', await readFile(defaultOutlineScriptPath), manifest, hash)
 }
 
-async function writeNavScript(outDir: string): Promise<void> {
-  const outPath = resolve(outDir, 'assets/nav.js')
-  await mkdir(dirname(outPath), { recursive: true })
-  await copyFile(defaultNavScriptPath, outPath)
+async function writeNavScript(outDir: string, manifest: AssetManifest, hash: boolean): Promise<void> {
+  await emitAsset(outDir, 'nav.js', await readFile(defaultNavScriptPath), manifest, hash)
 }
 
 async function copyConfiguredPlaygroundAssets(outDir: string, playground: PlaygroundConfig): Promise<void> {
@@ -469,10 +501,13 @@ async function copyConfiguredPlaygroundAssets(outDir: string, playground: Playgr
   }
 }
 
-async function writePlaygroundAssets(outDir: string, playground: PlaygroundConfig): Promise<void> {
-  const scriptPath = resolve(outDir, 'assets/playground.js')
-  await mkdir(dirname(scriptPath), { recursive: true })
-  await copyFile(defaultPlaygroundScriptPath, scriptPath)
+async function writePlaygroundAssets(
+  outDir: string,
+  playground: PlaygroundConfig,
+  manifest: AssetManifest,
+  hash: boolean,
+): Promise<void> {
+  await emitAsset(outDir, 'playground.js', await readFile(defaultPlaygroundScriptPath), manifest, hash)
   await copyDirectoryContents(carveEngineDistPath, resolve(outDir, 'assets/carve'))
   await copyConfiguredPlaygroundAssets(outDir, playground)
 }
@@ -639,17 +674,21 @@ export async function buildSite(opts: {
   if (await directoryExists(publicDir)) {
     await copyDirectoryContents(publicDir, outDir)
   }
+  const assets: AssetManifest = {}
+  const hashAssets = config.assets.hash
   await writeThemeCss({
     root: opts.root,
     outDir,
     css: config.theme.css,
     extraCss: config.theme.extraCss,
+    manifest: assets,
+    hash: hashAssets,
   })
-  if (config.search !== false) await writeSearchScript(outDir)
-  await writeTableScrollScript(outDir)
-  await writeCodeCopyScript(outDir)
-  await writeOutlineScript(outDir)
-  await writeNavScript(outDir)
+  if (config.search !== false) await writeSearchScript(outDir, assets, hashAssets)
+  await writeTableScrollScript(outDir, assets, hashAssets)
+  await writeCodeCopyScript(outDir, assets, hashAssets)
+  await writeOutlineScript(outDir, assets, hashAssets)
+  await writeNavScript(outDir, assets, hashAssets)
 
   const discovered = await discoverPages(srcDir, config.srcExclude)
   const discoveredContent = await bus.emit('contentDiscovered', { pages: discovered })
@@ -710,7 +749,7 @@ export async function buildSite(opts: {
   // The 404 page is written outside the normal loop but gets the same layout,
   // so a playground that only appears there still needs the runtime shipped.
   if ([...rendered, notFoundRendered].some((result) => result.html.includes('<carve-playground'))) {
-    await writePlaygroundAssets(outDir, config.playground)
+    await writePlaygroundAssets(outDir, config.playground, assets, hashAssets)
   }
 
   const expandedConfig: CarvePressConfig = {
@@ -785,6 +824,7 @@ export async function buildSite(opts: {
     const layout = selectLayout(result)
     const html = layout({
       config: expandedConfig,
+      assets,
       rendered: result,
       sidebar,
       prev,
@@ -809,6 +849,7 @@ export async function buildSite(opts: {
   const expandedNotFoundLocale = activeLocale(expandedConfig, '/404')
   const notFoundHtml = selectLayout(notFoundRendered)({
     config: expandedConfig,
+    assets,
     rendered: notFoundRendered,
     sidebar: resolveSidebar(
       notFoundRendered.page.route,
@@ -824,7 +865,7 @@ export async function buildSite(opts: {
   await mkdir(dirname(notFoundOutPath), { recursive: true })
   await writeFile(notFoundOutPath, notFoundHtml, 'utf8')
 
-  await bus.emit('buildCompleted', { rendered, outDir })
+  await bus.emit('buildCompleted', { rendered, outDir, lastUpdated })
   if (opts.writeManifest !== false) {
     await writeRouteManifest(opts.root, config.routeManifest, routes)
   }
