@@ -46,7 +46,22 @@ function fixtureHtml(playgroundMarkup: string): string {
   <body>
     ${playgroundMarkup}
     <script type="module">
-      const delay = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms))
+      // A timer is virtual under --virtual-time-budget: the clock jumps and the
+      // whole poll loop drains in milliseconds of wall time, before the work it
+      // is waiting on has run. A fetch is not virtual - virtual time pauses
+      // while one is in flight - so yielding through a data: URL makes each
+      // tick cost real time and lets the pending work actually proceed.
+      // One tick advances the clock and then yields real time. The timer alone
+      // is virtual, so a poll loop built on it drains in milliseconds of wall
+      // time before the work it waits on has run; the fetch alone never moves
+      // the clock, so a debounced render never fires. A tick needs both.
+      const delay = async () => {
+        await new Promise((resolve) => window.setTimeout(resolve, 50))
+        await fetch('data:text/plain,tick').then((response) => response.text())
+      }
+      // Deliberately virtual: this one is for jumping the clock past a debounce,
+      // which is exactly what virtual time is good at.
+      const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms))
       const assert = (condition, message) => {
         if (!condition) throw new Error(message)
       }
@@ -71,7 +86,7 @@ function fixtureHtml(playgroundMarkup: string): string {
           // that was still in flight.
           for (let i = 0; i < 600; i++) {
             if (predicate()) return
-            await delay(50)
+            await delay()
           }
           throw new Error('timed out waiting for: ' + what)
         }
@@ -102,7 +117,7 @@ function fixtureHtml(playgroundMarkup: string): string {
         )
 
         document.body.append(el)
-        await delay(50)
+        await delay()
         assert(textarea.value === '*bold*', 'reconnecting should not clear the editor')
 
         textarea.value = '::: details\\nbody\\n:::'
@@ -134,7 +149,22 @@ function wasmFixtureHtml(playgroundMarkup: string, mode: 'success' | 'fail'): st
   <body>
     ${playgroundMarkup}
     <script type="module">
-      const delay = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms))
+      // A timer is virtual under --virtual-time-budget: the clock jumps and the
+      // whole poll loop drains in milliseconds of wall time, before the work it
+      // is waiting on has run. A fetch is not virtual - virtual time pauses
+      // while one is in flight - so yielding through a data: URL makes each
+      // tick cost real time and lets the pending work actually proceed.
+      // One tick advances the clock and then yields real time. The timer alone
+      // is virtual, so a poll loop built on it drains in milliseconds of wall
+      // time before the work it waits on has run; the fetch alone never moves
+      // the clock, so a debounced render never fires. A tick needs both.
+      const delay = async () => {
+        await new Promise((resolve) => window.setTimeout(resolve, 50))
+        await fetch('data:text/plain,tick').then((response) => response.text())
+      }
+      // Deliberately virtual: this one is for jumping the clock past a debounce,
+      // which is exactly what virtual time is good at.
+      const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms))
       const assert = (condition, message) => {
         if (!condition) throw new Error(message)
       }
@@ -149,7 +179,7 @@ function wasmFixtureHtml(playgroundMarkup: string, mode: 'success' | 'fail'): st
         const waitFor = async (predicate, what) => {
           for (let i = 0; i < 600; i++) {
             if (predicate()) return
-            await delay(50)
+            await delay()
           }
           throw new Error('timed out waiting for: ' + what)
         }
@@ -210,7 +240,22 @@ function runtimeFixtureHtml(playgroundMarkup: string, script: string): string {
   <body>
     ${playgroundMarkup}
     <script type="module">
-      const delay = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms))
+      // A timer is virtual under --virtual-time-budget: the clock jumps and the
+      // whole poll loop drains in milliseconds of wall time, before the work it
+      // is waiting on has run. A fetch is not virtual - virtual time pauses
+      // while one is in flight - so yielding through a data: URL makes each
+      // tick cost real time and lets the pending work actually proceed.
+      // One tick advances the clock and then yields real time. The timer alone
+      // is virtual, so a poll loop built on it drains in milliseconds of wall
+      // time before the work it waits on has run; the fetch alone never moves
+      // the clock, so a debounced render never fires. A tick needs both.
+      const delay = async () => {
+        await new Promise((resolve) => window.setTimeout(resolve, 50))
+        await fetch('data:text/plain,tick').then((response) => response.text())
+      }
+      // Deliberately virtual: this one is for jumping the clock past a debounce,
+      // which is exactly what virtual time is good at.
+      const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms))
       const assert = (condition, message) => {
         if (!condition) throw new Error(message)
       }
@@ -221,9 +266,11 @@ function runtimeFixtureHtml(playgroundMarkup: string, script: string): string {
         document.body.append(node)
       }
       const waitFor = async (predicate, what) => {
-        for (let i = 0; i < 120; i++) {
+        // Virtual ticks, so this bound is not 6 seconds of anything: see the
+        // note on the other fixture's waitFor.
+        for (let i = 0; i < 600; i++) {
           if (predicate()) return
-          await delay(50)
+          await delay()
         }
         throw new Error('timed out waiting for: ' + what)
       }
@@ -772,7 +819,7 @@ globalThis.mermaid = {
         textarea.value = 'new'
         textarea.dispatchEvent(new Event('input', { bubbles: true }))
         await waitFor(() => rendered.innerHTML.includes('svg-new'), 'new mermaid render committed')
-        await delay(650)
+        await sleep(650)
         finish({ ok: true, html: rendered.innerHTML, definitions: window.__mermaidDefinitions })
       `,
       {
@@ -818,6 +865,10 @@ globalThis.Chart = function Chart(canvas, config) {
         textarea.value = 'two'
         textarea.dispatchEvent(new Event('input', { bubbles: true }))
         await waitFor(() => (window.__chartConstructs ?? []).includes('two'), 'second chart constructed')
+        // The teardown of the previous instance is what this test is about, so
+        // wait for it instead of reading the counter the moment the new chart
+        // appears and hoping the order held.
+        await waitFor(() => (window.__chartDestroys ?? 0) >= 1, 'previous chart destroyed')
         finish({
           ok: true,
           loads: window.__chartLoads ?? 0,
@@ -845,6 +896,9 @@ globalThis.Chart = function Chart(canvas, config) {
       `
         const rendered = document.querySelector('.carve-playground__rendered')
         await waitFor(() => rendered.querySelector('script[type="application/json"]'), 'raw chart script remains')
+        // The runtime still has to load for "loaded once, constructed nothing"
+        // to mean anything; reading the counter early asserts a race.
+        await waitFor(() => (window.__chartLoads ?? 0) >= 1, 'chart runtime loaded')
         finish({
           ok: true,
           loads: window.__chartLoads ?? 0,
