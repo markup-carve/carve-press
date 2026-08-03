@@ -475,7 +475,7 @@ describe('pageLayout', () => {
     })
     const html = pageLayout({ config, rendered, sidebar: [] })
     expect(html).toContain('<header class="site-header">')
-    expect(html).toContain('<main class="page-layout content">')
+    expect(html).toContain('<main id="main" class="page-layout content">')
     expect(html).toContain('<footer class="site-footer">')
     expect(html).not.toContain('class="sidebar"')
     expect(html).not.toContain('class="outline"')
@@ -550,5 +550,41 @@ describe('version switcher and banner', () => {
     const unknown = resolveConfig({ title: 'Carve', themeConfig: { versions } })
 
     expect(docLayout({ config: unknown, rendered, sidebar: [] })).not.toContain('version-banner')
+  })
+})
+
+describe('skip link', () => {
+  it('is the first thing in the body and targets the main region', () => {
+    const config = resolveConfig({ title: 'Carve' })
+
+    for (const layout of [docLayout, pageLayout, homeLayout]) {
+      const html = layout({ config, rendered, sidebar: [] })
+      const bodyStart = html.slice(html.indexOf('<body>'), html.indexOf('<body>') + 400)
+
+      // Before the header, so it is the first tab stop: without it a keyboard
+      // user walks the header and the whole sidebar before reaching the text.
+      expect(bodyStart).toContain('class="skip-link" href="#main"')
+      expect(bodyStart.indexOf('skip-link')).toBeLessThan(bodyStart.indexOf('site-header'))
+      expect(html).toContain('id="main"')
+    }
+  })
+
+  it('uses the locale label map for its text', () => {
+    const config = resolveConfig({
+      title: 'Carve',
+      locales: {
+        '/': { lang: 'en', label: 'EN' },
+        '/de/': { lang: 'de', label: 'DE', themeConfig: { labels: { skipToContent: 'Zum Inhalt' } } },
+      },
+    })
+    const localized = docLayout({
+      config,
+      rendered,
+      sidebar: [],
+      locale: { ...config.locales['/de/']!, prefix: '/de/', title: 'Carve' },
+      labels: { ...config.themeConfig.labels, skipToContent: 'Zum Inhalt' },
+    })
+
+    expect(localized).toContain('>Zum Inhalt</a>')
   })
 })

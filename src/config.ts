@@ -67,6 +67,7 @@ export interface ThemeLabels {
   copy: string
   copied: string
   menu: string
+  skipToContent: string
   version: string
   versionBanner: string
 }
@@ -256,6 +257,7 @@ export const DEFAULT_LABELS: ThemeLabels = {
   copy: 'Copy',
   copied: 'Copied',
   menu: 'Menu',
+  skipToContent: 'Skip to content',
   version: 'Version',
   versionBanner: '',
 }

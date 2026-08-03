@@ -517,7 +517,7 @@ describe('buildSite', () => {
 
     const { outDir } = await build({ srcDir, themeConfig: { sidebar: {} } }, root)
     const html = await readFile(resolve(outDir, 'index.html'), 'utf8')
-    expect(html).toContain('<main class="page-layout content">')
+    expect(html).toContain('<main id="main" class="page-layout content">')
     expect(html).not.toContain('class="sidebar"')
     expect(html).not.toContain('class="outline"')
   })

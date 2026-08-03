@@ -2,6 +2,9 @@
 
 ### Added
 
+- A skip link as the first tab stop on every page. Reaching the text previously took 23 tab stops through the header and sidebar.
+
+
 - Locale-aware derived outputs: search records carry their locale and the client filters to the reader's, feeds are written per locale with each page linking its own, and sitemap entries carry `hreflang` alternates for translations that exist.
 - A scale fixture in `test/perf` covering a 300-page full build and an incremental dev rebuild, asserting work done rather than wall-clock time.
 
@@ -33,6 +36,9 @@
 - npm scripts include `docs:build`, `docs:dev`, and `docs:serve`.
 
 ### Fixed
+
+- Every page advertised a feed for its locale, but a locale with no posts had no feed written, so the link 404'd. Locale feeds are now always written.
+
 
 - The mobile menu's links could not be tapped. The nav drawer is nested inside the header, which is a stacking context at mobile widths, so the drawer painted below the scrim however high its own z-index was: every tap landed on the scrim and closed the menu instead of following the link.
 

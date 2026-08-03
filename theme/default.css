@@ -1551,3 +1551,33 @@ h1:hover .permalink, h2:hover .permalink, h3:hover .permalink,
 @media (prefers-reduced-motion: reduce) {
   .tag { transition: none; }
 }
+
+/* --------------------------------------------------------------- skip link */
+
+/* Off-screen until focused, rather than display:none, which would take it out
+   of the tab order and defeat the point. */
+.skip-link {
+  position: absolute;
+  left: 0.75rem;
+  top: -3rem;
+  z-index: 100;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.9rem;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  text-decoration: none;
+  transition: top 0.15s ease;
+}
+
+.skip-link:focus-visible,
+.skip-link:focus {
+  top: 0.75rem;
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skip-link { transition: none; }
+}
