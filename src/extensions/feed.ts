@@ -52,7 +52,9 @@ async function feedPages(rendered: RenderedPage[], config: CarvePressConfig): Pr
 function rss(items: Array<{ page: RenderedPage; date: Date }>, config: CarvePressConfig, opts: Required<FeedOptions>): string {
   const title = opts.title || config.blog?.title || config.title
   const desc = opts.description || config.blog?.description || config.description || ''
-  const link = config.hostname!
+  // The site link has to carry the base: a feed for a project page under
+  // /carve-press/ that points at the domain root points at someone else's site.
+  const link = absoluteRouteUrl(config.hostname!, config.base, '/')
   const body = items.map(({ page, date }) => {
     const url = absoluteRouteUrl(config.hostname!, config.base, page.searchDoc.route)
     return `    <item><title>${escapeXml(page.searchDoc.title)}</title><link>${escapeXml(url)}</link><guid>${escapeXml(url)}</guid><pubDate>${date.toUTCString()}</pubDate><description>${escapeXml(description(page))}</description></item>`
@@ -62,7 +64,7 @@ function rss(items: Array<{ page: RenderedPage; date: Date }>, config: CarvePres
 
 function atom(items: Array<{ page: RenderedPage; date: Date }>, config: CarvePressConfig, opts: Required<FeedOptions>): string {
   const title = opts.title || config.blog?.title || config.title
-  const site = config.hostname!
+  const site = absoluteRouteUrl(config.hostname!, config.base, '/')
   const updatedAt = items[0]?.date ?? new Date()
   const body = items.map(({ page, date }) => {
     const url = absoluteRouteUrl(config.hostname!, config.base, page.searchDoc.route)

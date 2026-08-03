@@ -34,17 +34,20 @@
       continue
     }
 
-    const label = button.textContent || 'Copy'
+    // The button is an icon now, so the state change is the accessible name and
+    // a data attribute the stylesheet swaps icons on, not the text content.
+    const label = button.getAttribute('aria-label') || 'Copy code'
+    const copiedLabel = button.dataset.copiedLabel || 'Copied'
     let timeout
     button.addEventListener('click', () => {
       void copyText(source.content?.textContent ?? source.textContent ?? '')
         .then((copied) => {
           if (!copied) return
-          button.textContent = button.dataset.copiedLabel || 'Copied'
+          button.setAttribute('aria-label', copiedLabel)
           button.dataset.copied = 'true'
           window.clearTimeout(timeout)
           timeout = window.setTimeout(() => {
-            button.textContent = label
+            button.setAttribute('aria-label', label)
             delete button.dataset.copied
           }, 2000)
         })

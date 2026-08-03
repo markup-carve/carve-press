@@ -139,6 +139,19 @@ describe('createShikiExtension', () => {
     expect((html.match(/class="line highlighted"/g) ?? []).length).toBe(2)
   })
 
+  it('renders the copy control as a labeled icon rather than a text button', () => {
+    const html = carveToHtml('```js\nconst a = 1\n```\n', { extensions: [ext] })
+    const button = /<button class="code-block__copy".*?<\/button>/s.exec(html)?.[0] ?? ''
+
+    expect(button).toContain('aria-label="Copy code"')
+    expect(button).toContain('class="code-block__copy-icon"')
+    expect(button).toContain('class="code-block__copy-check"')
+    expect(button).toContain('<svg')
+    // No text node: a word here sits on top of the first line of code, which is
+    // why the control is an icon that appears on hover.
+    expect(button.replace(/<[^>]*>/g, '').trim()).toBe('')
+  })
+
   it('copies code without the notation comments the renderer consumed', () => {
     const html = carveToHtml(
       '```js\nconst a = 1 // [!code ++]\nconst b = 2 // [!code highlight]\n```\n',

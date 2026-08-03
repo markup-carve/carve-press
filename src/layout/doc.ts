@@ -484,13 +484,17 @@ function extraHead(ctx: LayoutContext): HeadTag[] {
   return [...pageUrlHead(ctx), ...socialHead(ctx), ...feedHead(ctx), ...(ctx.meta?.head ?? [])]
 }
 
+/**
+ * Only the button's attributes are localized, never its children: the icons
+ * inside it are markup the renderer owns, and a replacement that swallowed them
+ * would silently produce an empty button.
+ */
 function localizedHtml(ctx: LayoutContext): string {
-  const copy = escapeText(labels(ctx).copy)
   const copied = escapeAttr(labels(ctx).copied)
   const copyAria = escapeAttr(`${labels(ctx).copy} code`)
   return ctx.rendered.html.replace(
-    /<button class="code-block__copy" type="button" aria-label="Copy code">Copy<\/button>/g,
-    `<button class="code-block__copy" type="button" aria-label="${copyAria}" data-copied-label="${copied}">${copy}</button>`,
+    /<button class="code-block__copy" type="button" aria-label="Copy code">/g,
+    `<button class="code-block__copy" type="button" aria-label="${copyAria}" data-copied-label="${copied}">`,
   )
 }
 

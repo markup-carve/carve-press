@@ -316,6 +316,15 @@ function stripNotationComments(content: string): string {
     .join('\n')
 }
 
+/**
+ * Inline rather than a font or a sprite: the button has to render correctly on
+ * the first paint of a static page with no runtime.
+ */
+const COPY_ICON =
+  '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="9" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h1"/></svg>'
+const CHECK_ICON =
+  '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5 6.5 12 13 4.5"/></svg>'
+
 function wrapCodeBlock(opts: {
   html: string
   content: string
@@ -333,7 +342,7 @@ function wrapCodeBlock(opts: {
   if (opts.lineStart !== undefined) classes.push('code-block--line-numbers')
   const langAttr = opts.lang === undefined || opts.lang === '' ? '' : ` data-lang="${escapeValue(opts.lang)}"`
   const title = opts.title === undefined ? '' : `<div class="code-block__title">${escapeText(opts.title)}</div>`
-  return `<div class="${classes.join(' ')}"${langAttr}${style}>${title}<button class="code-block__copy" type="button" aria-label="Copy code">Copy</button><template data-code-block-copy>${escapeText(
+  return `<div class="${classes.join(' ')}"${langAttr}${style}>${title}<button class="code-block__copy" type="button" aria-label="Copy code"><span class="code-block__copy-icon" aria-hidden="true">${COPY_ICON}</span><span class="code-block__copy-check" aria-hidden="true">${CHECK_ICON}</span></button><template data-code-block-copy>${escapeText(
     opts.notationConsumed === true ? stripNotationComments(opts.content) : opts.content,
   )}</template>${opts.html}</div>`
 }
