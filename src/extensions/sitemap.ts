@@ -31,13 +31,24 @@ export function sitemap(opts: SitemapOptions): SiteExtension {
       })
       bus.on(
         'buildCompleted',
-        async ({ rendered, outDir }) => {
+        async ({ rendered, outDir, lastUpdated }) => {
           if (config === undefined) return
           const siteConfig = config
-          const urls = publicRenderedPages(rendered)
+          const entries = publicRenderedPages(rendered)
             .filter((page) => !excluded.has(page.searchDoc.route))
-            .map((page) => absoluteRouteUrl(options.hostname, siteConfig.base, page.searchDoc.route))
-          const body = urls.map((url) => `  <url><loc>${escapeXml(url)}</loc></url>`).join('\n')
+            .map((page) => ({
+              url: absoluteRouteUrl(options.hostname, siteConfig.base, page.searchDoc.route),
+              // Omitted rather than guessed: a lastmod of "now" on every page
+              // tells a crawler the whole site changed on every deploy.
+              lastmod: lastUpdated.get(page.page.srcPath),
+            }))
+          const body = entries
+            .map(({ url, lastmod }) =>
+              lastmod === undefined
+                ? `  <url><loc>${escapeXml(url)}</loc></url>`
+                : `  <url><loc>${escapeXml(url)}</loc><lastmod>${lastmod.toISOString().slice(0, 10)}</lastmod></url>`,
+            )
+            .join('\n')
           const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>\n`
           const outPath = resolve(outDir, options.filename)
           await mkdir(dirname(outPath), { recursive: true })

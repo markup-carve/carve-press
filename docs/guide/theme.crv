@@ -126,3 +126,26 @@ themeConfig: {
 The switcher renders in the header using the same dropdown as the primary nav. The banner appears only when this build's own `hostname` and `base` match an entry that is not the one marked `current`. If the build cannot be matched to any entry - no `hostname`, for instance - no banner renders at all: telling a reader they are on old documentation when they are not is worse than saying nothing.
 
 Both strings go through the locale label map, so a translated site can translate them.
+
+## Assets And Cache Busting
+
+CarvePress copies the theme stylesheet and its small scripts into `assets/` with a content hash in the filename - `style.61f743c0.css` - and references those names from every page. A deploy therefore cannot be served from a stale cache, which is the failure that makes a site look broken for exactly the readers whose cache is warmest.
+
+Turn it off when something outside the build references the plain names:
+
+``` ts "carve-press.config.ts"
+assets: { hash: false }
+```
+
+## Bringing Your Own Bundler
+
+There is deliberately no asset pipeline here. The theme is plain CSS and a handful of vanilla scripts, which is why `npm install` puts no toolchain underneath your site.
+
+When a site outgrows that - SCSS, TypeScript, Tailwind, npm component libraries - run your own bundler and point CarvePress at its output:
+
+``` ts "carve-press.config.ts"
+theme: { extraCss: ['build/site.css'] },
+head: [['script', { type: 'module', src: '/site.js', defer: '' }]],
+```
+
+Build your assets into `publicDir` (or into a path you reference above) before running `carve-press build`, and let your bundler own hashing for the files it emits. CarvePress hashes only what it emits itself.

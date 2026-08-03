@@ -12,7 +12,7 @@ This reference mirrors the exported TypeScript types from `src/config.ts`.
 
 | Type | Keys |
 | --- | --- |
-| `UserConfig` | `title`, `description`, `hostname`, `base`, `srcDir`, `outDir`, `publicDir`, `srcExclude`, `cleanUrls`, `ignoreDeadLinks`, `routeManifest`, `head`, `theme`, `themeConfig`, `carve`, `shiki`, `search`, `blog`, `feed`, `redirects`, `substitutions`, `extensions`, `layouts`, `locales`, `dev` |
+| `UserConfig` | `title`, `description`, `hostname`, `base`, `srcDir`, `outDir`, `publicDir`, `srcExclude`, `cleanUrls`, `ignoreDeadLinks`, `routeManifest`, `head`, `theme`, `assets`, `themeConfig`, `carve`, `shiki`, `search`, `blog`, `feed`, `redirects`, `substitutions`, `extensions`, `layouts`, `locales`, `dev` |
 | `CarvePressConfig` | Normalized form of `UserConfig`; all defaulted keys are present. |
 
 ## Navigation Types

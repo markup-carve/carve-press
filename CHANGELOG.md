@@ -2,6 +2,10 @@
 
 ### Added
 
+- Content-hashed asset filenames, so a deploy is never served from a stale cache. `assets: { hash: false }` restores the plain names.
+- Prefix redirects: `'/old/*': '/new/*'` expands against the real route table, one stub per page, while `_redirects` keeps the splat.
+- Sitemap entries carry `lastmod` when a page's last-updated time is known.
+
 - `substitutions` config: `|token|` placeholders in prose are replaced at render time, with optional bold, italic, or code formatting. Off unless configured, and never applied inside code.
 - `themeConfig.versions`: an opt-in version switcher in the header plus a banner on builds that are not the current version.
 

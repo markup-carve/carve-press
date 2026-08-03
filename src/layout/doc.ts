@@ -20,6 +20,8 @@ export { htmlDocument }
 
 export interface LayoutContext {
   config: CarvePressConfig
+  /** Logical asset name to emitted filename, when the build hashed them. */
+  assets?: Record<string, string>
   rendered: RenderedPage
   sidebar: SidebarGroup[]
   prev?: FlatLink
@@ -544,6 +546,15 @@ function localizedHtml(ctx: LayoutContext): string {
   )
 }
 
+/**
+ * Resolves through the build's asset manifest so a hashed filename reaches the
+ * markup. Falls back to the logical name, which is what a layout rendered
+ * outside a build (a test, a custom tool) gets.
+ */
+function assetUrl(ctx: LayoutContext, name: string): string {
+  return withBase(ctx.config.base, `/assets/${ctx.assets?.[name] ?? name}`)
+}
+
 function themeToggleScript(): string {
   return `    <script>(()=>{const b=document.querySelector('[data-theme-toggle]');if(!b)return;const d=document.documentElement,k='carve-press-theme',m=matchMedia('(prefers-color-scheme: dark)'),p=()=>m.matches?'dark':'light',c=()=>d.dataset.theme||p(),u=()=>{const n=c()==='dark'?'light':'dark';b.setAttribute('aria-label','Switch to '+n+' theme');b.dataset.themeToggleState=c()};u();b.addEventListener('click',()=>{const n=c()==='dark'?'light':'dark';d.dataset.theme=n;try{localStorage.setItem(k,n)}catch{}u()});m.addEventListener('change',()=>{try{if(localStorage.getItem(k))return}catch{}u()})})()</script>`
 }
@@ -559,29 +570,29 @@ function labelsScript(ctx: LayoutContext): string {
 function searchScript(ctx: LayoutContext): string {
   return ctx.config.search === false
     ? ''
-    : `\n    <script src="${escapeAttr(withBase(ctx.config.base, '/assets/search.js'))}" type="module"></script>`
+    : `\n    <script src="${escapeAttr(assetUrl(ctx, 'search.js'))}" type="module"></script>`
 }
 
 function playgroundScript(ctx: LayoutContext): string {
   return ctx.rendered.html.includes('<carve-playground')
-    ? `\n    <script src="${escapeAttr(withBase(ctx.config.base, '/assets/playground.js'))}" type="module"></script>`
+    ? `\n    <script src="${escapeAttr(assetUrl(ctx, 'playground.js'))}" type="module"></script>`
     : ''
 }
 
 function tableScrollScript(ctx: LayoutContext): string {
-  return `\n    <script src="${escapeAttr(withBase(ctx.config.base, '/assets/table-scroll.js'))}" defer></script>`
+  return `\n    <script src="${escapeAttr(assetUrl(ctx, 'table-scroll.js'))}" defer></script>`
 }
 
 function codeCopyScript(ctx: LayoutContext): string {
-  return `\n    <script src="${escapeAttr(withBase(ctx.config.base, '/assets/code-copy.js'))}" defer></script>`
+  return `\n    <script src="${escapeAttr(assetUrl(ctx, 'code-copy.js'))}" defer></script>`
 }
 
 function outlineScript(ctx: LayoutContext): string {
-  return `\n    <script src="${escapeAttr(withBase(ctx.config.base, '/assets/outline.js'))}" defer></script>`
+  return `\n    <script src="${escapeAttr(assetUrl(ctx, 'outline.js'))}" defer></script>`
 }
 
 function navScript(ctx: LayoutContext): string {
-  return `\n    <script src="${escapeAttr(withBase(ctx.config.base, '/assets/nav.js'))}" defer></script>`
+  return `\n    <script src="${escapeAttr(assetUrl(ctx, 'nav.js'))}" defer></script>`
 }
 
 export function editLink(ctx: LayoutContext): string {
@@ -620,6 +631,7 @@ ${themeToggleScript()}${labelsScript(ctx)}${searchScript(ctx)}${navScript(ctx)}$
     head: ctx.config.head,
     extraHead: extraHead(ctx),
     base: ctx.config.base,
+    stylesheet: assetUrl(ctx, 'style.css'),
     body,
   })
 }
@@ -644,6 +656,7 @@ ${themeToggleScript()}${labelsScript(ctx)}${searchScript(ctx)}${navScript(ctx)}$
     head: ctx.config.head,
     extraHead: extraHead(ctx),
     base: ctx.config.base,
+    stylesheet: assetUrl(ctx, 'style.css'),
     body,
   })
 }
@@ -736,6 +749,7 @@ ${themeToggleScript()}${labelsScript(ctx)}${searchScript(ctx)}${navScript(ctx)}$
     head: ctx.config.head,
     extraHead: extraHead(ctx),
     base: ctx.config.base,
+    stylesheet: assetUrl(ctx, 'style.css'),
     body,
   })
 }
@@ -822,6 +836,7 @@ ${themeToggleScript()}${labelsScript(ctx)}${searchScript(ctx)}${navScript(ctx)}$
     head: ctx.config.head,
     extraHead: extraHead(ctx),
     base: ctx.config.base,
+    stylesheet: assetUrl(ctx, 'style.css'),
     body,
   })
 }

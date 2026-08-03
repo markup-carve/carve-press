@@ -11,8 +11,10 @@ function renderedPage(route: string, title = 'Page'): RenderedPage {
   return {
     page: {
       route,
-      srcPath: resolve(import.meta.dirname, 'fixtures/site/start.crv'),
-      relPath: 'start.crv',
+      // Derived from the route: pages that share a source path cannot be told
+      // apart by anything keyed on it, such as last-updated times.
+      srcPath: resolve(import.meta.dirname, `fixtures/site${route === '/' ? '/index' : route}.crv`),
+      relPath: `${route === '/' ? 'index' : route.replace(/^\//, '')}.crv`,
       frontmatter: { title },
       source: '# Page\n',
       bodyStartLine: 1,
@@ -23,12 +25,17 @@ function renderedPage(route: string, title = 'Page'): RenderedPage {
   }
 }
 
-async function emitSitemap(rendered: RenderedPage[], base = '/', opts = {}) {
+async function emitSitemap(
+  rendered: RenderedPage[],
+  base = '/',
+  opts = {},
+  lastUpdated = new Map<string, Date>(),
+) {
   const outDir = await mkdtemp(resolve(tmpdir(), 'cp-sitemap-'))
   const bus = new BuildEventBus()
   sitemap({ hostname: 'https://example.com/', ...opts }).setup(bus)
   await bus.emit('buildStarted', { config: resolveConfig({ title: 'Carve', base }) })
-  await bus.emit('buildCompleted', { rendered, outDir })
+  await bus.emit('buildCompleted', { rendered, outDir, lastUpdated })
   return outDir
 }
 
@@ -79,5 +86,22 @@ describe('sitemap', () => {
     })
     const xml = await readFile(resolve(outDir, 'feeds/site.xml'), 'utf8')
     expect(xml).toContain('<loc>https://example.com/guide/</loc>')
+  })
+
+  it('reports lastmod for pages with a known time, and omits it for the rest', async () => {
+    const dated = renderedPage('/dated')
+    const undatedPage = renderedPage('/undated')
+    const outDir = await emitSitemap(
+      [dated, undatedPage],
+      '/',
+      {},
+      new Map([[dated.page.srcPath, new Date('2026-02-03T10:00:00Z')]]),
+    )
+
+    const xml = await readFile(resolve(outDir, 'sitemap.xml'), 'utf8')
+
+    expect(xml).toContain('<loc>https://example.com/dated</loc><lastmod>2026-02-03</lastmod>')
+    // Stamping "now" on everything would tell a crawler the whole site changed.
+    expect(xml).toContain('<url><loc>https://example.com/undated</loc></url>')
   })
 })
