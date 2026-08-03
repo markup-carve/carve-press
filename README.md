@@ -83,6 +83,3 @@ Add `{.no-render}` to a `::: compare` block to suppress the live pane when a fen
 :::
 ````
 
-## Documentation
-
-Use the published docs for details: <https://markup-carve.github.io/carve-press/>.
