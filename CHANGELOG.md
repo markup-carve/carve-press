@@ -34,6 +34,8 @@
 
 ### Fixed
 
+- The mobile menu's links could not be tapped. The nav drawer is nested inside the header, which is a stacking context at mobile widths, so the drawer painted below the scrim however high its own z-index was: every tap landed on the scrim and closed the menu instead of following the link.
+
 - Search indexes every page. Records existed only per heading, so a page written without an `##` produced none at all and could not be found, and prose above a page's first heading belonged to no record on any page. Each page now carries a record of its own alongside its sections, and results are deduplicated per page in the client.
 
 - The feed's channel link now carries the site base, so a project site's feed points at the site rather than at the domain root.

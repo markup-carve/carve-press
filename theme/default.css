@@ -411,7 +411,11 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
   .site-header {
     position: sticky;
     top: 0;
-    z-index: 40;
+    /* Above the scrim, not below it. The header is a stacking context here, so
+       the nav drawer nested inside it cannot escape this value however high its
+       own z-index is - at 40 the scrim covered the drawer's links and every tap
+       closed the menu instead of following the link. */
+    z-index: 60;
     align-items: center;
     padding: 0.85rem 1.25rem;
     background: var(--paper);
