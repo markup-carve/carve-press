@@ -50,14 +50,14 @@ describe('resolveConfig', () => {
     ])
     expect(c.shiki.themes).toEqual({ light: 'github-light', dark: 'github-dark' })
     expect(c.search).toEqual({ filename: 'search-index.json', exclude: [] })
-    expect(c.extensions.map((extension) => extension.name)).toEqual(['search-index', 'redirects'])
+    expect(c.extensions.map((extension) => extension.name)).toEqual(['search-index', 'redirects', 'robots'])
     expect(c.layouts).toEqual({})
   })
 
   it('can disable the default search extension', () => {
     const c = resolveConfig({ title: 'Carve', search: false })
     expect(c.search).toBe(false)
-    expect(c.extensions.map((extension) => extension.name)).toEqual(['redirects'])
+    expect(c.extensions.map((extension) => extension.name)).toEqual(['redirects', 'robots'])
   })
 
   it('resolves user Shiki themes over defaults and adds user languages to them', () => {

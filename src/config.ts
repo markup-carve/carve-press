@@ -6,6 +6,7 @@ import { BuildError } from './errors.js'
 import type { BuildEventBus } from './events.js'
 import { normalizeIslands, type IslandsConfig, type NormalizedIsland } from './render/islands.js'
 import { blog, type BlogOptions } from './extensions/blog.js'
+import { robots, type RobotsOptions } from './extensions/robots.js'
 import { feed, type FeedOptions } from './extensions/feed.js'
 import { redirects } from './extensions/redirects.js'
 import { searchIndex, type SearchIndexOptions } from './extensions/search-index.js'
@@ -186,6 +187,7 @@ export interface CarvePressConfig {
   blog?: Required<BlogOptions>
   feed: false | Required<FeedOptions>
   redirects: Record<string, string>
+  robots: false | RobotsOptions
   rewrites: Record<string, string>
   islands: Record<string, NormalizedIsland>
   substitutions: Record<string, NormalizedSubstitution>
@@ -209,6 +211,7 @@ export type UserConfig = Partial<
   blog?: BlogOptions
   feed?: false | FeedOptions
   redirects?: Record<string, string>
+  robots?: boolean | RobotsOptions
   rewrites?: Record<string, string>
   islands?: IslandsConfig
   substitutions?: SubstitutionsConfig
@@ -467,6 +470,7 @@ export function resolveConfig(user: UserConfig, root?: string): CarvePressConfig
     blog: blogConfig,
     feed: feedConfig,
     redirects: user.redirects ?? {},
+    robots: user.robots === false ? false : user.robots === true || user.robots === undefined ? {} : user.robots,
     rewrites: user.rewrites ?? {},
     islands: normalizeIslands(user.islands),
     substitutions: normalizeSubstitutions(user.substitutions),
@@ -479,6 +483,9 @@ export function resolveConfig(user: UserConfig, root?: string): CarvePressConfig
       ...(search === false ? [] : [searchIndex(search)]),
       ...(feedConfig === false ? [] : [feed(feedConfig)]),
       redirects(user.redirects ?? {}),
+      ...(user.robots === false
+        ? []
+        : [robots(user.robots === true || user.robots === undefined ? {} : user.robots)]),
       ...(user.extensions ?? []),
     ],
     layouts: user.layouts ?? {},

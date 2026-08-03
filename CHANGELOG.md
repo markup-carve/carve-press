@@ -2,6 +2,8 @@
 
 ### Added
 
+- `robots.txt` is generated, advertising the sitemap when `hostname` is set. `robots: false` disables it, and a `robots.txt` in `publicDir` is never overwritten.
+
 - `rewrites`: publish a page at a route that does not follow its source path, by exact path or directory pattern.
 - `islands`: opt-in mount points hydrated by site-supplied ES modules, with `load`, `idle`, or `visible` strategies and the block's own content as the fallback. No client framework is bundled.
 

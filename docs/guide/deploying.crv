@@ -74,3 +74,16 @@ redirects: { '/docs/*': '/guide/*' }
 ```
 
 The pattern is expanded against the pages that actually exist, so each one gets its own stub - a static host cannot match a pattern at request time. The `_redirects` file keeps the single splat line for hosts that do understand one. A pattern whose target matches no page fails the build rather than emitting nothing.
+
+## robots.txt
+
+Every build writes `robots.txt`, advertising the sitemap when the site knows its own `hostname`:
+
+``` txt "robots.txt"
+User-agent: *
+Allow: /
+
+Sitemap: https://example.com/docs/sitemap.xml
+```
+
+Without a `hostname` the `Sitemap:` line is omitted rather than written relative, which is a line crawlers ignore. `robots: false` writes nothing, and a `robots.txt` of your own in `publicDir` is never replaced - a file you shipped is your answer to this question, and silently overriding it is the kind of thing discovered weeks later by a crawler doing the wrong thing.
