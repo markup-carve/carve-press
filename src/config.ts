@@ -4,6 +4,7 @@ import { Profile, type CarveExtension } from '@markup-carve/carve'
 import type { LanguageRegistration } from '@shikijs/types'
 import { BuildError } from './errors.js'
 import type { BuildEventBus } from './events.js'
+import { normalizeIslands, type IslandsConfig, type NormalizedIsland } from './render/islands.js'
 import { blog, type BlogOptions } from './extensions/blog.js'
 import { feed, type FeedOptions } from './extensions/feed.js'
 import { redirects } from './extensions/redirects.js'
@@ -185,6 +186,8 @@ export interface CarvePressConfig {
   blog?: Required<BlogOptions>
   feed: false | Required<FeedOptions>
   redirects: Record<string, string>
+  rewrites: Record<string, string>
+  islands: Record<string, NormalizedIsland>
   substitutions: Record<string, NormalizedSubstitution>
   playground: PlaygroundConfig
   dev: DevConfig
@@ -206,6 +209,8 @@ export type UserConfig = Partial<
   blog?: BlogOptions
   feed?: false | FeedOptions
   redirects?: Record<string, string>
+  rewrites?: Record<string, string>
+  islands?: IslandsConfig
   substitutions?: SubstitutionsConfig
   layouts?: Record<string, Layout>
   locales?: Record<string, LocaleConfig>
@@ -462,6 +467,8 @@ export function resolveConfig(user: UserConfig, root?: string): CarvePressConfig
     blog: blogConfig,
     feed: feedConfig,
     redirects: user.redirects ?? {},
+    rewrites: user.rewrites ?? {},
+    islands: normalizeIslands(user.islands),
     substitutions: normalizeSubstitutions(user.substitutions),
     playground: resolvePlaygroundConfig(user.playground, root),
     dev: {

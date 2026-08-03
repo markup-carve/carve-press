@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { routeForPath, outPathForRoute, routeKey } from '../src/content/route.js'
+import { rewriteRoute, routeForPath, outPathForRoute, routeKey } from '../src/content/route.js'
 
 describe('routeForPath', () => {
   it('maps a top-level page to a root route', () => {
@@ -58,5 +58,35 @@ describe('routeKey', () => {
     expect(routeKey(routeForPath('get-started.crv'))).toBe(
       routeKey(routeForPath('get-started/index.crv')),
     )
+  })
+})
+
+describe('rewriteRoute', () => {
+  it('publishes an exact source path at another route', () => {
+    const rewrites = { 'packages/a/docs/index.crv': '/a/' }
+
+    expect(rewriteRoute('packages/a/docs/index.crv', rewrites)).toBe('/a/')
+    expect(rewriteRoute('packages/a/docs/other.crv', rewrites)).toBeUndefined()
+  })
+
+  it('moves a directory with a prefix pattern, keeping the tail', () => {
+    const rewrites = { 'packages/a/docs/*': '/a/*' }
+
+    expect(rewriteRoute('packages/a/docs/index.crv', rewrites)).toBe('/a/')
+    expect(rewriteRoute('packages/a/docs/guide/start.crv', rewrites)).toBe('/a/guide/start')
+  })
+
+  it('prefers the longest matching pattern over config order', () => {
+    // Config objects have an order, but relying on it would make the result
+    // depend on how the file happens to be written.
+    const rewrites = { 'packages/*': '/pkg/*', 'packages/a/docs/*': '/a/*' }
+
+    expect(rewriteRoute('packages/a/docs/start.crv', rewrites)).toBe('/a/start')
+    expect(rewriteRoute('packages/b/start.crv', rewrites)).toBe('/pkg/b/start')
+  })
+
+  it('collapses index files in the rewritten target too', () => {
+    expect(rewriteRoute('src/home.crv', { 'src/home.crv': 'index.crv' })).toBe('/')
+    expect(rewriteRoute('src/g.crv', { 'src/g.crv': '/guide/index' })).toBe('/guide/')
   })
 })

@@ -36,6 +36,8 @@ export default defineConfig({
 | `redirects` | `Record<string, string>` | `{}` | `{ '/old/': '/new/' }` |
 | `substitutions` | `Record<string, string \| { value, format }>` | `{}` | `{ minnode: '20' }` |
 | `assets` | `{ hash?: boolean }` | `{ hash: true }` | `{ hash: false }` |
+| `rewrites` | `Record<string, string>` | `{}` | `{ 'pkg/a/docs/*': '/a/*' }` |
+| `islands` | `Record<string, string \| { module, hydrate }>` | `{}` | `{ counter: 'islands/counter.js' }` |
 | `layouts` | `Record<string, Layout>` | `{}` | `{ landing: myLayout }` |
 | `locales` | `Record<string, LocaleConfig>` | `{}` | `{ '/de/': { lang: 'de-DE', label: 'Deutsch' } }` |
 | `dev.incremental` | `boolean` | `false` | `true` |

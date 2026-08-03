@@ -21,6 +21,7 @@ import {
 import { discoverPages, type Page } from './content/discover.js'
 import { outPathForRoute, routeKey } from './content/route.js'
 import { buildExtensionStack } from './render/extensions.js'
+import type { NormalizedIsland } from './render/islands.js'
 import type { ShikiOptions } from './render/shiki.js'
 import { renderPage, type RenderContext, type RenderedPage } from './render/page.js'
 import { resolveByPrefix, resolveSidebar, resolvePrevNext, type FlatLink } from './nav.js'
@@ -45,6 +46,7 @@ const defaultTableScrollScriptPath = require.resolve('../theme/table-scroll.js')
 const defaultCodeCopyScriptPath = require.resolve('../theme/code-copy.js')
 const defaultOutlineScriptPath = require.resolve('../theme/outline.js')
 const defaultNavScriptPath = require.resolve('../theme/nav.js')
+const defaultIslandsScriptPath = require.resolve('../theme/islands.js')
 const carveGrammarPath = require.resolve('@markup-carve/carve-grammars/textmate/carve.tmLanguage.json')
 const carveEngineDistPath = resolve(dirname(carveGrammarPath), '../../carve/dist')
 let configLoadVersion = 0
@@ -470,6 +472,38 @@ function expandSidebar(
   )
 }
 
+
+/**
+ * Copies the site's own island modules and the loader that imports them. The
+ * modules belong to the site; nothing here bundles or transforms them, which is
+ * why a site with islands still ships no framework it did not choose.
+ */
+async function writeIslandAssets(opts: {
+  root: string
+  outDir: string
+  base: string
+  islands: Record<string, NormalizedIsland>
+  manifest: AssetManifest
+  hash: boolean
+}): Promise<Record<string, string>> {
+  const urls: Record<string, string> = {}
+  for (const [name, island] of Object.entries(opts.islands)) {
+    const source = resolve(opts.root, island.module)
+    let content: Buffer
+    try {
+      content = await readFile(source)
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      throw new BuildError(`island "${name}" module cannot be read: ${source}`, [reason])
+    }
+    const logical = `islands/${name}.js`
+    await emitAsset(opts.outDir, logical, content, opts.manifest, opts.hash)
+    urls[name] = `${opts.base.replace(/\/$/, '')}/assets/${opts.manifest[logical]}`
+  }
+  await emitAsset(opts.outDir, 'islands.js', await readFile(defaultIslandsScriptPath), opts.manifest, opts.hash)
+  return urls
+}
+
 async function writeTableScrollScript(outDir: string, manifest: AssetManifest, hash: boolean): Promise<void> {
   await emitAsset(outDir, 'table-scroll.js', await readFile(defaultTableScrollScriptPath), manifest, hash)
 }
@@ -689,8 +723,19 @@ export async function buildSite(opts: {
   await writeCodeCopyScript(outDir, assets, hashAssets)
   await writeOutlineScript(outDir, assets, hashAssets)
   await writeNavScript(outDir, assets, hashAssets)
+  const islandUrls =
+    Object.keys(config.islands).length === 0
+      ? {}
+      : await writeIslandAssets({
+          root: opts.root,
+          outDir,
+          base: config.base,
+          islands: config.islands,
+          manifest: assets,
+          hash: hashAssets,
+        })
 
-  const discovered = await discoverPages(srcDir, config.srcExclude)
+  const discovered = await discoverPages(srcDir, config.srcExclude, config.rewrites)
   const discoveredContent = await bus.emit('contentDiscovered', { pages: discovered })
   validateUniqueRoutes(discoveredContent.pages)
   const redirectPayload = await bus.emit('redirectsCollected', { pages: discoveredContent.pages, redirects: [] })
@@ -825,6 +870,7 @@ export async function buildSite(opts: {
     const html = layout({
       config: expandedConfig,
       assets,
+      islandUrls,
       rendered: result,
       sidebar,
       prev,
@@ -850,6 +896,7 @@ export async function buildSite(opts: {
   const notFoundHtml = selectLayout(notFoundRendered)({
     config: expandedConfig,
     assets,
+    islandUrls,
     rendered: notFoundRendered,
     sidebar: resolveSidebar(
       notFoundRendered.page.route,

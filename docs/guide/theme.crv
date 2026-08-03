@@ -149,3 +149,54 @@ head: [['script', { type: 'module', src: '/site.js', defer: '' }]],
 ```
 
 Build your assets into `publicDir` (or into a path you reference above) before running `carve-press build`, and let your bundler own hashing for the files it emits. CarvePress hashes only what it emits itself.
+
+## Islands
+
+A page can mount an interactive component without this project shipping a framework to do it. Declare the module, then mount it:
+
+``` ts "carve-press.config.ts"
+islands: {
+  counter: { module: 'islands/counter.js', hydrate: 'visible' },
+}
+```
+
+``` carve "a page"
+{name="counter" props="{\"start\": 3}"}
+::: island
+Counter unavailable without JavaScript.
+:::
+```
+
+The block's own content is the fallback: it renders statically and stays on screen until the module replaces it, so an island degrades to what the author wrote rather than to an empty box.
+
+Your module is copied as-is - not bundled, not transpiled - and imported lazily. It default-exports a function that receives the element and the parsed props:
+
+``` js "islands/counter.js"
+export default (element, props) => {
+  let count = props.start ?? 0
+  element.textContent = String(count)
+  element.addEventListener('click', () => {
+    count += 1
+    element.textContent = String(count)
+  })
+}
+```
+
+`hydrate` is `load` (default), `idle`, or `visible`. The loader and the registry are emitted only for pages that actually contain an island, so the rest of the site downloads nothing extra.
+
+::: note "Still no framework in the output"
+CarvePress bundles no client framework and never will. If your island imports React or Vue, that is your site's choice and your site's bytes. An `::: island` block naming an island the config does not define fails the build rather than rendering an anonymous div nobody will hydrate.
+:::
+
+## Route Rewrites
+
+A source tree organized for editing rarely matches the URL tree a reader should see:
+
+``` ts "carve-press.config.ts"
+rewrites: {
+  'packages/a/docs/*': '/a/*',
+  'legacy/handbook.crv': '/handbook/',
+}
+```
+
+Keys are content-relative source paths. A trailing `/*` on both sides moves a directory and keeps the tail; the longest matching pattern wins, so config order never decides the result. A rewrite that matches no source file fails the build - otherwise a typo is indistinguishable from a page that moved.
