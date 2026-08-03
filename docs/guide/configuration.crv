@@ -36,6 +36,9 @@ export default defineConfig({
 | `redirects` | `Record<string, string>` | `{}` | `{ '/old/': '/new/' }` |
 | `layouts` | `Record<string, Layout>` | `{}` | `{ landing: myLayout }` |
 | `locales` | `Record<string, LocaleConfig>` | `{}` | `{ '/de/': { lang: 'de-DE', label: 'Deutsch' } }` |
+| `dev.incremental` | `boolean` | `false` | `true` |
+
+`dev.incremental` is only used by `carve-press dev`. When enabled, the dev server can reuse a page render if that page's source, included files, config fingerprint, theme CSS, and installed engine versions are unchanged. Static `carve-press build` always renders every page so a stale cache can never reach published output.
 
 ## Theme
 

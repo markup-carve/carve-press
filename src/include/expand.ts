@@ -17,6 +17,10 @@ export interface IncludeSourceMap {
   resolve(line: number): Origin
 }
 
+export interface IncludeFile {
+  path: string
+}
+
 export interface ExpandOptions {
   /** Path used in error messages for the document being expanded. */
   srcPath: string
@@ -93,8 +97,9 @@ function assertInsideRoots(abs: string, roots: string[], srcPath: string, line: 
 export function expandIncludes(
   source: string,
   opts: ExpandOptions,
-): { source: string; map: IncludeSourceMap } {
+): { source: string; map: IncludeSourceMap; files: IncludeFile[] } {
   const origins: Origin[] = []
+  const files = new Map<string, IncludeFile>()
 
   function expand(
     text: string,
@@ -157,6 +162,7 @@ export function expandIncludes(
       } catch {
         throw new SourceError(srcPath, directiveLine, 1, `include: cannot read "${m.groups.path}"`)
       }
+      files.set(abs, { path: abs })
 
       let body = raw.replace(/\n$/, '').split('\n')
       // How far into the included file the kept slice begins. Without this the
@@ -191,6 +197,7 @@ export function expandIncludes(
   if (!source.includes('@include:')) {
     return {
       source,
+      files: [],
       map: { resolve: (line) => ({ srcPath: opts.srcPath, line }) },
     }
   }
@@ -198,6 +205,7 @@ export function expandIncludes(
   const expanded = expand(source, opts.srcPath, opts.baseDir, [])
   return {
     source: expanded.join('\n'),
+    files: [...files.values()],
     map: {
       resolve(line) {
         return origins[line - 1] ?? { srcPath: opts.srcPath, line }

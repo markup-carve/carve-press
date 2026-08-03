@@ -13,6 +13,8 @@ export interface Page {
   frontmatter: Record<string, unknown>
   /** Body only; frontmatter has been split off. */
   source: string
+  /** Complete file contents, used by dev-only cache invalidation. */
+  rawSource?: string
   bodyStartLine: number
 }
 
@@ -78,7 +80,7 @@ export async function discoverPages(srcDir: string, srcExclude: string[]): Promi
     const srcPath = resolve(srcDir, relPath)
     const raw = await readFile(srcPath, 'utf8')
     const { data, body, bodyStartLine } = splitFrontmatter(raw, relPath)
-    pages.push({ route, srcPath, relPath, frontmatter: data, source: body, bodyStartLine })
+    pages.push({ route, srcPath, relPath, frontmatter: data, source: body, rawSource: raw, bodyStartLine })
   }
   return pages
 }

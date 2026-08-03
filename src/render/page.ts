@@ -12,7 +12,7 @@ import {
 } from '@markup-carve/carve'
 import type { Page } from '../content/discover.js'
 import { outlineFromAst, type OutlineEntry } from '../outline.js'
-import { expandIncludes } from '../include/expand.js'
+import { expandIncludes, type IncludeFile } from '../include/expand.js'
 import { SourceError } from '../errors.js'
 
 export interface SearchDoc {
@@ -34,6 +34,7 @@ export interface RenderedPage {
   html: string
   outline: OutlineEntry[]
   searchDoc: SearchDoc
+  includeFiles: IncludeFile[]
 }
 
 export interface RenderContext {
@@ -224,13 +225,13 @@ function rewriteContentUrls(node: AnyNode, base: string): void {
 }
 
 export function renderPage(page: Page, ctx: RenderContext): RenderedPage {
-  let expanded: string
+  let expanded: ReturnType<typeof expandIncludes>
   try {
     expanded = expandIncludes(page.source, {
       srcPath: page.relPath,
       baseDir: dirname(page.srcPath),
       roots: ctx.includeRoots,
-    }).source
+    })
   } catch (error) {
     // Include errors carry a body-relative line; shift it back to the original
     // file so the reported location is clickable.
@@ -252,8 +253,8 @@ export function renderPage(page: Page, ctx: RenderContext): RenderedPage {
   let html: string
   let ast: Document
   try {
-    enforceProfileMaxLength(expanded, ctx.profile)
-    ast = applyTransforms(resolve(parse(expanded, { extensions: ctx.extensions })), ctx.extensions)
+    enforceProfileMaxLength(expanded.source, ctx.profile)
+    ast = applyTransforms(resolve(parse(expanded.source, { extensions: ctx.extensions })), ctx.extensions)
     if (ctx.profile !== undefined) applyProfile(ast, ctx.profile, ctx.profileBaseHost)
     rewriteContentUrls(ast as unknown as AnyNode, ctx.base)
     html = renderHtml(ast, { extensions: ctx.extensions })
@@ -279,6 +280,7 @@ export function renderPage(page: Page, ctx: RenderContext): RenderedPage {
     page,
     html,
     outline,
+    includeFiles: expanded.files,
     searchDoc: {
       route: page.route,
       title,

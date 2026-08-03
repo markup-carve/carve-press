@@ -12,7 +12,7 @@ This reference mirrors the exported TypeScript types from `src/config.ts`.
 
 | Type | Keys |
 | --- | --- |
-| `UserConfig` | `title`, `description`, `hostname`, `base`, `srcDir`, `outDir`, `publicDir`, `srcExclude`, `cleanUrls`, `ignoreDeadLinks`, `routeManifest`, `head`, `theme`, `themeConfig`, `carve`, `shiki`, `search`, `blog`, `feed`, `redirects`, `extensions`, `layouts`, `locales` |
+| `UserConfig` | `title`, `description`, `hostname`, `base`, `srcDir`, `outDir`, `publicDir`, `srcExclude`, `cleanUrls`, `ignoreDeadLinks`, `routeManifest`, `head`, `theme`, `themeConfig`, `carve`, `shiki`, `search`, `blog`, `feed`, `redirects`, `extensions`, `layouts`, `locales`, `dev` |
 | `CarvePressConfig` | Normalized form of `UserConfig`; all defaulted keys are present. |
 
 ## Navigation Types
@@ -44,6 +44,7 @@ This reference mirrors the exported TypeScript types from `src/config.ts`.
 | `ShikiLanguage` | `string | LanguageRegistration` |
 | `ShikiConfig` | `{ langs: ShikiLanguage[]; themes: { light: string; dark: string }; lineNumbers: boolean | number }` |
 | `SearchConfig` | `false | { filename: string; exclude: string[] }` |
+| `DevConfig` | `{ incremental: boolean }`; dev-server-only render reuse, default `false`. |
 
 ## Locale Types
 

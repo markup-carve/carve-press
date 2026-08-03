@@ -21,7 +21,7 @@ import { discoverPages, type Page } from './content/discover.js'
 import { outPathForRoute, routeKey } from './content/route.js'
 import { buildExtensionStack } from './render/extensions.js'
 import type { ShikiOptions } from './render/shiki.js'
-import { renderPage, type RenderedPage } from './render/page.js'
+import { renderPage, type RenderContext, type RenderedPage } from './render/page.js'
 import { resolveByPrefix, resolveSidebar, resolvePrevNext, type FlatLink } from './nav.js'
 import { LAYOUTS } from './layout/doc.js'
 import {
@@ -46,11 +46,23 @@ const defaultOutlineScriptPath = require.resolve('../theme/outline.js')
 const defaultNavScriptPath = require.resolve('../theme/nav.js')
 const carveGrammarPath = require.resolve('@markup-carve/carve-grammars/textmate/carve.tmLanguage.json')
 const carveEngineDistPath = resolve(dirname(carveGrammarPath), '../../carve/dist')
+let configLoadVersion = 0
 
 export interface BuildResult {
   rendered: RenderedPage[]
   outDir: string
   routes: string[]
+  renderStats: RenderStats
+}
+
+export interface RenderStats {
+  rendered: number
+  reused: number
+}
+
+export interface RenderCache {
+  stats: RenderStats
+  render(page: Page, ctx: RenderContext, render: () => RenderedPage): RenderedPage
 }
 
 async function configExists(path: string): Promise<boolean> {
@@ -588,7 +600,10 @@ export async function loadConfig(root: string, opts: { bustCache?: boolean } = {
     const path = resolve(root, name)
     if (!(await configExists(path))) continue
 
-    const href = `${pathToFileURL(path).href}${opts.bustCache === true ? `?t=${Date.now()}` : ''}`
+    const href =
+      `${pathToFileURL(path).href}${
+        opts.bustCache === true ? `?t=${Date.now()}-${configLoadVersion += 1}` : ''
+      }`
     const mod = (await import(href)) as { default?: UserConfig }
     if (mod.default === undefined) {
       throw new BuildError(`${name} has no default export`)
@@ -602,6 +617,14 @@ export async function buildSite(opts: {
   root: string
   config: UserConfig
   shiki?: ShikiOptions
+  renderCache?: RenderCache
+  /**
+   * The dev server checks the route manifest but never rewrites it. Writing on
+   * every save mutates the repository while the author types, and the file
+   * lives next to the config, which the config watcher watches - so writing it
+   * made every rebuild trigger the next one.
+   */
+  writeManifest?: boolean
 }): Promise<BuildResult> {
   const config = resolveConfig(opts.config, opts.root)
   const bus = new BuildEventBus()
@@ -655,14 +678,17 @@ export async function buildSite(opts: {
     const meta = pageMeta(page)
     metas.set(page.srcPath, meta)
     const outline = meta.outlineLevels ?? locale.themeConfig.outline.level
-    const result = renderPage(page, {
+    const renderContext: RenderContext = {
       extensions: stack,
       outlineLevels: renderOutlineLevels(outline),
       includeRoots: [srcDir, opts.root],
       base: config.base,
       profile: config.carve.profile,
       profileBaseHost: host,
-    })
+    }
+    const result =
+      opts.renderCache?.render(page, renderContext, () => renderPage(page, renderContext)) ??
+      renderPage(page, renderContext)
     const after = await bus.emit('pageRendered', { rendered: result, html: result.html })
     rendered.push({ ...result, html: after.html })
   }
@@ -798,6 +824,14 @@ export async function buildSite(opts: {
   await writeFile(notFoundOutPath, notFoundHtml, 'utf8')
 
   await bus.emit('buildCompleted', { rendered, outDir })
-  await writeRouteManifest(opts.root, config.routeManifest, routes)
-  return { rendered, outDir, routes: [...routes] }
+  if (opts.writeManifest !== false) {
+    await writeRouteManifest(opts.root, config.routeManifest, routes)
+  }
+  const renderStats = opts.renderCache?.stats ?? { rendered: rendered.length, reused: 0 }
+  return {
+    rendered,
+    outDir,
+    routes: [...routes],
+    renderStats: { ...renderStats },
+  }
 }
