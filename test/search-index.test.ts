@@ -52,6 +52,7 @@ describe('searchIndex', () => {
       {
         id: '/p#:page',
         route: '/p',
+        locale: '/',
         title: 'Start',
         heading: 'Start',
         slug: '',
@@ -60,6 +61,7 @@ describe('searchIndex', () => {
       {
         id: '/p#Install:0',
         route: '/p',
+        locale: '/',
         title: 'Start',
         heading: 'Install',
         slug: 'Install',
@@ -68,6 +70,7 @@ describe('searchIndex', () => {
       {
         id: '/p#Options:1',
         route: '/p',
+        locale: '/',
         title: 'Start',
         heading: 'Options',
         slug: 'Options',

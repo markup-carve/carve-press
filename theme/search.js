@@ -28,6 +28,7 @@ function initSearch(root, input, panel, resultsList, status) {
   let active = -1
 
   const indexUrl = root.getAttribute('data-search-index') || '/assets/search-index.json'
+  const locale = root.getAttribute('data-search-locale') || ''
   const siteRoot = siteRootFromIndex(indexUrl)
 
   function linkFor(record) {
@@ -118,6 +119,9 @@ function initSearch(root, input, panel, resultsList, status) {
     for (const hit of docs.search(query)) {
       const record = recordsById.get(hit.id)
       if (record === undefined || seen.has(record.route)) continue
+      // Records carry the locale they belong to; a page in another language is
+      // not a result, it is noise the reader cannot read.
+      if (locale !== '' && record.locale !== undefined && record.locale !== locale) continue
       seen.add(record.route)
       matches.push(record)
       if (matches.length === 8) break
