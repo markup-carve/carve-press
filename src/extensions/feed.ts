@@ -100,7 +100,10 @@ export function feed(opts: Required<FeedOptions>): SiteExtension {
             const localeItems = items.filter(
               ({ page }) => localePrefixFor(page.searchDoc.route, prefixes) === prefix,
             )
-            if (prefix !== '/' && localeItems.length === 0) continue
+            // Written even when empty: every page of that locale advertises this
+            // URL in its head, and a link to a file that does not exist is a
+            // 404 for anyone who tries to subscribe. It fills itself the moment
+            // the locale gets a post.
             const xml =
               opts.type === 'atom'
                 ? atom(localeItems, siteConfig, opts)
