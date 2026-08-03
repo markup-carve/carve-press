@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { buildSite } from '../src/build.js'
+import type { SiteExtension } from '../src/config.js'
 import { SourceError } from '../src/errors.js'
 
 async function site(files: Record<string, string>) {
@@ -137,6 +138,152 @@ describe('P2 site features', () => {
     await expect(build(root, { redirects: { '/new': '/' } })).rejects.toThrow(/collides/)
   })
 
+  it('emits redirectFrom frontmatter through the redirects output path', async () => {
+    const { root } = await site({
+      'index.crv': '---\ntitle: Home\n---\n# Home\n',
+      'guide.crv': '---\ntitle: Guide\nredirectFrom:\n  - /old-guide/\n  - /install\n---\n# Guide\n',
+    })
+    const outDir = await build(root)
+
+    await expect(readFile(resolve(outDir, 'old-guide/index.html'), 'utf8')).resolves.toContain(
+      'http-equiv="refresh"',
+    )
+    await expect(readFile(resolve(outDir, 'install/index.html'), 'utf8')).resolves.toContain('/guide')
+    const redirects = await readFile(resolve(outDir, '_redirects'), 'utf8')
+    expect(redirects).toContain('/old-guide/ /guide 301')
+    expect(redirects).toContain('/install /guide 301')
+  })
+
+  it('rejects invalid redirectFrom frontmatter with page and key', async () => {
+    const { root } = await site({
+      'index.crv': '---\ntitle: Home\nredirectFrom: { old: /old }\n---\n# Home\n',
+    })
+
+    await expect(build(root)).rejects.toMatchObject({
+      name: 'SourceError',
+      srcPath: 'index.crv',
+      message: 'frontmatter: invalid redirectFrom',
+    } satisfies Partial<SourceError>)
+  })
+
+  it('validates redirectFrom sources like configured redirect sources', async () => {
+    const { root } = await site({
+      'index.crv': '---\ntitle: Home\nredirectFrom: old\n---\n# Home\n',
+    })
+
+    await expect(build(root)).rejects.toThrow(/redirect source old is not a site route/)
+  })
+
+  it('rejects redirectFrom collisions with config redirects and other pages', async () => {
+    const configCollision = await site({
+      'index.crv': '---\ntitle: Home\n---\n# Home\n',
+      'new.crv': '---\ntitle: New\nredirectFrom: /old\n---\n# New\n',
+    })
+    await expect(build(configCollision.root, { redirects: { '/old': '/' } })).rejects.toThrow(
+      /config redirects\["\/old"\].*new\.crv redirectFrom/s,
+    )
+
+    const pageCollision = await site({
+      'index.crv': '---\ntitle: Home\n---\n# Home\n',
+      'a.crv': '---\ntitle: A\nredirectFrom: /old\n---\n# A\n',
+      'b.crv': '---\ntitle: B\nredirectFrom: /old\n---\n# B\n',
+    })
+    await expect(build(pageCollision.root)).rejects.toThrow(/a\.crv redirectFrom.*b\.crv redirectFrom/s)
+  })
+
+  it('does not emit redirectFrom from drafts', async () => {
+    const { root } = await site({
+      'index.crv': '---\ntitle: Home\n---\n# Home\n',
+      'draft.crv': '---\ntitle: Draft\ndraft: true\nredirectFrom: /old-draft\n---\n# Draft\n',
+    })
+    const outDir = await build(root)
+
+    await expect(readFile(resolve(outDir, 'draft/index.html'), 'utf8')).resolves.toContain('Draft')
+    await expect(readFile(resolve(outDir, '_redirects'), 'utf8')).rejects.toThrow()
+  })
+
+  it('emits redirectFrom from blog posts and virtual pages', async () => {
+    const virtualPage: SiteExtension = {
+      name: 'virtual-test-page',
+      setup(bus) {
+        bus.on('contentDiscovered', (payload) => {
+          payload.pages.push({
+            route: '/virtual',
+            srcPath: resolve(payload.pages[0]!.srcPath, '../virtual.crv'),
+            relPath: 'virtual.crv',
+            frontmatter: { title: 'Virtual', redirectFrom: '/old-virtual', virtual: true },
+            source: '# Virtual\n',
+            bodyStartLine: 1,
+          })
+        })
+      },
+    }
+    const { root } = await site({
+      'index.crv': '---\ntitle: Home\n---\n# Home\n',
+      'blog/a.crv': '---\ntitle: A\ndate: 2026-01-01\nredirectFrom: /old-post\n---\n# A\n',
+    })
+    const outDir = await build(root, { blog: { dir: 'blog', route: '/blog/' }, extensions: [virtualPage] })
+    const redirects = await readFile(resolve(outDir, '_redirects'), 'utf8')
+
+    expect(redirects).toContain('/old-post /blog/a 301')
+    expect(redirects).toContain('/old-virtual /virtual 301')
+  })
+
+  it('creates and updates the route manifest without including redirect stubs', async () => {
+    const { root } = await site({
+      'index.crv': '---\ntitle: Home\n---\n# Home\n',
+      'new.crv': '---\ntitle: New\n---\n# New\n',
+    })
+
+    await build(root, { redirects: { '/old': '/new' } })
+    await expect(readFile(resolve(root, 'routes.json'), 'utf8')).resolves.toBe('[\n  "/",\n  "/new"\n]\n')
+
+    await writeFile(resolve(root, 'docs/new.crv'), '---\ntitle: New\nredirectFrom: /start\n---\n# New\n')
+    await build(root)
+    await expect(readFile(resolve(root, 'routes.json'), 'utf8')).resolves.toBe('[\n  "/",\n  "/new"\n]\n')
+  })
+
+  it('fails every missing manifest route not covered by redirects', async () => {
+    const { root } = await site({
+      'index.crv': '---\ntitle: Home\n---\n# Home\n',
+      'new.crv': '---\ntitle: New\nredirectFrom: /old-a\n---\n# New\n',
+    })
+    await writeFile(resolve(root, 'routes.json'), '[\n  "/",\n  "/old-a",\n  "/old-b",\n  "/old-c",\n  "/old-d"\n]\n')
+
+    // Asserted through format(), which is what the author actually reads: the
+    // summary carries the count, the details carry every missing route.
+    const error = await build(root, {
+      ignoreDeadLinks: true,
+      redirects: { '/old-b': '/new' },
+    }).then(
+      () => undefined,
+      (thrown: unknown) => thrown as { format: () => string },
+    )
+
+    expect(error).toBeDefined()
+    const report = error!.format()
+    expect(report).toContain('2 published route(s) disappeared without a redirect')
+    expect(report).toContain('/old-c')
+    expect(report).toContain('/old-d')
+    expect(report).toContain('add redirectFrom to the page that replaced it')
+    // Covered by a redirect, so not reported.
+    expect(report).not.toContain('/old-a')
+    expect(report).not.toContain('/old-b')
+  })
+
+  it('writes a configured route manifest and lets false disable the check', async () => {
+    const { root } = await site({
+      'index.crv': '---\ntitle: Home\n---\n# Home\n',
+    })
+    await writeFile(resolve(root, 'routes.json'), '[\n  "/gone"\n]\n')
+
+    await build(root, { routeManifest: false })
+    await expect(readFile(resolve(root, 'routes.json'), 'utf8')).resolves.toContain('/gone')
+
+    await build(root, { routeManifest: 'state/routes.json' })
+    await expect(readFile(resolve(root, 'state/routes.json'), 'utf8')).resolves.toBe('[\n  "/"\n]\n')
+  })
+
   it('rejects a redirect source that would write outside the output directory', async () => {
     const { root } = await site({ 'index.crv': '---\ntitle: Home\n---\n# Home\n' })
 
@@ -200,4 +347,3 @@ describe('P2 site features', () => {
     expect(html).toContain('name="twitter:image" content="https://example.com/page.png"')
   })
 })
-

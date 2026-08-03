@@ -40,12 +40,13 @@ Common flags: `--root <dir>`, `--port <n>`, `--host <host>`, `--open`, `--force`
 
 - Carve-native `.crv` content, including includes and cross-references.
 - Static HTML output with no client framework required for navigation.
-- Build-time validation for internal links, nav, sidebars, frontmatter prev/next links, and Carve lint findings.
+- Build-time validation for internal links, nav, sidebars, frontmatter prev/next links, route removals, and Carve lint findings.
 - Shiki highlighting with Carve grammar, titles, copy buttons, line numbers, highlighted lines, notation transformers, and code groups.
 - `::: compare` blocks for source/render demonstrations.
 - `::: playground` blocks that ship the Carve engine to the browser only when used.
 - Default theme with nav, path-keyed sidebars, outline, edit links, last-updated timestamps, social icons, locale switcher, and custom CSS hooks.
 - Built-in site extensions for search index, blog, feed, redirects, sitemap, and `llms.txt`.
+- Renames do not break links: `redirectFrom` lives on the page that replaced the old path, and a route that disappears without a redirect fails the build (see [Comparison](https://markup-carve.github.io/carve-press/comparison) for how that lines up against other generators).
 
 ## Render Extension Presets
 

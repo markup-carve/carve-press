@@ -20,6 +20,7 @@ Every page is a `.crv` file with optional YAML frontmatter followed by Carve con
 | `head` | head tuple array | `[]` | Extra tags for this page. |
 | `image` | `string` | none | Social image URL. |
 | `ogImage` | `string` | none | Alias used when `image` is absent. |
+| `redirectFrom` | `string | string[]` | none | Old routes that redirect to this page. |
 | `outline` | `false | number | [number, number] | 'deep'` | site outline | Per-page outline level. |
 | `aside` | `false` | visible | Hides the outline. |
 | `sidebar` | `false` | visible when matched | Hides the sidebar. |
@@ -62,3 +63,14 @@ This sentence links back to </#cross-reference-target>. Reference links also wor
 
 CarvePress validates site-internal absolute links such as [Code Blocks](/guide/code-blocks), nav entries, sidebar entries, and frontmatter `prev` or `next` links. Hash fragments are allowed, while missing route paths fail the build.
 
+## Redirects From Old Routes
+
+Use `redirectFrom` on the page that replaced an old URL:
+
+```yaml "frontmatter"
+redirectFrom:
+  - /old-guide/
+  - /install
+```
+
+Each source must start with `/`, must not contain `..` segments, and must not collide with a real page or another redirect source. Draft pages do not emit their `redirectFrom` entries.

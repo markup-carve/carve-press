@@ -14,6 +14,7 @@ async function build(over: object = {}, root = SITE) {
       title: 'Fixture',
       srcDir: SITE,
       outDir,
+      routeManifest: false,
       themeConfig: {
         sidebar: {
           '/': [

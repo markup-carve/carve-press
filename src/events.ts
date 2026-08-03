@@ -4,10 +4,18 @@ import type { Page } from './content/discover.js'
 import { BuildError, SourceError } from './errors.js'
 import type { RenderedPage } from './render/page.js'
 
+export interface RedirectEntry {
+  source: string
+  target: string
+  claimant: string
+}
+
 export interface BuildEvents {
   buildStarted: { config: CarvePressConfig }
   /** `pages` is mutable: a handler may inject virtual pages or filter the list. */
   contentDiscovered: { pages: Page[] }
+  /** `redirects` is mutable: a handler may add redirect entries before validation. */
+  redirectsCollected: { pages: Page[]; redirects: RedirectEntry[] }
   /** `extensions` is mutable: a handler may add Carve extensions before rendering. */
   rendererCreated: { extensions: CarveExtension[] }
   /** `html` is mutable: a handler may post-process a page's output. */
