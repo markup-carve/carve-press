@@ -50,8 +50,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@markup-carve/carve": "github:markup-carve/carve-js#ce37874560c332285e1337be0633ca2493e52727",
-    "@markup-carve/carve-grammars": "github:markup-carve/carve-grammars",
+    "@markup-carve/carve": "github:markup-carve/carve-js#d2b4c04c9ff8ece50bfa5ded7efa401f7d32fc17",
+    "@markup-carve/carve-grammars": "github:markup-carve/carve-grammars#4f089574357c1372431dd1cdc913263de8ca2784",
     "@shikijs/transformers": "^1.29.0",
     "minisearch": "^7.2.0",
     "shiki": "^1.24.0",
