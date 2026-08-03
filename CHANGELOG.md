@@ -2,6 +2,9 @@
 
 ### Added
 
+- `substitutions` config: `|token|` placeholders in prose are replaced at render time, with optional bold, italic, or code formatting. Off unless configured, and never applied inside code.
+- `themeConfig.versions`: an opt-in version switcher in the header plus a banner on builds that are not the current version.
+
 - Dogfood documentation site authored in Carve under `docs/`.
 - Root `carve-press.config.ts` for GitHub Pages output at `.site`.
 - Blog collection, generated tags, RSS feed, sitemap, and `llms.txt`.

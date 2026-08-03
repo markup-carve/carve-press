@@ -74,3 +74,22 @@ redirectFrom:
 ```
 
 Each source must start with `/`, must not contain `..` segments, and must not collide with a real page or another redirect source. Draft pages do not emit their `redirectFrom` entries.
+
+## Substitutions
+
+Values that appear across many pages - a supported version, a package name - can live in the config instead of in forty files:
+
+``` ts "carve-press.config.ts"
+substitutions: {
+  enginever: { value: '0.1.0', format: 'code' },
+  minnode: '20',
+}
+```
+
+Write the key wrapped in pipes and the build replaces it: this site is built with carve-js |enginever| and needs Node |minnode| or newer. A `format` of `bold`, `italic`, or `code` wraps the value; the default is plain text.
+
+Substitution runs on the parsed document, not on the source text, so a token inside a fence or an inline code span stays literal - which is how this page can show `|enginever|` while explaining it. An unknown token is left alone and warned about once per build, because a typo should be visible without making every sentence containing a pipe fatal.
+
+::: warning "Not inside table rows"
+A table row uses pipes as cell delimiters, so `|token|` there is parsed as two cell boundaries before substitution ever sees it. Put the value in prose, or write it out in the table.
+:::

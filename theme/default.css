@@ -776,6 +776,20 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
 .content > section > .code-block,
 .content > section > pre,
 .content > section > figure { max-width: none; }
+.version-banner {
+  max-width: var(--measure);
+  margin: 0 0 1.5rem;
+  padding: 0.7rem 0.85rem;
+  color: var(--ink);
+  background: var(--paper-sunk);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--brass);
+  border-radius: 4px;
+}
+.version-banner p {
+  margin: 0;
+  font-size: 0.92rem;
+}
 
 .content h1 {
   font-family: var(--display);

@@ -499,3 +499,56 @@ describe('mobile drawer toggles', () => {
     expect(home).not.toContain('data-drawer-toggle="sidebar"')
   })
 })
+
+describe('version switcher and banner', () => {
+  const versions = {
+    current: '5.x',
+    banner: 'You are reading an older release.',
+    items: [
+      { text: '5.x (latest)', link: 'https://book.example.com/5.x/', current: true },
+      { text: '4.x', link: 'https://book.example.com/4.x/' },
+    ],
+  }
+
+  it('renders nothing at all when versions are not configured', () => {
+    const html = docLayout({ config: resolveConfig({ title: 'Carve' }), rendered, sidebar: [] })
+
+    expect(html).not.toContain('version-banner')
+    expect(html).not.toContain('Version:')
+  })
+
+  it('renders the dropdown, and the banner only on a build that is not the current version', () => {
+    const old = resolveConfig({
+      title: 'Carve',
+      hostname: 'https://book.example.com',
+      base: '/4.x/',
+      themeConfig: { versions },
+    })
+    const latest = resolveConfig({
+      title: 'Carve',
+      hostname: 'https://book.example.com',
+      base: '/5.x/',
+      themeConfig: { versions },
+    })
+
+    const onOld = docLayout({ config: old, rendered, sidebar: [] })
+    const onLatest = docLayout({ config: latest, rendered, sidebar: [] })
+
+    expect(onOld).toContain('version-banner')
+    expect(onOld).toContain('You are reading an older release.')
+    expect(onOld).toContain('https://book.example.com/5.x/')
+    // The current build is not old, so no banner.
+    expect(onLatest).not.toContain('version-banner')
+    // The switcher is on both.
+    expect(onOld).toContain('5.x (latest)')
+    expect(onLatest).toContain('4.x')
+  })
+
+  it('renders no banner when the build cannot be matched to a version', () => {
+    // No hostname, so nothing can say which version this build is. Claiming
+    // "you are reading an old version" on the current docs is worse than silence.
+    const unknown = resolveConfig({ title: 'Carve', themeConfig: { versions } })
+
+    expect(docLayout({ config: unknown, rendered, sidebar: [] })).not.toContain('version-banner')
+  })
+})
