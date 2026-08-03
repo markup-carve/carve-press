@@ -55,7 +55,7 @@ export function htmlDocument(opts: DocumentOptions): string {
     <title>${escapeText(opts.title)}</title>${description}
     ${themeBootstrapScript()}
     <link rel="stylesheet" href="${escapeAttr(withBase(opts.base, '/assets/style.css'))}">
-    ${renderHead([...(opts.extraHead ?? []), ...opts.head])}
+    ${renderHead([...opts.head, ...(opts.extraHead ?? [])])}
   </head>
   <body>
 ${opts.body}

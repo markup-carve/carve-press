@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
 import { carveToHtml } from '@markup-carve/carve'
 import type { LanguageRegistration } from '@shikijs/types'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { resolveConfig } from '../src/config.js'
 import { buildExtensionStack } from '../src/render/extensions.js'
 import {
@@ -69,6 +71,9 @@ describe('createShikiExtension', () => {
     expect(html).toContain('shiki')
     expect(html).toContain('const')
     expect(html).toContain('<span')
+    expect(html).toContain('class="code-block"')
+    expect(html).toContain('class="code-block__copy"')
+    expect(html).toContain('<template data-code-block-copy>const x = 1</template>')
   })
 
   it('emits both theme variants as CSS variables', () => {
@@ -105,10 +110,11 @@ describe('createShikiExtension', () => {
       '{#my-id .foo data-x=y}\n```js "src/index.js"\nconst x = 1\n```\n',
       { extensions: [ext] },
     )
-    const openTag = /^<pre[^>]*>/.exec(html)?.[0] ?? ''
+    const openTag = /<pre[^>]*>/.exec(html)?.[0] ?? ''
     expect(openTag).toContain('id="my-id"')
-    expect(openTag).toContain('title="src/index.js"')
+    expect(openTag).not.toContain('title="src/index.js"')
     expect(openTag).toContain('data-x="y"')
+    expect(html).toContain('<div class="code-block__title">src/index.js</div>')
     // Shiki's own markers must survive, merged into the same class attribute
     // as the author's class, not replaced by it.
     expect((openTag.match(/class="/g) ?? []).length).toBe(1)
@@ -116,6 +122,38 @@ describe('createShikiExtension', () => {
     expect(openTag).toContain('foo')
     expect(openTag).toMatch(/style="[^"]*"/)
     expect(openTag).toContain('tabindex="0"')
+  })
+
+  it('consumes the render directives instead of emitting them on the pre', () => {
+    const html = carveToHtml(
+      '{hl="1,3" .line-numbers start="5"}\n```js\nconst a = 1\nconst b = 2\nconst c = 3\n```\n',
+      { extensions: [ext] },
+    )
+    const openTag = /<pre[^>]*>/.exec(html)?.[0] ?? ''
+    expect(openTag).not.toContain('hl=')
+    expect(openTag).not.toContain('start=')
+    expect(openTag).not.toContain('line-numbers')
+    // The wrapper is where those directives actually take effect.
+    expect(html).toContain('code-block--line-numbers')
+    expect(html).toContain('--code-block-line-start: 4')
+    expect((html.match(/class="line highlighted"/g) ?? []).length).toBe(2)
+  })
+
+  it('copies code without the notation comments the renderer consumed', () => {
+    const html = carveToHtml(
+      '```js\nconst a = 1 // [!code ++]\nconst b = 2 // [!code highlight]\n```\n',
+      { extensions: [ext] },
+    )
+    const copyText = /<template data-code-block-copy>(.*?)<\/template>/s.exec(html)?.[1] ?? ''
+    expect(copyText).toBe('const a = 1\nconst b = 2')
+    expect(html).toContain('line diff add')
+  })
+
+  it('copies a plain fence verbatim, notation-looking text included', () => {
+    const html = carveToHtml('```text\nconst a = 1 // [!code ++]\n```\n', { extensions: [ext] })
+    const copyText = /<template data-code-block-copy>(.*?)<\/template>/s.exec(html)?.[1] ?? ''
+    // Nothing consumed the marker here, so it is content, not an instruction.
+    expect(copyText).toBe('const a = 1 // [!code ++]')
   })
 
   it('preserves fence attributes and title for an unregistered language', () => {
@@ -127,7 +165,8 @@ describe('createShikiExtension', () => {
     expect(html).toContain('id="my-id"')
     expect(html).toContain('class="foo"')
     expect(html).toContain('data-x="y"')
-    expect(html).toContain('title="src/prog.b"')
+    expect(html).not.toContain('title="src/prog.b"')
+    expect(html).toContain('<div class="code-block__title">src/prog.b</div>')
     warn.mockRestore()
   })
 
@@ -136,6 +175,64 @@ describe('createShikiExtension', () => {
     expect(html).toContain('id="my-id"')
     expect(html).toContain('class="foo"')
     expect(html).toContain('data-x="y"')
+  })
+
+  it('applies Shiki notation transformer classes', () => {
+    const html = carveToHtml(
+      ['```js', 'const add = 1 // [!code ++]', 'const remove = 2 // [!code --]', 'const hot = 3 // [!code highlight]', '```'].join(
+        '\n',
+      ),
+      { extensions: [ext] },
+    )
+    expect(html).toContain('diff')
+    expect(html).toContain('add')
+    expect(html).toContain('remove')
+    expect(html).toContain('highlighted')
+    expect(html.match(/<pre[\s\S]*<\/pre>/)?.[0] ?? '').not.toContain('[!code ++]')
+  })
+
+  it('highlights 1-based line ranges from fence attributes', () => {
+    const html = carveToHtml('{hl="1,3-4"}\n```js\none\ntwo\nthree\nfour\n```\n', { extensions: [ext] })
+    const highlighted = html.match(/class="line highlighted"/g) ?? []
+    expect(highlighted).toHaveLength(3)
+  })
+
+  it('warns once per malformed highlight range value', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    carveToHtml('{hl="x"}\n```js\none\n```\n\n{hl="x"}\n```js\ntwo\n```\n', { extensions: [ext] })
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('hl="x"'))
+    warn.mockRestore()
+  })
+
+  it('renders line numbers through CSS counters, not HTML text', async () => {
+    const ext = await createShikiExtension({
+      langs: ['js'],
+      themes: { light: 'github-light', dark: 'github-dark' },
+      lineNumbers: 5,
+    })
+    const html = carveToHtml('```js\none\ntwo\n```\n', { extensions: [ext] })
+    expect(html).toContain('code-block--line-numbers')
+    expect(html).toContain('--code-block-line-start: 4')
+    expect(html).not.toContain('>5<')
+    expect(html).not.toContain('>6<')
+    const css = readFileSync(resolve(import.meta.dirname, '../theme/default.css'), 'utf8')
+    expect(css).toContain('.code-block--line-numbers .line::before')
+    expect(css).toContain('content: counter(code-line)')
+  })
+
+  it('lets per-fence line number classes beat config', async () => {
+    const ext = await createShikiExtension({
+      langs: ['js'],
+      themes: { light: 'github-light', dark: 'github-dark' },
+      lineNumbers: true,
+    })
+    expect(carveToHtml('{.no-line-numbers}\n```js\none\n```\n', { extensions: [ext] })).not.toContain(
+      'code-block--line-numbers',
+    )
+    expect(carveToHtml('{.line-numbers start="9"}\n```js\none\n```\n', { extensions: [ext] })).toContain(
+      '--code-block-line-start: 8',
+    )
   })
 })
 

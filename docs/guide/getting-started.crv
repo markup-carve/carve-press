@@ -1,0 +1,59 @@
+---
+title: Getting Started
+description: Install CarvePress, scaffold a site, build it, and run the dev server.
+order: 1
+---
+
+# Getting Started
+
+CarvePress turns `.crv` files into a static documentation site. The fastest path is to install the package, scaffold a site, and run the dev server.
+
+## Install
+
+```bash "npm"
+npm install --save-dev @markup-carve/carve-press
+```
+
+## Initialize
+
+```bash "scaffold"
+npx carve-press init
+```
+
+Use `--force` only when you intentionally want scaffold files overwritten.
+
+## Project Layout
+
+```txt "created files"
+carve-press.config.ts
+docs/
+  index.crv
+  guide/
+    getting-started.crv
+public/
+  .gitkeep
+```
+
+The default source directory is `docs`, the default output directory is `dist`, and both can be changed in [Configuration](/guide/configuration).
+
+## First Build
+
+```bash "build"
+npx carve-press build
+```
+
+The build discovers pages, expands includes, renders Carve through the extension stack, validates navigation and links, then writes static files.
+
+## Dev Server
+
+```bash "serve while editing"
+npx carve-press dev --open
+```
+
+The dev server rebuilds on content and config changes. To preview an existing build, run:
+
+```bash "static preview"
+npx carve-press serve --port 4173
+```
+
+Next, read [Writing Content](/guide/writing-content) for frontmatter, includes, and cross-reference rules.

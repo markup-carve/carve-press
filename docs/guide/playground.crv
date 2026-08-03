@@ -1,0 +1,27 @@
+---
+title: Playground
+description: The live Carve playground block and its browser engine payload.
+order: 6
+---
+
+# Playground
+
+The playground block renders an editable Carve source pane, a rendered pane, an HTML pane, and an AST pane.
+
+::: note "Browser payload"
+The playground ships the Carve engine to the browser. CarvePress only copies those assets when a rendered page contains a playground block.
+:::
+
+::: playground
+```carve
+# Try Carve
+
+/italic/, *bold*, _underline_, ~strike~, =highlight=.
+
+::: details "Disclosure"
+Edit the source and the preview updates.
+:::
+```
+:::
+
+Use the static `::: compare` block from [Carve Syntax](/guide/carve-syntax) when a page only needs a fixed source and output demonstration.

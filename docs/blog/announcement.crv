@@ -1,0 +1,39 @@
+---
+title: CarvePress Dogfood Site
+description: The CarvePress documentation site is now authored in Carve and built by CarvePress.
+date: '2026-08-02'
+tags: [release, dogfood]
+excerpt: The documentation now doubles as a working demo of CarvePress features.
+author: CarvePress Maintainers
+---
+
+# CarvePress Dogfood Site
+
+The CarvePress documentation is now a CarvePress site. The pages under `docs/` are `.crv` source, the build writes `.site`, and GitHub Pages serves the result.
+
+## Why it is worth the trouble
+
+Documentation about a generator tends to describe features rather than use them, and a described feature can rot for months without anyone noticing. Here the docs are the demo:
+
+- The home page is the `home` layout with hero and feature data from frontmatter.
+- The syntax guide is built out of `::: compare` blocks, so the source and the rendered HTML of each construct sit beside each other and cannot disagree.
+- This blog, its tag pages, and `feed.xml` are generated from three dated files in `docs/blog/`.
+- Search, the sitemap, and `llms.txt` are the same site extensions any other site would configure.
+- The nav, sidebar, cross-references, and every internal link are checked on each build.
+
+If a feature breaks, a page breaks. That is the point.
+
+## What it costs to build
+
+``` bash "Local"
+npm run docs:dev     # watch, rebuild, live reload
+npm run docs:build   # static build into .site
+```
+
+The full site is 27 pages and builds in about half a second on a laptop, which keeps the dev loop honest: the watcher rebuilds the whole site on every save rather than pretending to be incremental.
+
+## What is deliberately missing
+
+No client framework ships with the output. The page you are reading is HTML and CSS plus four small scripts - search, nav, table scroll, and copy - and the Carve engine only lands on the pages that embed a live playground.
+
+See [Getting Started](/guide/getting-started) for the shortest path to a new site, or [Comparison](/comparison) for how this lines up against other documentation generators.

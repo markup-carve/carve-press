@@ -1,0 +1,47 @@
+---
+title: Why Carve Instead Of Markdown
+description: CarvePress chooses Carve because its markup semantics are explicit and lintable.
+date: '2026-08-01'
+tags: [carve, authoring]
+excerpt: Carve uses deliberate delimiters and cross-reference syntax so docs can fail loudly before publishing.
+author: CarvePress Maintainers
+---
+
+# Why Carve Instead Of Markdown
+
+Markdown is the most familiar markup there is, and familiarity is worth a lot. It is also why so much of it is ambiguous: every renderer carries its own dialect, and the disagreements are silent. A document that looks right in one tool ships wrong from another.
+
+Carve trades a little familiarity for markup that means one thing.
+
+## The delimiters say what they do
+
+::: compare
+``` carve
+/italic/, *bold*, _underline_, ~strike~, =highlight=
+```
+``` html
+<p><em>italic</em>, <strong>bold</strong>, <u>underline</u>, <s>strike</s>, <mark>highlight</mark></p>
+```
+:::
+
+The slashes lean, the star is the heavy one, the underscore underlines. There is no second spelling for any of them: `**bold**` is not a synonym, it is literal text, and `carve lint` reports it rather than letting a near-miss through.
+
+## Failures are loud instead of plausible
+
+That is the whole argument. A Markdown typo usually renders as /something/ - a stray asterisk, a paragraph that quietly swallowed a list. Carve prefers constructs that either work or fail visibly, which is what makes a linter worth running in CI.
+
+Cross-references are the clearest case. A reference names its target instead of repeating it:
+
+``` carve "A cross-reference"
+See </#deploying-to-pages> for the workflow.
+```
+
+The link text comes from the heading, so it cannot drift out of sync with the section it points at, and if that heading disappears the build fails instead of publishing a link to nothing.
+
+## What it costs
+
+Habits. Everyone who joins the project types `**bold**` at least once and reaches for `^sup^` instead of `{^sup^}`. The linter catches both, so the cost lands in review rather than in production, but it is a real cost and worth naming.
+
+::: tip "Start here"
+The [Carve Syntax](/guide/carve-syntax) page puts source and rendered output side by side for every construct that differs from Markdown. It is the fastest way to unlearn the collisions.
+:::

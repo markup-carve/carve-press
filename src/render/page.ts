@@ -1,5 +1,15 @@
 import { dirname } from 'node:path'
-import { carveToHtml, parse, type CarveExtension, type Document } from '@markup-carve/carve'
+import {
+  ProfileViolationError,
+  applyProfile,
+  formatProfileViolation,
+  parse,
+  renderHtml,
+  resolve,
+  type CarveExtension,
+  type Document,
+  type Profile,
+} from '@markup-carve/carve'
 import type { Page } from '../content/discover.js'
 import { outlineFromAst, type OutlineEntry } from '../outline.js'
 import { expandIncludes } from '../include/expand.js'
@@ -28,14 +38,19 @@ export interface RenderedPage {
 
 export interface RenderContext {
   extensions: CarveExtension[]
-  outlineLevels: [number, number]
+  outlineLevels: [number, number] | false
   includeRoots: string[]
+  base: string
+  profile?: Profile
+  profileBaseHost?: string
 }
 
 interface AnyNode {
   type: string
   level?: number
   value?: string
+  href?: string
+  src?: string
   attrs?: { id?: string }
   children?: AnyNode[]
 }
@@ -131,6 +146,83 @@ function searchSections(ast: Document, outline: OutlineEntry[]): SearchSection[]
   return sections
 }
 
+function profileError(page: Page, error: ProfileViolationError): SourceError {
+  const violation = error.violations[0]
+  const message =
+    violation === undefined
+      ? 'profile violation'
+      : `profile: ${formatProfileViolation(violation)}`
+  return new SourceError(page.relPath, 1, 1, message)
+}
+
+/**
+ * `carveToHtml` guards the source length before it parses, and that guard is
+ * internal to the engine. Rendering step by step would otherwise drop a
+ * profile's max-length limit without a word.
+ */
+function enforceProfileMaxLength(source: string, profile: Profile | undefined): void {
+  if (profile === undefined) return
+  const maxLength = profile.getMaxLength()
+  const length = Buffer.byteLength(source, 'utf8')
+  if (maxLength > 0 && length > maxLength) {
+    throw new RangeError(
+      `Input exceeds the profile's maximum length of ${maxLength} bytes (got ${length} bytes).`,
+    )
+  }
+}
+
+function applyTransforms(doc: Document, extensions: CarveExtension[]): Document {
+  let out = doc
+  for (const extension of extensions) {
+    if (extension.afterParse !== undefined) out = extension.afterParse(out)
+  }
+  for (const extension of extensions) {
+    if (extension.beforeRender !== undefined) out = extension.beforeRender(out)
+  }
+  return out
+}
+
+function shouldRewriteUrl(value: string, base: string): boolean {
+  if (!value.startsWith('/') || value.startsWith('//')) return false
+  return base !== '/' && !value.startsWith(base)
+}
+
+function withContentBase(base: string, value: string): string {
+  return `${base.replace(/\/$/, '')}${value}`
+}
+
+function rewriteUrl(value: string, base: string): string {
+  return shouldRewriteUrl(value, base) ? withContentBase(base, value) : value
+}
+
+function rewriteSrcset(value: string, base: string): string {
+  return value
+    .split(',')
+    .map((part) => {
+      const trimmed = part.trim()
+      const match = /^(\S+)(\s+.*)?$/.exec(trimmed)
+      if (match === null) return part
+      return `${rewriteUrl(match[1]!, base)}${match[2] ?? ''}`
+    })
+    .join(', ')
+}
+
+function rewriteContentUrls(node: AnyNode, base: string): void {
+  if (node.type === 'link' && node.href !== undefined) node.href = rewriteUrl(node.href, base)
+  if (node.type === 'image' && node.src !== undefined) node.src = rewriteUrl(node.src, base)
+
+  const keyValues = (node.attrs as { keyValues?: Record<string, string> } | undefined)?.keyValues
+  if (keyValues !== undefined) {
+    for (const key of ['href', 'src']) {
+      const value = keyValues[key]
+      if (value !== undefined) keyValues[key] = rewriteUrl(value, base)
+    }
+    if (keyValues.srcset !== undefined) keyValues.srcset = rewriteSrcset(keyValues.srcset, base)
+  }
+
+  for (const child of node.children ?? []) rewriteContentUrls(child, base)
+}
+
 export function renderPage(page: Page, ctx: RenderContext): RenderedPage {
   let expanded: string
   try {
@@ -153,12 +245,26 @@ export function renderPage(page: Page, ctx: RenderContext): RenderedPage {
     throw error
   }
 
-  // The public engine pipeline resolves heading ids and runs extension hooks
-  // before rendering. Keep a second parsed AST for outline/search until the
-  // engine exports applyTransforms and runProfile, which would allow one pass.
-  const html = carveToHtml(expanded, { extensions: ctx.extensions })
-  const ast = parse(expanded, { extensions: ctx.extensions })
-  const outline = outlineFromAst(ast, ctx.outlineLevels)
+  // This is `carveToHtml` unrolled: parse, resolve, transforms, profile,
+  // render. The steps have to be separate because the base rewrite operates on
+  // the AST, and because outline and search read the same resolved document
+  // instead of parsing the page a second time.
+  let html: string
+  let ast: Document
+  try {
+    enforceProfileMaxLength(expanded, ctx.profile)
+    ast = applyTransforms(resolve(parse(expanded, { extensions: ctx.extensions })), ctx.extensions)
+    if (ctx.profile !== undefined) applyProfile(ast, ctx.profile, ctx.profileBaseHost)
+    rewriteContentUrls(ast as unknown as AnyNode, ctx.base)
+    html = renderHtml(ast, { extensions: ctx.extensions })
+  } catch (error) {
+    if (error instanceof ProfileViolationError) throw profileError(page, error)
+    if (ctx.profile !== undefined && error instanceof RangeError) {
+      throw new SourceError(page.relPath, 1, 1, `profile: ${error.message}`)
+    }
+    throw error
+  }
+  const outline = ctx.outlineLevels === false ? [] : outlineFromAst(ast, ctx.outlineLevels)
 
   const fmTitle = page.frontmatter.title
   const title = typeof fmTitle === 'string' && fmTitle !== '' ? fmTitle : firstH1(ast)

@@ -50,6 +50,7 @@ describe('resolveConfig', () => {
     expect(c.shiki.themes).toEqual({ light: 'github-light', dark: 'github-dark' })
     expect(c.search).toEqual({ filename: 'search-index.json', exclude: [] })
     expect(c.extensions.map((extension) => extension.name)).toEqual(['search-index'])
+    expect(c.layouts).toEqual({})
   })
 
   it('can disable the default search extension', () => {
@@ -83,6 +84,18 @@ describe('resolveConfig', () => {
   it('rejects a config with no title', () => {
     // @ts-expect-error deliberately invalid at runtime
     expect(() => resolveConfig({})).toThrow(/title is required/)
+  })
+
+  it('resolves supported carve profile names', () => {
+    const c = resolveConfig({ title: 'Carve', carve: { profile: 'article' } })
+
+    expect(c.carve.profile?.getName()).toBe('article')
+  })
+
+  it('rejects unsupported carve profile names', () => {
+    expect(() => resolveConfig({ title: 'Carve', carve: { profile: 'unknown' } })).toThrow(
+      /unsupported carve\.profile/,
+    )
   })
 
   it('resolves configured playground paths relative to the site root', async () => {

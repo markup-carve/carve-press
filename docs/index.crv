@@ -1,0 +1,40 @@
+---
+title: CarvePress
+description: Documentation for CarvePress, built from Carve source by CarvePress.
+layout: home
+hero:
+  name: CarvePress
+  text: Carve-native static documentation
+  tagline: Author in Carve, validate links at build time, and publish static HTML with no client framework in the output.
+  actions:
+    - theme: brand
+      text: Get Started
+      link: /guide/getting-started
+    - theme: alt
+      text: Compare Syntax
+      link: /guide/carve-syntax
+features:
+  - title: Carve markup first
+    details: The docs source uses .crv files, Carve delimiter rules, heading references, definition lists, admonitions, and includes.
+  - title: Static output
+    details: CarvePress writes HTML, CSS, and small progressive scripts without bundling a client framework.
+  - title: Validated builds
+    details: Internal links, navigation entries, frontmatter page links, and cross-references fail the build when they drift.
+  - title: Live compare blocks
+    details: A compare block keeps Carve source beside rendered HTML for syntax documentation that proves itself.
+  - title: Browser playground
+    details: Playground blocks ship the Carve engine to the browser only on pages that need live editing.
+  - title: LLM and search artifacts
+    details: Search indexes, sitemaps, feeds, and llms.txt are generated as build extensions.
+---
+
+{#dogfood}
+# Dogfood
+
+This site is the demo: it is authored in Carve, built by CarvePress, and deployed to GitHub Pages at [the published site](https://markup-carve.github.io/carve-press/).
+
+Start with [Getting Started](/guide/getting-started), then use [Carve Syntax](/guide/carve-syntax) to check the markup rules that differ from Markdown.
+
+::: note "For assistants"
+Generated `llms.txt` is enabled for this site, so an assistant can read a compact route list instead of crawling the HTML.
+:::

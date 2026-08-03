@@ -1,0 +1,18 @@
+.home-hero {
+  border-bottom: 1px solid var(--cp-border);
+}
+
+.home-features {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.content table td:first-child,
+.content table th:first-child {
+  white-space: nowrap;
+}
+
+.callout-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}

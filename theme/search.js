@@ -1,66 +1,73 @@
-(() => {
-  const root = document.querySelector('[data-search-root]')
-  if (!root) return
+import MiniSearch from './minisearch.js'
 
+const root = document.querySelector('[data-search-root]')
+
+if (root) {
   const input = root.querySelector('[data-search-input]')
   const panel = root.querySelector('[data-search-panel]')
   const resultsList = root.querySelector('[data-search-results]')
   const status = root.querySelector('[data-search-status]')
-  if (!(input instanceof HTMLInputElement) || !panel || !resultsList || !status) return
 
+  if (
+    input instanceof HTMLInputElement &&
+    panel instanceof HTMLElement &&
+    resultsList instanceof HTMLElement &&
+    status instanceof HTMLElement
+  ) {
+    initSearch(root, input, panel, resultsList, status)
+  }
+}
+
+function initSearch(root, input, panel, resultsList, status) {
   root.hidden = false
 
-  let records = null
+  let index = null
   let loading = null
+  let recordsById = new Map()
   let results = []
   let active = -1
 
   const indexUrl = root.getAttribute('data-search-index') || '/assets/search-index.json'
-  const siteRoot = (() => {
-    const url = new URL(indexUrl, location.href)
-    const marker = '/assets/'
-    const cut = url.pathname.lastIndexOf(marker)
-    return cut === -1 ? '/' : url.pathname.slice(0, cut + 1)
-  })()
+  const siteRoot = siteRootFromIndex(indexUrl)
 
-  const linkFor = (record) => {
+  function linkFor(record) {
     const route = String(record.route || '/').replace(/^\/+/, '')
     const slug = String(record.slug || '')
     const path = route === '' ? siteRoot : `${siteRoot}${route}`
     return `${path}#${encodeURIComponent(slug)}`
   }
 
-  const load = async () => {
-    if (records) return records
+  async function load() {
+    if (index) return index
     loading ||= fetch(indexUrl)
       .then((response) => {
         if (!response.ok) throw new Error(`search index ${response.status}`)
         return response.json()
       })
-      .then((payload) => (Array.isArray(payload.records) ? payload.records : []))
+      .then((payload) => {
+        const records = Array.isArray(payload.records) ? payload.records : []
+        recordsById = new Map(records.map((record) => [record.id, record]))
+        const next = new MiniSearch({
+          fields: ['title', 'heading', 'text'],
+          storeFields: ['id'],
+          searchOptions: {
+            boost: { title: 6, heading: 3, text: 1 },
+            fuzzy: 0.2,
+            prefix: true,
+          },
+        })
+        next.addAll(records)
+        return next
+      })
       .catch(() => {
         status.textContent = 'Search unavailable'
-        return []
+        return new MiniSearch({ fields: ['title', 'heading', 'text'] })
       })
-    records = await loading
-    return records
+    index = await loading
+    return index
   }
 
-  const score = (record, terms) => {
-    const title = String(record.title || '').toLowerCase()
-    const heading = String(record.heading || '').toLowerCase()
-    const text = String(record.text || '').toLowerCase()
-    let total = 0
-    for (const term of terms) {
-      if (heading.includes(term)) total += 8
-      if (title.includes(term)) total += 4
-      if (text.includes(term)) total += 1
-      if (!heading.includes(term) && !title.includes(term) && !text.includes(term)) return 0
-    }
-    return total
-  }
-
-  const setActive = (next) => {
+  function setActive(next) {
     active = next
     const links = [...resultsList.querySelectorAll('a')]
     for (const [i, link] of links.entries()) {
@@ -69,7 +76,7 @@
     }
   }
 
-  const render = () => {
+  function render() {
     resultsList.textContent = ''
     for (const record of results) {
       const item = document.createElement('li')
@@ -93,20 +100,19 @@
     setActive(results.length === 0 ? -1 : 0)
   }
 
-  const search = async () => {
-    const terms = input.value.toLowerCase().trim().split(/\s+/).filter(Boolean)
-    if (terms.length === 0) {
+  async function search() {
+    const query = input.value.trim()
+    if (query === '') {
       results = []
       render()
       return
     }
     const docs = await load()
     results = docs
-      .map((record) => ({ record, score: score(record, terms) }))
-      .filter((hit) => hit.score > 0)
-      .sort((a, b) => b.score - a.score)
+      .search(query)
       .slice(0, 8)
-      .map((hit) => hit.record)
+      .map((hit) => recordsById.get(hit.id))
+      .filter((record) => record !== undefined)
     render()
   }
 
@@ -144,4 +150,11 @@
       input.focus()
     }
   })
-})()
+}
+
+function siteRootFromIndex(indexUrl) {
+  const url = new URL(indexUrl, location.href)
+  const marker = '/assets/'
+  const cut = url.pathname.lastIndexOf(marker)
+  return cut === -1 ? '/' : url.pathname.slice(0, cut + 1)
+}

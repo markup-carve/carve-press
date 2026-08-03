@@ -2,6 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import type { SiteExtension } from '../config.js'
 import type { RenderedPage } from '../render/page.js'
+import { publicRenderedPages } from './derived.js'
 
 export interface SearchIndexOptions {
   filename?: string
@@ -50,7 +51,7 @@ export function searchIndex(opts: SearchIndexOptions = {}): SiteExtension {
       bus.on(
         'buildCompleted',
         async ({ rendered, outDir }) => {
-          const records = rendered
+          const records = publicRenderedPages(rendered)
             .filter((page) => !excluded.has(page.searchDoc.route))
             .flatMap(recordsFromPage)
           const payload: SearchIndexPayload = { version: 1, records }

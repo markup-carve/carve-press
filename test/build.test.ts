@@ -57,6 +57,12 @@ describe('buildSite', () => {
     expect(actual).toBe(expected)
   })
 
+  it('writes the MiniSearch browser module for the search client', async () => {
+    const { outDir } = await build()
+    const actual = await readFile(resolve(outDir, 'assets/minisearch.js'), 'utf8')
+    expect(actual).toContain('export { MiniSearch as default }')
+  })
+
   it('writes the shipped table overflow client script', async () => {
     const { outDir } = await build()
     const actual = await readFile(resolve(outDir, 'assets/table-scroll.js'), 'utf8')
@@ -64,10 +70,24 @@ describe('buildSite', () => {
     expect(actual).toBe(expected)
   })
 
+  it('writes the shipped code copy client script', async () => {
+    const { outDir } = await build()
+    const actual = await readFile(resolve(outDir, 'assets/code-copy.js'), 'utf8')
+    const expected = await readFile(resolve(import.meta.dirname, '../theme/code-copy.js'), 'utf8')
+    expect(actual).toBe(expected)
+  })
+
   it('writes the shipped outline client script', async () => {
     const { outDir } = await build()
     const actual = await readFile(resolve(outDir, 'assets/outline.js'), 'utf8')
     const expected = await readFile(resolve(import.meta.dirname, '../theme/outline.js'), 'utf8')
+    expect(actual).toBe(expected)
+  })
+
+  it('writes the shipped mobile navigation client script', async () => {
+    const { outDir } = await build()
+    const actual = await readFile(resolve(outDir, 'assets/nav.js'), 'utf8')
+    const expected = await readFile(resolve(import.meta.dirname, '../theme/nav.js'), 'utf8')
     expect(actual).toBe(expected)
   })
 
@@ -152,6 +172,7 @@ describe('buildSite', () => {
     const { outDir } = await build({ search: false })
     await expect(readFile(resolve(outDir, 'assets/search-index.json'), 'utf8')).rejects.toThrow()
     await expect(readFile(resolve(outDir, 'assets/search.js'), 'utf8')).rejects.toThrow()
+    await expect(readFile(resolve(outDir, 'assets/minisearch.js'), 'utf8')).rejects.toThrow()
     const html = await readFile(resolve(outDir, 'start/index.html'), 'utf8')
     expect(html).not.toContain('class="site-search"')
     expect(html).not.toContain('/assets/search.js')
@@ -220,6 +241,70 @@ describe('buildSite', () => {
     expect(html).toContain('<h1>Home ')
   })
 
+  it('prefixes root-relative content links and images under a non-root base exactly once', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-base-'))
+    const srcDir = resolve(root, 'docs')
+    await mkdir(srcDir)
+    await writeFile(
+      resolve(srcDir, 'index.crv'),
+      ['---', 'title: Home', '---', '', '# Home', '', '[Start](/start)', '', '![Logo](/logo.png)'].join('\n'),
+    )
+    await writeFile(resolve(srcDir, 'start.crv'), ['---', 'title: Start', '---', '', '# Start'].join('\n'))
+
+    const { outDir } = await build({ srcDir, base: '/carve-press/', themeConfig: { sidebar: {} } }, root)
+    const html = await readFile(resolve(outDir, 'index.html'), 'utf8')
+
+    expect(html).toContain('<a href="/carve-press/start">Start</a>')
+    expect(html).toContain('<img src="/carve-press/logo.png" alt="Logo" loading="lazy" decoding="async">')
+    expect(html).not.toContain('/carve-press/carve-press/')
+  })
+
+  it('reports a dead content link as authored under a non-root base', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-base-dead-'))
+    const srcDir = resolve(root, 'docs')
+    await mkdir(srcDir)
+    await writeFile(
+      resolve(srcDir, 'index.crv'),
+      ['---', 'title: Home', '---', '', '# Home', '', '[Missing](/missing)'].join('\n'),
+    )
+
+    await expect(
+      build({ srcDir, base: '/carve-press/', themeConfig: { sidebar: {} } }, root),
+    ).rejects.toThrow(/index\.crv: \/missing/)
+  })
+
+  it('emits a built-in 404 page outside the route table and search index', async () => {
+    const { result, outDir } = await build()
+    const html = await readFile(resolve(outDir, '404.html'), 'utf8')
+    const search = JSON.parse(await readFile(resolve(outDir, 'assets/search-index.json'), 'utf8')) as {
+      records: { route: string }[]
+    }
+
+    expect(html).toContain('<title>Page not found | Fixture</title>')
+    expect(html).toContain('<p>The page you requested could not be found. <a href="/">Return home</a>.</p>')
+    expect(result.routes).not.toContain('/404')
+    expect(search.records.map((record) => record.route)).not.toContain('/404')
+  })
+
+  it('uses content 404.crv without adding it to normal outputs', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-404-'))
+    const srcDir = resolve(root, 'docs')
+    await mkdir(srcDir)
+    await writeFile(resolve(srcDir, 'index.crv'), ['---', 'title: Home', '---', '', '# Home'].join('\n'))
+    await writeFile(
+      resolve(srcDir, '404.crv'),
+      ['---', 'title: Missing', '---', '', 'Custom missing page. [Home](/).'].join('\n'),
+    )
+
+    const { result, outDir } = await build({ srcDir, themeConfig: { sidebar: {} } }, root)
+    const html = await readFile(resolve(outDir, '404.html'), 'utf8')
+
+    expect(html).toContain('<title>Missing | Fixture</title>')
+    expect(html).toContain('Custom missing page')
+    expect(result.routes).toEqual(['/'])
+    await expect(readFile(resolve(outDir, '404/index.html'), 'utf8')).rejects.toThrow()
+  })
+
   it('renders prev/next from sidebar order', async () => {
     const { outDir } = await build({
       themeConfig: {
@@ -243,6 +328,209 @@ describe('buildSite', () => {
     expect(html).toContain('<span class="page-nav__title">Home</span>')
     expect(html).toContain('<a class="page-nav__next" rel="next" href="/guide/">')
     expect(html).toContain('<span class="page-nav__title">Guide</span>')
+  })
+
+  it('applies supported per-page frontmatter controls', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-page-meta-'))
+    const srcDir = resolve(root, 'docs')
+    await mkdir(srcDir)
+    await writeFile(resolve(srcDir, 'index.crv'), ['---', 'title: Home', '---', '', '# Home'].join('\n'))
+    await writeFile(
+      resolve(srcDir, 'start.crv'),
+      [
+        '---',
+        'title: Start',
+        'description: Page description',
+        'head:',
+        '  - - meta',
+        '    - name: robots',
+        '      content: noindex',
+        'image: /og.png',
+        'outline: false',
+        'aside: false',
+        'sidebar: false',
+        'prev: false',
+        'next: { text: Custom, link: / }',
+        'editLink: false',
+        'lastUpdated: false',
+        '---',
+        '',
+        '# Start',
+        '## Hidden',
+      ].join('\n'),
+    )
+
+    const { outDir } = await build(
+      {
+        srcDir,
+        base: '/docs/',
+        themeConfig: {
+          editLink: { pattern: 'https://example.com/edit/:path', text: 'Edit' },
+          lastUpdated: true,
+          sidebar: { '/': [{ text: 'G', items: [{ text: 'Start', link: '/start' }] }] },
+        },
+      },
+      root,
+    )
+    const html = await readFile(resolve(outDir, 'start/index.html'), 'utf8')
+
+    expect(html).toContain('<meta name="description" content="Page description">')
+    expect(html).toContain('<meta property="og:image" content="/docs/og.png">')
+    expect(html).toContain('<meta name="twitter:card" content="summary_large_image">')
+    expect(html).toContain('<meta name="robots" content="noindex">')
+    expect(html).not.toContain('class="sidebar"')
+    expect(html).not.toContain('class="outline"')
+    expect(html).not.toContain('rel="prev"')
+    expect(html).toContain('<a class="page-nav__next" rel="next" href="/docs/">')
+    expect(html).not.toContain('class="edit-link"')
+    expect(html).not.toContain('class="last-updated"')
+  })
+
+  it('fails on invalid per-page frontmatter values with page and key', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-bad-page-meta-'))
+    const srcDir = resolve(root, 'docs')
+    await mkdir(srcDir)
+    await writeFile(
+      resolve(srcDir, 'index.crv'),
+      ['---', 'title: Bad', 'outline: wide', '---', '', '# Bad'].join('\n'),
+    )
+
+    await expect(build({ srcDir, themeConfig: { sidebar: {} } }, root)).rejects.toMatchObject({
+      srcPath: 'index.crv',
+      message: 'frontmatter: invalid outline',
+    })
+  })
+
+  it('generates sidebar groups from pages under a route prefix', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-generated-sidebar-'))
+    const srcDir = resolve(root, 'docs')
+    await mkdir(resolve(srcDir, 'guide/nested'), { recursive: true })
+    await writeFile(resolve(srcDir, 'index.crv'), ['---', 'title: Home', '---', '', '# Home'].join('\n'))
+    await writeFile(resolve(srcDir, 'guide/index.crv'), ['---', 'title: Guide', '---', '', '# Guide'].join('\n'))
+    await writeFile(resolve(srcDir, 'guide/a.crv'), ['---', 'title: A', 'order: 2', '---', '', '# A'].join('\n'))
+    await writeFile(resolve(srcDir, 'guide/b.crv'), ['---', 'title: B', 'order: 1', '---', '', '# B'].join('\n'))
+    await writeFile(resolve(srcDir, 'guide/hidden.crv'), ['---', 'title: Hidden', 'sidebar: false', '---', '', '# Hidden'].join('\n'))
+    await writeFile(resolve(srcDir, 'guide/draft.crv'), ['---', 'title: Draft', 'draft: true', '---', '', '# Draft'].join('\n'))
+    await writeFile(resolve(srcDir, 'guide/nested/index.crv'), ['# Nested'].join('\n'))
+
+    const { outDir } = await build(
+      {
+        srcDir,
+        themeConfig: {
+          sidebar: { '/guide/': [{ text: 'Guide', generate: '/guide/' }] },
+        },
+      },
+      root,
+    )
+    const html = await readFile(resolve(outDir, 'guide/index.html'), 'utf8')
+
+    expect(html.indexOf('href="/guide/"')).toBeLessThan(html.indexOf('href="/guide/b"'))
+    expect(html.indexOf('href="/guide/b"')).toBeLessThan(html.indexOf('href="/guide/a"'))
+    expect(html).toContain('<a href="/guide/nested/">Nested</a>')
+    expect(html).not.toContain('/guide/hidden')
+    expect(html).not.toContain('/guide/draft')
+  })
+
+  it('renders locale-specific chrome and switches to matching translated routes', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-locales-'))
+    const srcDir = resolve(root, 'docs')
+    await mkdir(resolve(srcDir, 'de'), { recursive: true })
+    await writeFile(resolve(srcDir, 'index.crv'), ['---', 'title: Home', '---', '', '# Home'].join('\n'))
+    await writeFile(resolve(srcDir, 'start.crv'), ['---', 'title: Start', '---', '', '# Start'].join('\n'))
+    await writeFile(resolve(srcDir, 'de/index.crv'), ['---', 'title: Startseite', '---', '', '# Startseite'].join('\n'))
+    await writeFile(
+      resolve(srcDir, 'de/start.crv'),
+      ['---', 'title: Start DE', '---', '', '# Start DE', '## Abschnitt', '', '```js', 'console.log(1)', '```'].join('\n'),
+    )
+
+    const { outDir } = await build(
+      {
+        srcDir,
+        themeConfig: {
+          sidebar: { '/': [{ text: 'G', items: [{ text: 'Start', link: '/start' }] }] },
+        },
+        locales: {
+          '/': { lang: 'en', label: 'English' },
+          '/de/': {
+            lang: 'de-DE',
+            label: 'Deutsch',
+            title: 'Fixture DE',
+            description: 'DE description',
+            themeConfig: {
+              labels: {
+                search: 'Suche',
+                previous: 'Zurueck',
+                next: 'Weiter',
+                lastUpdated: 'Aktualisiert',
+                onThisPage: 'Auf dieser Seite',
+                copy: 'Kopieren',
+                copied: 'Kopiert',
+                menu: 'Menue',
+              },
+            },
+          },
+        },
+      },
+      root,
+    )
+    const html = await readFile(resolve(outDir, 'de/start/index.html'), 'utf8')
+
+    expect(html).toContain('<html lang="de-DE">')
+    expect(html).toContain('<title>Start DE | Fixture DE</title>')
+    expect(html).toContain('placeholder="Suche"')
+    expect(html).toContain('aria-label="Auf dieser Seite"')
+    expect(html).toContain('>Kopieren</button>')
+    expect(html).toContain('"copied":"Kopiert"')
+    expect(html).toContain('href="/start">English</a>')
+    expect(html).toContain('href="/de/start" aria-current="true">Deutsch</a>')
+  })
+
+  it('uses the built-in page layout without sidebar or outline', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-page-layout-'))
+    const srcDir = resolve(root, 'docs')
+    await mkdir(srcDir)
+    await writeFile(
+      resolve(srcDir, 'index.crv'),
+      ['---', 'title: Plain', 'layout: page', '---', '', '# Plain'].join('\n'),
+    )
+
+    const { outDir } = await build({ srcDir, themeConfig: { sidebar: {} } }, root)
+    const html = await readFile(resolve(outDir, 'index.html'), 'utf8')
+    expect(html).toContain('<main class="page-layout content">')
+    expect(html).not.toContain('class="sidebar"')
+    expect(html).not.toContain('class="outline"')
+  })
+
+  it('lets user layouts replace built-ins', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-custom-layout-'))
+    const srcDir = resolve(root, 'docs')
+    await mkdir(srcDir)
+    await writeFile(resolve(srcDir, 'index.crv'), ['---', 'title: Custom', '---', '', '# Custom'].join('\n'))
+
+    const { outDir } = await build(
+      {
+        srcDir,
+        themeConfig: { sidebar: {} },
+        layouts: {
+          doc: ({ rendered }: { rendered: { html: string } }) => `<!doctype html><main>${rendered.html}</main>`,
+        },
+      },
+      root,
+    )
+    const html = await readFile(resolve(outDir, 'index.html'), 'utf8')
+    expect(html).toContain('<!doctype html><main><section id="Custom">')
+    expect(html).not.toContain('class="site-header"')
+  })
+
+  it('fails on an unknown frontmatter layout and lists known layouts', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-unknown-layout-'))
+    const srcDir = resolve(root, 'docs')
+    await mkdir(srcDir)
+    await writeFile(resolve(srcDir, 'index.crv'), ['---', 'title: Custom', 'layout: missing', '---', '', '# Custom'].join('\n'))
+
+    await expect(build({ srcDir, themeConfig: { sidebar: {} } }, root)).rejects.toThrow(
+      /unknown layout "missing" \(known layouts: blog, doc, home, page\)/,
+    )
   })
 
   it('omits unavailable prev/next links and omits the block for pages outside the sidebar', async () => {
@@ -381,5 +669,32 @@ describe('buildSite', () => {
     await writeFile(resolve(root, 'carve-press.config.ts'), 'throw new Error("config boom")\n')
     await writeFile(resolve(root, 'carve-press.config.js'), 'export default { title: "ok" }\n')
     await expect(loadConfig(root)).rejects.toThrow(/config boom/)
+  })
+})
+
+describe('generated sidebars and frontmatter navigation overrides', () => {
+  it('writes 404.html when the matching sidebar group is generated', async () => {
+    const { outDir } = await build({
+      themeConfig: { sidebar: { '/': [{ text: 'Docs', generate: '/' }] } },
+    })
+    const notFound = await readFile(resolve(outDir, '404.html'), 'utf8')
+    // The generated group must be expanded by the time the 404 page renders,
+    // or the layout meets a group with no items.
+    expect(notFound).toContain('<nav class="sidebar"')
+    expect(notFound).toContain('Start')
+  })
+
+  it('rejects a frontmatter prev or next pointing at a route that does not exist', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-prevnext-'))
+    await writeFile(
+      resolve(root, 'index.crv'),
+      '---\ntitle: Home\nnext:\n  text: Nowhere\n  link: /nowhere\n---\n\n# Home\n',
+      'utf8',
+    )
+    const outDir = await mkdtemp(resolve(tmpdir(), 'cp-prevnext-out-'))
+
+    await expect(
+      buildSite({ root, config: { title: 'T', srcDir: root, outDir } }),
+    ).rejects.toThrow(/dead frontmatter prev\/next link/)
   })
 })

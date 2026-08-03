@@ -1,7 +1,7 @@
 import type { CarveExtension } from '@markup-carve/carve'
 import type { CarvePressConfig } from './config.js'
 import type { Page } from './content/discover.js'
-import { BuildError } from './errors.js'
+import { BuildError, SourceError } from './errors.js'
 import type { RenderedPage } from './render/page.js'
 
 export interface BuildEvents {
@@ -44,6 +44,7 @@ export class BuildEventBus {
       try {
         await handler(payload)
       } catch (error) {
+        if (error instanceof BuildError || error instanceof SourceError) throw error
         const reason = error instanceof Error ? error.message : String(error)
         throw new BuildError(`extension "${owner}" failed on ${String(event)}: ${reason}`)
       }

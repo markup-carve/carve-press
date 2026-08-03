@@ -1,0 +1,54 @@
+---
+title: Build-Time Validation
+description: CarvePress treats broken links and cross-references as build failures.
+date: '2026-07-31'
+tags: [validation, ci]
+excerpt: Internal route drift, nav drift, and cross-reference mistakes fail before a page is published.
+author: CarvePress Maintainers
+---
+
+# Build-Time Validation
+
+Documentation rots quietly. Someone renames a page, the old route keeps shipping, and a reader finds the broken link months later. CarvePress turns that into a build failure instead of a bug report.
+
+## What is checked
+
+Five things are validated against the resolved route table on every build:
+
+- Internal links in page content, compared after the base prefix is stripped again, so a dead link is reported the way the author wrote it.
+- Nav entries and sidebar entries, including items inside generated sidebar groups.
+- The `prev` and `next` frontmatter overrides. They are injected into the footer after the page HTML was validated, so without a check of their own they were the one internal link on a site that could point nowhere and still build green.
+- Carve cross-references (`</#section-id>`), which fail when the target heading is gone or its id changed.
+- Redirect targets, plus a check that no redirect source collides with a real page.
+
+## What a failure looks like
+
+Every dead link on the site is reported in one error, not one build cycle per link:
+
+``` txt "Build output"
+carve-press: 3 dead internal link(s)
+  guide/theme.crv: /guide/layouts
+  guide/deploying.crv: /guide/ci
+  blog/announcement.crv: /reference/cli-options
+```
+
+That shape is deliberate. A migration that moves forty pages should tell you about all forty broken links at once.
+
+## Turning it off
+
+``` ts "carve-press.config.ts"
+export default defineConfig({
+  title: 'Docs',
+  ignoreDeadLinks: true,
+})
+```
+
+::: warning "One switch, every check"
+`ignoreDeadLinks` disables all of the above together. A site that flips it on to unblock one release goes on to ship the next twenty broken links in silence, which is the failure the checks exist to prevent. Fix the link, or add a redirect for the route you removed.
+:::
+
+## In CI
+
+The Pages workflow for this repository builds the docs on pull requests without deploying them, so a broken link fails the check before anything reaches the published site. Deployment happens only on `main`.
+
+See [Writing Content](/guide/writing-content) for the author-facing rules and [Deploying](/guide/deploying) for the workflow itself.

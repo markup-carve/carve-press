@@ -5,6 +5,15 @@ export interface FlatLink {
   link: string
 }
 
+export function resolveByPrefix<T>(route: string, values: Record<string, T>): T | undefined {
+  let best: string | undefined
+  for (const key of Object.keys(values)) {
+    if (!route.startsWith(key)) continue
+    if (best === undefined || key.length > best.length) best = key
+  }
+  return best === undefined ? undefined : values[best]!
+}
+
 /**
  * Path-keyed sidebar lookup. The longest matching key wins, so a `/case-study/`
  * sidebar overrides the `/` one for routes beneath it.
@@ -13,12 +22,7 @@ export function resolveSidebar(
   route: string,
   sidebar: Record<string, SidebarGroup[]>,
 ): SidebarGroup[] {
-  let best: string | undefined
-  for (const key of Object.keys(sidebar)) {
-    if (!route.startsWith(key)) continue
-    if (best === undefined || key.length > best.length) best = key
-  }
-  return best === undefined ? [] : sidebar[best]!
+  return resolveByPrefix(route, sidebar) ?? []
 }
 
 function collect(items: SidebarItem[], out: FlatLink[]): void {

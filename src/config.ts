@@ -1,12 +1,17 @@
 import { statSync } from 'node:fs'
 import { resolve } from 'node:path'
-import type { CarveExtension } from '@markup-carve/carve'
+import { Profile, type CarveExtension } from '@markup-carve/carve'
 import type { LanguageRegistration } from '@shikijs/types'
 import { BuildError } from './errors.js'
 import type { BuildEventBus } from './events.js'
+import { blog, type BlogOptions } from './extensions/blog.js'
+import { feed, type FeedOptions } from './extensions/feed.js'
+import { redirects } from './extensions/redirects.js'
 import { searchIndex, type SearchIndexOptions } from './extensions/search-index.js'
+import type { Layout } from './layout/doc.js'
 
 export type HeadTag = [tag: string, attrs: Record<string, string>]
+export type CarvePreset = 'minimal' | 'docs' | 'full'
 
 export interface NavItem {
   text: string
@@ -26,20 +31,66 @@ export interface SidebarGroup {
   items: SidebarItem[]
 }
 
+export interface GeneratedSidebarGroup {
+  text: string
+  generate: string
+  collapsed?: boolean
+  order?: number
+}
+
+export type SidebarConfigGroup = SidebarGroup | GeneratedSidebarGroup
+
 export interface SocialLink {
-  icon: string
+  icon: string | { svg: string }
   link: string
+}
+
+export type ThemeLogo = string | { light: string; dark: string; alt?: string }
+
+export type OutlineSetting = false | number | [number, number] | 'deep'
+
+export interface ThemeLabels {
+  search: string
+  previous: string
+  next: string
+  lastUpdated: string
+  onThisPage: string
+  pageNotFound: string
+  copy: string
+  copied: string
+  menu: string
 }
 
 export interface ThemeConfig {
   nav: NavItem[]
   /** Path-keyed: the longest matching key prefix wins for a given route. */
-  sidebar: Record<string, SidebarGroup[]>
+  sidebar: Record<string, SidebarConfigGroup[]>
   socialLinks: SocialLink[]
+  logo?: ThemeLogo
+  siteTitle?: string | false
   editLink?: { pattern: string; text: string }
   footer?: { message: string; copyright: string }
   lastUpdated?: boolean
+  socialImage?: string
   outline: { level: [number, number] }
+  labels: ThemeLabels
+}
+
+export interface LocaleThemeConfig {
+  nav?: NavItem[]
+  sidebar?: Record<string, SidebarConfigGroup[]>
+  footer?: { message: string; copyright: string }
+  editLink?: { pattern: string; text: string }
+  outline?: { level: OutlineSetting }
+  labels?: Partial<ThemeLabels>
+}
+
+export interface LocaleConfig {
+  lang: string
+  label: string
+  title?: string
+  description?: string
+  themeConfig?: LocaleThemeConfig
 }
 
 /** A site-level extension: it subscribes to build events and writes derived files. */
@@ -53,6 +104,7 @@ export type ShikiLanguage = string | LanguageRegistration
 export interface ShikiConfig {
   langs: ShikiLanguage[]
   themes: { light: string; dark: string }
+  lineNumbers: boolean | number
 }
 
 export interface ThemeAssetsConfig {
@@ -90,11 +142,16 @@ export interface CarvePressConfig {
   head: HeadTag[]
   theme: ThemeAssetsConfig
   themeConfig: ThemeConfig
-  carve: { extensions: CarveExtension[]; profile?: string }
+  carve: { extensions: CarveExtension[]; profile?: Profile; preset: CarvePreset }
   shiki: ShikiConfig
   search: SearchConfig
+  blog?: Required<BlogOptions>
+  feed: false | Required<FeedOptions>
+  redirects: Record<string, string>
   playground: PlaygroundConfig
   extensions: SiteExtension[]
+  layouts: Record<string, Layout>
+  locales: Record<string, LocaleConfig>
 }
 
 export type UserConfig = Partial<
@@ -102,10 +159,15 @@ export type UserConfig = Partial<
 > & {
   title: string
   theme?: Partial<ThemeAssetsConfig>
-  themeConfig?: Partial<ThemeConfig>
-  carve?: Partial<CarvePressConfig['carve']>
+  themeConfig?: Partial<Omit<ThemeConfig, 'labels'>> & { labels?: Partial<ThemeLabels> }
+  carve?: { extensions?: CarveExtension[]; profile?: string | Profile; preset?: CarvePreset }
   shiki?: Partial<Omit<ShikiConfig, 'themes'>> & { themes?: Partial<ShikiConfig['themes']> }
   search?: false | SearchIndexOptions
+  blog?: BlogOptions
+  feed?: false | FeedOptions
+  redirects?: Record<string, string>
+  layouts?: Record<string, Layout>
+  locales?: Record<string, LocaleConfig>
   playground?: PlaygroundConfig
 }
 
@@ -131,6 +193,19 @@ const DEFAULT_SHIKI: ShikiConfig = {
     'xml',
   ],
   themes: { light: 'github-light', dark: 'github-dark' },
+  lineNumbers: false,
+}
+
+export const DEFAULT_LABELS: ThemeLabels = {
+  search: 'Search',
+  previous: 'Previous',
+  next: 'Next',
+  lastUpdated: 'Last updated',
+  onThisPage: 'On this page',
+  pageNotFound: 'Page not found',
+  copy: 'Copy',
+  copied: 'Copied',
+  menu: 'Menu',
 }
 
 function shikiLanguageName(lang: ShikiLanguage): string {
@@ -156,6 +231,64 @@ export function defineConfig(config: UserConfig): UserConfig {
  */
 function normalizeBase(base: string): string {
   const trimmed = base.replace(/^\/+/, '').replace(/\/+$/, '')
+  return trimmed === '' ? '/' : `/${trimmed}/`
+}
+
+function resolveProfile(profile: string | Profile | undefined): Profile | undefined {
+  if (profile === undefined) return undefined
+  if (profile instanceof Profile) return profile.onDisallowed(Profile.ACTION_ERROR)
+  const name = profile.toLowerCase()
+  const resolved =
+    name === 'full'
+      ? Profile.full()
+      : name === 'article'
+        ? Profile.article()
+        : name === 'comment'
+          ? Profile.comment()
+          : name === 'minimal'
+            ? Profile.minimal()
+            : undefined
+  if (resolved === undefined) {
+    throw new BuildError(`config: unsupported carve.profile "${profile}"`, [
+      'supported profiles: full, article, comment, minimal',
+    ])
+  }
+  return resolved.onDisallowed(Profile.ACTION_ERROR)
+}
+
+function normalizeRoute(route: string): string {
+  const withLeading = route.startsWith('/') ? route : `/${route}`
+  return withLeading.endsWith('/') ? withLeading : `${withLeading}/`
+}
+
+function normalizeBlog(blogConfig: BlogOptions | undefined): Required<BlogOptions> | undefined {
+  if (blogConfig === undefined) return undefined
+  const dir = typeof blogConfig.dir === 'string' ? blogConfig.dir.replace(/^\/+|\/+$/g, '') : ''
+  if (dir === '') throw new BuildError('config: blog.dir is required')
+  const route = normalizeRoute(blogConfig.route ?? `/${dir}/`)
+  return {
+    dir,
+    route,
+    title: blogConfig.title ?? 'Blog',
+    description: blogConfig.description ?? '',
+    perPage: blogConfig.perPage ?? 10,
+    tagsRoute: normalizeRoute(blogConfig.tagsRoute ?? `${route}tags/`),
+  }
+}
+
+function normalizeFeed(feedConfig: false | FeedOptions | undefined): false | Required<FeedOptions> {
+  if (feedConfig === false || feedConfig === undefined) return false
+  return {
+    filename: feedConfig.filename ?? 'feed.xml',
+    title: feedConfig.title ?? '',
+    description: feedConfig.description ?? '',
+    limit: feedConfig.limit ?? 20,
+    type: feedConfig.type ?? 'rss',
+  }
+}
+
+function normalizeLocaleKey(key: string): string {
+  const trimmed = key.replace(/^\/+/, '').replace(/\/+$/, '')
   return trimmed === '' ? '/' : `/${trimmed}/`
 }
 
@@ -219,6 +352,8 @@ export function resolveConfig(user: UserConfig, root?: string): CarvePressConfig
           filename: user.search?.filename ?? 'search-index.json',
           exclude: user.search?.exclude ?? [],
         }
+  const blogConfig = normalizeBlog(user.blog)
+  const feedConfig = normalizeFeed(user.feed)
   return {
     title: user.title,
     description: user.description,
@@ -239,14 +374,19 @@ export function resolveConfig(user: UserConfig, root?: string): CarvePressConfig
       nav: user.themeConfig?.nav ?? [],
       sidebar: user.themeConfig?.sidebar ?? {},
       socialLinks: user.themeConfig?.socialLinks ?? [],
+      logo: user.themeConfig?.logo,
+      siteTitle: user.themeConfig?.siteTitle,
       editLink: user.themeConfig?.editLink,
       footer: user.themeConfig?.footer,
       lastUpdated: user.themeConfig?.lastUpdated,
+      socialImage: user.themeConfig?.socialImage,
       outline: user.themeConfig?.outline ?? { level: [2, 3] },
+      labels: { ...DEFAULT_LABELS, ...(user.themeConfig?.labels ?? {}) },
     },
     carve: {
       extensions: user.carve?.extensions ?? [],
-      profile: user.carve?.profile,
+      preset: user.carve?.preset ?? 'docs',
+      profile: resolveProfile(user.carve?.profile),
     },
     shiki: {
       // Additive, not a replacement. Naming one extra language should not cost a
@@ -257,9 +397,23 @@ export function resolveConfig(user: UserConfig, root?: string): CarvePressConfig
         light: user.shiki?.themes?.light ?? DEFAULT_SHIKI.themes.light,
         dark: user.shiki?.themes?.dark ?? DEFAULT_SHIKI.themes.dark,
       },
+      lineNumbers: user.shiki?.lineNumbers ?? DEFAULT_SHIKI.lineNumbers,
     },
     search,
+    blog: blogConfig,
+    feed: feedConfig,
+    redirects: user.redirects ?? {},
     playground: resolvePlaygroundConfig(user.playground, root),
-    extensions: [...(search === false ? [] : [searchIndex(search)]), ...(user.extensions ?? [])],
+    extensions: [
+      ...(blogConfig === undefined ? [] : [blog(blogConfig)]),
+      ...(search === false ? [] : [searchIndex(search)]),
+      ...(feedConfig === false ? [] : [feed(feedConfig)]),
+      ...(Object.keys(user.redirects ?? {}).length === 0 ? [] : [redirects(user.redirects ?? {})]),
+      ...(user.extensions ?? []),
+    ],
+    layouts: user.layouts ?? {},
+    locales: Object.fromEntries(
+      Object.entries(user.locales ?? {}).map(([key, locale]) => [normalizeLocaleKey(key), locale]),
+    ),
   }
 }

@@ -1,3 +1,4 @@
+import { Profile } from '@markup-carve/carve'
 import { describe, it, expect } from 'vitest'
 import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -18,6 +19,7 @@ const ctx = {
   extensions: [],
   outlineLevels: [2, 3] as [number, number],
   includeRoots: [resolve(import.meta.dirname, 'fixtures')],
+  base: '/',
 }
 
 function idsFromHtml(html: string): string[] {
@@ -73,6 +75,23 @@ describe('renderPage', () => {
   it('throws a SourceError when a page has no title and no H1', () => {
     const p = { ...page('just text\n'), frontmatter: {} }
     expect(() => renderPage(p, ctx)).toThrow(/no frontmatter title and no H1/)
+  })
+
+  it('throws a SourceError when a carve profile rejects the page', () => {
+    const profile = Profile.article().onDisallowed(Profile.ACTION_ERROR)
+
+    expect(() =>
+      renderPage(page('# T\n\n```=html\n<strong>raw</strong>\n```\n'), { ...ctx, profile }),
+    ).toThrow(/profile:/)
+  })
+
+  it('enforces the profile max length that the engine checks before parsing', () => {
+    const profile = Profile.article().onDisallowed(Profile.ACTION_ERROR).setMaxLength(16)
+
+    expect(() => renderPage(page('# T\n\nplenty of prose here\n'), { ...ctx, profile })).toThrow(
+      /maximum length of 16 bytes/,
+    )
+    expect(() => renderPage(page('# T\n'), { ...ctx, profile })).not.toThrow()
   })
 
   it('reports an include failure at the original file and line', () => {

@@ -1,0 +1,80 @@
+---
+title: Code Blocks
+description: Demonstrations of Shiki highlighting, titles, highlighted lines, notation comments, line numbers, code groups, and copy buttons.
+order: 4
+---
+
+# Code Blocks
+
+CarvePress wraps fenced code in a consistent code-block UI, highlights with Shiki, and adds a copy button.
+
+## Highlighting
+
+```ts "TypeScript"
+import { defineConfig } from '@markup-carve/carve-press'
+
+export default defineConfig({
+  title: 'Docs',
+})
+```
+
+## Highlight Lines
+
+Use `hl` for one-based lines and ranges.
+
+{hl="2,4-5"}
+```ts "Highlighted Lines"
+const site = 'CarvePress'
+const markup = 'Carve'
+const output = 'static html'
+console.log(site)
+console.log(markup, output)
+```
+
+## Line Numbers
+
+Use `.line-numbers` on one fence, or set `shiki.lineNumbers` globally.
+
+{.line-numbers start="10"}
+```js "Numbered"
+export function build() {
+  return 'site'
+}
+```
+
+Use `.no-line-numbers` to opt out of global numbering.
+
+{.no-line-numbers}
+```txt "Plain Text"
+This block stays unhighlighted and unnumbered.
+```
+
+## Shiki Notation
+
+Shiki notation comments style diffs, focused lines, highlighted lines, and errors. The copy payload strips the notation comments.
+
+```ts "Notation"
+const removed = false // [!code --]
+const added = true // [!code ++]
+const focused = 'important' // [!code focus]
+const marked = 'read this' // [!code highlight]
+throw new Error('visible failure') // [!code error]
+```
+
+## Code Groups
+
+Group alternatives with `::: code-group`.
+
+::: code-group
+```bash [npm]
+npm install --save-dev @markup-carve/carve-press
+```
+
+```bash [pnpm]
+pnpm add -D @markup-carve/carve-press
+```
+:::
+
+## Copy Button
+
+Every block above has a copy button in the rendered site. The label can be localized through `themeConfig.labels.copy` and `copied`; see [Internationalization](/guide/i18n).

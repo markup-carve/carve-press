@@ -4,6 +4,10 @@ let mermaidSeq = 0
 let chartSeq = 0
 const scriptPromises = new Map()
 
+function themeLabel(key, fallback) {
+  return window.__carvePressLabels?.[key] ?? fallback
+}
+
 const EXTENSION_HOOKS = new Set([
   'afterParse',
   'beforeRender',
@@ -183,7 +187,7 @@ function setButtonStatus(button, text) {
   window.clearTimeout(button._carveCopyTimer)
   button.textContent = text
   button._carveCopyTimer = window.setTimeout(() => {
-    button.textContent = button.dataset.copyLabel ?? 'Copy'
+    button.textContent = button.dataset.copyLabel ?? themeLabel('copy', 'Copy')
   }, 1400)
 }
 
@@ -191,8 +195,8 @@ function copyButton(label, getText) {
   const button = document.createElement('button')
   button.type = 'button'
   button.className = 'carve-playground__copy'
-  button.dataset.copyLabel = 'Copy'
-  button.textContent = 'Copy'
+  button.dataset.copyLabel = themeLabel('copy', 'Copy')
+  button.textContent = themeLabel('copy', 'Copy')
   button.setAttribute('aria-label', label)
   button.addEventListener('click', async () => {
     if (!navigator.clipboard?.writeText) {
@@ -201,7 +205,7 @@ function copyButton(label, getText) {
     }
     try {
       await navigator.clipboard.writeText(getText())
-      setButtonStatus(button, 'Copied')
+      setButtonStatus(button, themeLabel('copied', 'Copied'))
     } catch (error) {
       console.warn(`Carve playground copy failed: ${errorMessage(error)}`)
       setButtonStatus(button, 'Failed')
