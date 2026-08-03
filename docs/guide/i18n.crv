@@ -30,3 +30,20 @@ When at least two locales are configured, the header shows a locale switcher. It
 
 This dogfood site includes a small [German landing page](/de/) so the switcher has a concrete target.
 
+
+## What Else Follows The Locale
+
+Configuring `locales` changes more than the chrome:
+
+:: Search
+:  Every index record carries the locale of the page it came from, and the client filters to the locale of the page the reader is on. One index file still serves the whole site.
+
+:: Feeds
+:  One feed per locale, written to `<prefix>feed.xml`, and each page links the feed for its own locale rather than the site-wide one. A locale with no pages of its own gets no feed.
+
+:: Sitemap
+:  Pages that exist in more than one locale carry `xhtml:link` alternates with each locale's `lang`. Only translations that were actually written are advertised - claiming one that does not exist earns a crawl error rather than a ranking.
+
+::: warning "Blog collections are not localized yet"
+A blog collection is a single directory. Posts under `de/blog/` are not part of a collection configured as `blog`, so they do not appear in that blog's index, its tag pages, or its feed. Feeds split by locale correctly when sourced from all pages.
+:::

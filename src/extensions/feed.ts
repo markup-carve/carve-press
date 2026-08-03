@@ -4,6 +4,7 @@ import type { CarvePressConfig, SiteExtension } from '../config.js'
 import { BuildError } from '../errors.js'
 import type { RenderedPage } from '../render/page.js'
 import { absoluteRouteUrl, escapeXml } from './url.js'
+import { localePrefixFor, localePrefixes } from '../locales.js'
 import { publicRenderedPages } from './derived.js'
 
 export interface FeedOptions {
@@ -88,11 +89,26 @@ export function feed(opts: Required<FeedOptions>): SiteExtension {
         'buildCompleted',
         async ({ rendered, outDir }) => {
           if (config === undefined || config.feed === false) return
-          const items = await feedPages(rendered, config)
-          const xml = opts.type === 'atom' ? atom(items, config, opts) : rss(items, config, opts)
-          const outPath = resolve(outDir, opts.filename)
-          await mkdir(dirname(outPath), { recursive: true })
-          await writeFile(outPath, xml, 'utf8')
+          const siteConfig = config
+          const prefixes = localePrefixes(siteConfig)
+          const items = await feedPages(rendered, siteConfig)
+
+          // One feed per locale, at <prefix>feed.xml. A single mixed feed
+          // subscribes a reader to languages they did not ask for, and the
+          // per-page head link points at the feed for that page's locale.
+          for (const prefix of prefixes) {
+            const localeItems = items.filter(
+              ({ page }) => localePrefixFor(page.searchDoc.route, prefixes) === prefix,
+            )
+            if (prefix !== '/' && localeItems.length === 0) continue
+            const xml =
+              opts.type === 'atom'
+                ? atom(localeItems, siteConfig, opts)
+                : rss(localeItems, siteConfig, opts)
+            const outPath = resolve(outDir, prefix.replace(/^\//, ''), opts.filename)
+            await mkdir(dirname(outPath), { recursive: true })
+            await writeFile(outPath, xml, 'utf8')
+          }
         },
         'feed',
       )

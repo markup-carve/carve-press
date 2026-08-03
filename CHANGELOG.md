@@ -2,6 +2,9 @@
 
 ### Added
 
+- Locale-aware derived outputs: search records carry their locale and the client filters to the reader's, feeds are written per locale with each page linking its own, and sitemap entries carry `hreflang` alternates for translations that exist.
+- A scale fixture in `test/perf` covering a 300-page full build and an incremental dev rebuild, asserting work done rather than wall-clock time.
+
 - `robots.txt` is generated, advertising the sitemap when `hostname` is set. `robots: false` disables it, and a `robots.txt` in `publicDir` is never overwritten.
 
 - `rewrites`: publish a page at a route that does not follow its source path, by exact path or directory pattern.

@@ -6,7 +6,7 @@ layout: comparison
 
 # Comparison
 
-This table is a hand-maintained snapshot, not a benchmark. Check the project docs directly: [VitePress](https://vitepress.dev/), [Docusaurus](https://docusaurus.io/), [Astro Starlight](https://starlight.astro.build/), and [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/). Corrections are welcome in [an issue](https://github.com/markup-carve/carve-press/issues).
+This table is a hand-maintained snapshot, last checked on 2026-08-03, not a benchmark. Every project here moves faster than a table written by hand, so treat a cell as a claim about that date and check the source before relying on it. Check the project docs directly: [VitePress](https://vitepress.dev/), [Docusaurus](https://docusaurus.io/), [Astro Starlight](https://starlight.astro.build/), and [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/). Corrections are welcome in [an issue](https://github.com/markup-carve/carve-press/issues).
 
 | Capability | CarvePress | VitePress | Docusaurus | Astro Starlight | MkDocs Material |
 | --- | --- | --- | --- | --- | --- |
@@ -45,6 +45,10 @@ Being honest about the row above: only VitePress lacks built-in redirects. Astro
 - No doc versioning, where Docusaurus has it in core.
 - No plugin ecosystem worth the name yet, and islands are mount points rather than components written inline in the page, which is what Vue-in-Markdown or MDX give you.
 - No translation workflow beyond prefix locales and a label map.
+
+::: note "Blog collections are single-directory"
+A blog collection is one directory, so a localized site with posts under `de/blog/` does not get them in the German blog index or feed yet. Feeds split by locale correctly when they are sourced from all pages; per-locale blog collections are not implemented.
+:::
 
 ::: note "How to read this"
 Rows are coarse capabilities, not fine print, and every project here moves faster than a hand-written table. Where a cell says "not documented", it means the project's own documentation does not present it as a built-in - a plugin may well cover it. Where CarvePress is behind, the row says so.

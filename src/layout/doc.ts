@@ -278,7 +278,12 @@ function themeToggleHtml(): string {
 function searchHtml(ctx: LayoutContext): string {
   if (ctx.config.search === false) return ''
   const label = labels(ctx).search
-  return `<div class="site-search" data-search-root data-search-index="${escapeAttr(
+  // The client filters the index by this: one index file holds every locale,
+  // and a German reader searching should not be handed English pages.
+  const locale = ctx.locale?.prefix ?? '/'
+  return `<div class="site-search" data-search-root data-search-locale="${escapeAttr(
+    locale,
+  )}" data-search-index="${escapeAttr(
     withBase(ctx.config.base, `/assets/${ctx.config.search.filename}`),
   )}" hidden><label class="site-search__label" for="site-search-input">${escapeText(
     label,
@@ -527,7 +532,10 @@ function feedHead(ctx: LayoutContext): HeadTag[] {
   const explicit = [...ctx.config.head, ...(ctx.meta?.head ?? [])]
   if (hasAlternateFeed(explicit)) return []
   const type = ctx.config.feed.type === 'atom' ? 'application/atom+xml' : 'application/rss+xml'
-  return [['link', { rel: 'alternate', type, href: withBase(ctx.config.base, `/${ctx.config.feed.filename}`) }]]
+  // The feed for this page's locale, not the site-wide one.
+  const prefix = ctx.locale?.prefix ?? '/'
+  const href = withBase(ctx.config.base, `${prefix}${ctx.config.feed.filename}`)
+  return [['link', { rel: 'alternate', type, href }]]
 }
 
 function extraHead(ctx: LayoutContext): HeadTag[] {

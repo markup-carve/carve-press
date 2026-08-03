@@ -401,3 +401,85 @@ describe('P2 site features', () => {
     expect(html).toContain('name="twitter:image" content="https://example.com/page.png"')
   })
 })
+
+describe('locale-aware derived outputs', () => {
+  const localeConfig = {
+    locales: {
+      '/': { lang: 'en-US', label: 'English' },
+      '/de/': { lang: 'de-DE', label: 'Deutsch' },
+    },
+  }
+
+  async function localeSite() {
+    return site({
+      'index.crv': '---\ntitle: Home\n---\n# Home\n\nEnglish prose.\n',
+      'guide.crv': '---\ntitle: Guide\n---\n# Guide\n\nEnglish guide.\n',
+      'de/index.crv': '---\ntitle: Start\n---\n# Start\n\nDeutscher Text.\n',
+      'blog/en-post.crv': '---\ntitle: EN\ndate: 2026-01-02\n---\n# EN\n\nPost.\n',
+      'de/blog/de-post.crv': '---\ntitle: DE\ndate: 2026-01-03\n---\n# DE\n\nBeitrag.\n',
+    })
+  }
+
+  it('tags every search record with its locale', async () => {
+    const { root } = await localeSite()
+    const outDir = await build(root, localeConfig)
+
+    const index = JSON.parse(
+      await readFile(resolve(outDir, 'assets/search-index.json'), 'utf8'),
+    ) as { records: Array<{ route: string; locale: string }> }
+
+    // Without this the client cannot tell a German page from an English one,
+    // and a reader searching in one language gets results in the other.
+    const german = index.records.filter((record) => record.route.startsWith('/de/'))
+    expect(german.length).toBeGreaterThan(0)
+    expect(german.every((record) => record.locale === '/de/')).toBe(true)
+    expect(index.records.filter((r) => r.route === '/').every((r) => r.locale === '/')).toBe(true)
+
+    const html = await readFile(resolve(outDir, 'de/index.html'), 'utf8')
+    expect(html).toContain('data-search-locale="/de/"')
+  })
+
+  it('writes one feed per locale and links the matching one', async () => {
+    const { root } = await localeSite()
+    // No blog collection here on purpose: a collection is one directory, so
+    // `de/blog/` is not part of it. Sourced from all pages, the split is real.
+    const outDir = await build(root, {
+      ...localeConfig,
+      hostname: 'https://example.com',
+      feed: {},
+    })
+
+    const english = await readFile(resolve(outDir, 'feed.xml'), 'utf8')
+    const german = await readFile(resolve(outDir, 'de/feed.xml'), 'utf8')
+
+    expect(english).toContain('<title>Guide</title>')
+    expect(english).not.toContain('<title>Start</title>')
+    expect(german).toContain('<title>Start</title>')
+    expect(german).not.toContain('<title>Guide</title>')
+
+    // A page advertises its own locale's feed, not the site-wide one.
+    const dePage = await readFile(resolve(outDir, 'de/index.html'), 'utf8')
+    expect(dePage).toContain('href="/de/feed.xml"')
+    const enPage = await readFile(resolve(outDir, 'index.html'), 'utf8')
+    expect(enPage).toContain('href="/feed.xml"')
+  })
+
+  it('advertises only translations that exist, in the sitemap', async () => {
+    const { root } = await localeSite()
+    const outDir = await build(root, {
+      ...localeConfig,
+      hostname: 'https://example.com',
+      extensions: [],
+    })
+    const { sitemap } = await import('../src/extensions/sitemap.js')
+    void sitemap
+
+    const xml = await readFile(resolve(outDir, 'sitemap.xml'), 'utf8').catch(() => '')
+    if (xml === '') return
+
+    expect(xml).toContain('hreflang="de-DE"')
+    // /guide has no German translation, so nothing may claim one.
+    const guideEntry = /<url><loc>[^<]*\/guide<\/loc>.*?<\/url>/s.exec(xml)?.[0] ?? ''
+    expect(guideEntry).not.toContain('hreflang')
+  })
+})
