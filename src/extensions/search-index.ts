@@ -30,15 +30,35 @@ function normalizedOptions(opts: SearchIndexOptions = {}): Required<SearchIndexO
   }
 }
 
+/**
+ * One record for the page, then one per section.
+ *
+ * Sections alone left whole pages unfindable: a record exists only for a
+ * heading inside the outline levels, so a page written without an `##` produced
+ * nothing at all, and text above a page's first heading belonged to no section
+ * on any page. Both failed silently - search simply did not know those pages
+ * existed.
+ */
 function recordsFromPage(page: RenderedPage): SearchIndexRecord[] {
-  return page.searchDoc.sections.map((section, index) => ({
-    id: `${page.searchDoc.route}#${section.slug}:${index}`,
-    route: page.searchDoc.route,
-    title: page.searchDoc.title,
-    heading: section.heading,
-    slug: section.slug,
-    text: section.text,
-  }))
+  const doc = page.searchDoc
+  return [
+    {
+      id: `${doc.route}#:page`,
+      route: doc.route,
+      title: doc.title,
+      heading: doc.title,
+      slug: '',
+      text: doc.text,
+    },
+    ...doc.sections.map((section, index) => ({
+      id: `${doc.route}#${section.slug}:${index}`,
+      route: doc.route,
+      title: doc.title,
+      heading: section.heading,
+      slug: section.slug,
+      text: section.text,
+    })),
+  ]
 }
 
 export function searchIndex(opts: SearchIndexOptions = {}): SiteExtension {
