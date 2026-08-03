@@ -17,6 +17,7 @@ export interface NavItem {
   text: string
   link?: string
   items?: NavItem[]
+  current?: boolean
 }
 
 export interface SidebarItem {
@@ -45,6 +46,11 @@ export interface SocialLink {
   link: string
 }
 
+export type SubstitutionFormat = 'bold' | 'italic' | 'code' | 'none'
+export type SubstitutionConfigValue = string | { value: string; format?: SubstitutionFormat }
+export type SubstitutionsConfig = Record<string, SubstitutionConfigValue>
+export type NormalizedSubstitution = { value: string; format: SubstitutionFormat }
+
 export type ThemeLogo = string | { light: string; dark: string; alt?: string }
 
 export type OutlineSetting = false | number | [number, number] | 'deep'
@@ -59,6 +65,20 @@ export interface ThemeLabels {
   copy: string
   copied: string
   menu: string
+  version: string
+  versionBanner: string
+}
+
+export interface VersionItem {
+  text: string
+  link: string
+  current?: boolean
+}
+
+export interface VersionsConfig {
+  current: string
+  banner?: string
+  items: VersionItem[]
 }
 
 export interface ThemeConfig {
@@ -74,6 +94,7 @@ export interface ThemeConfig {
   socialImage?: string
   outline: { level: [number, number] }
   labels: ThemeLabels
+  versions?: VersionsConfig
 }
 
 export interface LocaleThemeConfig {
@@ -83,6 +104,7 @@ export interface LocaleThemeConfig {
   editLink?: { pattern: string; text: string }
   outline?: { level: OutlineSetting }
   labels?: Partial<ThemeLabels>
+  versions?: VersionsConfig
 }
 
 export interface LocaleConfig {
@@ -149,6 +171,7 @@ export interface CarvePressConfig {
   blog?: Required<BlogOptions>
   feed: false | Required<FeedOptions>
   redirects: Record<string, string>
+  substitutions: Record<string, NormalizedSubstitution>
   playground: PlaygroundConfig
   extensions: SiteExtension[]
   layouts: Record<string, Layout>
@@ -167,6 +190,7 @@ export type UserConfig = Partial<
   blog?: BlogOptions
   feed?: false | FeedOptions
   redirects?: Record<string, string>
+  substitutions?: SubstitutionsConfig
   layouts?: Record<string, Layout>
   locales?: Record<string, LocaleConfig>
   playground?: PlaygroundConfig
@@ -207,6 +231,8 @@ export const DEFAULT_LABELS: ThemeLabels = {
   copy: 'Copy',
   copied: 'Copied',
   menu: 'Menu',
+  version: 'Version',
+  versionBanner: '',
 }
 
 function shikiLanguageName(lang: ShikiLanguage): string {
@@ -286,6 +312,18 @@ function normalizeFeed(feedConfig: false | FeedOptions | undefined): false | Req
     limit: feedConfig.limit ?? 20,
     type: feedConfig.type ?? 'rss',
   }
+}
+
+function normalizeSubstitutions(
+  substitutions: SubstitutionsConfig | undefined,
+): Record<string, NormalizedSubstitution> {
+  if (substitutions === undefined) return {}
+  return Object.fromEntries(
+    Object.entries(substitutions).map(([key, raw]) => {
+      if (typeof raw === 'string') return [key, { value: raw, format: 'none' }]
+      return [key, { value: raw.value, format: raw.format ?? 'none' }]
+    }),
+  )
 }
 
 function normalizeLocaleKey(key: string): string {
@@ -384,6 +422,7 @@ export function resolveConfig(user: UserConfig, root?: string): CarvePressConfig
       socialImage: user.themeConfig?.socialImage,
       outline: user.themeConfig?.outline ?? { level: [2, 3] },
       labels: { ...DEFAULT_LABELS, ...(user.themeConfig?.labels ?? {}) },
+      versions: user.themeConfig?.versions,
     },
     carve: {
       extensions: user.carve?.extensions ?? [],
@@ -405,6 +444,7 @@ export function resolveConfig(user: UserConfig, root?: string): CarvePressConfig
     blog: blogConfig,
     feed: feedConfig,
     redirects: user.redirects ?? {},
+    substitutions: normalizeSubstitutions(user.substitutions),
     playground: resolvePlaygroundConfig(user.playground, root),
     extensions: [
       ...(blogConfig === undefined ? [] : [blog(blogConfig)]),

@@ -318,6 +318,7 @@ function activeLocale(config: CarvePressConfig, route: string): ActiveLocale {
     sidebar: locale.themeConfig?.sidebar ?? config.themeConfig.sidebar,
     footer: locale.themeConfig?.footer ?? config.themeConfig.footer,
     editLink: locale.themeConfig?.editLink ?? config.themeConfig.editLink,
+    versions: locale.themeConfig?.versions ?? config.themeConfig.versions,
     outline: {
       level:
         locale.themeConfig?.outline?.level === undefined

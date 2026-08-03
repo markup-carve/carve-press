@@ -95,6 +95,10 @@ export default defineConfig({
     description: 'Updates from the CarvePress project.',
     type: 'rss',
   },
+  substitutions: {
+    minnode: '20',
+    enginever: { value: '0.1.0', format: 'code' },
+  },
   redirects: {
     '/old-guide/': '/guide/getting-started',
   },

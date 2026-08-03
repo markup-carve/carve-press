@@ -105,3 +105,24 @@ export default defineConfig({
 
 Then select it in page frontmatter with `layout: landing`.
 
+
+## Version Switcher
+
+A project that publishes each major release at its own base URL can offer a switcher and a banner. Both are off unless `themeConfig.versions` is set.
+
+``` ts "carve-press.config.ts"
+themeConfig: {
+  versions: {
+    current: '5.x',
+    banner: 'You are reading the documentation for an older release.',
+    items: [
+      { text: '5.x (latest)', link: 'https://book.example.com/5.x/', current: true },
+      { text: '4.x', link: 'https://book.example.com/4.x/' },
+    ],
+  },
+}
+```
+
+The switcher renders in the header using the same dropdown as the primary nav. The banner appears only when this build's own `hostname` and `base` match an entry that is not the one marked `current`. If the build cannot be matched to any entry - no `hostname`, for instance - no banner renders at all: telling a reader they are on old documentation when they are not is worse than saying nothing.
+
+Both strings go through the locale label map, so a translated site can translate them.

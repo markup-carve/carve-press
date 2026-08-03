@@ -109,7 +109,7 @@ function navLinkHtml(item: NavItem, base: string, current: string, className: st
   if (item.link === undefined) return `<span class="${className}">${escapeText(item.text)}</span>`
   const href = item.link.startsWith('/') ? withBase(base, item.link) : item.link
   return `<a class="${className}" href="${escapeAttr(href)}"${
-    item.link === current ? ' aria-current="page"' : ''
+    item.current === true || item.link === current ? ' aria-current="page"' : ''
   }>${escapeText(item.text)}</a>`
 }
 
@@ -118,7 +118,7 @@ function dropdownHtml(item: NavItem, base: string, current: string): string {
   const links = children
     .map((child) => `<li>${navLinkHtml(child, base, current, 'site-nav__dropdown-link')}</li>`)
     .join('')
-  const currentAttr = item.link === current ? ' aria-current="page"' : ''
+  const currentAttr = item.current === true || item.link === current ? ' aria-current="page"' : ''
   return `<details class="site-nav__dropdown"><summary${currentAttr}>${escapeText(
     item.text,
   )}</summary><ul>${links}</ul></details>`
@@ -224,6 +224,49 @@ function localeSwitcherHtml(ctx: LayoutContext): string {
   return `<nav class="locale-switcher" aria-label="Language"><ul>${items}</ul></nav>`
 }
 
+function versionDropdown(ctx: LayoutContext): NavItem | undefined {
+  const versions = themeConfig(ctx).versions
+  if (versions === undefined) return undefined
+  return {
+    text: `${labels(ctx).version}: ${versions.current}`,
+    items: versions.items.map((item) => ({
+      text: item.text,
+      link: item.link,
+      current: item.current,
+    })),
+  }
+}
+
+function normalizeComparableUrl(value: string): string | undefined {
+  try {
+    const url = new URL(value)
+    return url.href.replace(/\/+$/, '')
+  } catch {
+    return undefined
+  }
+}
+
+function siteVersionUrl(ctx: LayoutContext): string | undefined {
+  const hostname = ctx.config.hostname?.replace(/\/+$/, '')
+  if (hostname === undefined || hostname === '') return undefined
+  return normalizeComparableUrl(`${hostname}${withBase(ctx.config.base, '/')}`)
+}
+
+export function versionBannerHtml(ctx: LayoutContext): string {
+  const versions = themeConfig(ctx).versions
+  if (versions?.banner === undefined) return ''
+  const siteUrl = siteVersionUrl(ctx)
+  if (siteUrl === undefined) return ''
+  const current = versions.items.find((item) => item.current === true)
+  if (current === undefined) return ''
+  const siteItem = versions.items.find((item) => normalizeComparableUrl(item.link) === siteUrl)
+  if (siteItem === undefined || siteItem === current) return ''
+  const text = labels(ctx).versionBanner === '' ? versions.banner : labels(ctx).versionBanner
+  return `<div class="version-banner"><p>${escapeText(text)} <a href="${escapeAttr(
+    current.link,
+  )}">${escapeText(current.text)}</a></p></div>`
+}
+
 function themeToggleHtml(): string {
   return `<button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark theme"><span aria-hidden="true">Theme</span></button>`
 }
@@ -277,14 +320,17 @@ export function headerHtml(ctx: LayoutContext, sidebarDrawer = ctx.sidebar.lengt
   const title = tc.siteTitle ?? siteTitle(ctx)
   const titleText = title === false ? '' : `<span class="site-title__text">${escapeText(title)}</span>`
   const switcher = localeSwitcherHtml(ctx)
+  const nav = [...tc.nav]
+  const versions = versionDropdown(ctx)
+  if (versions !== undefined) nav.push(versions)
   return `<header class="site-header">${drawerButtonHtml('sidebar', labels(ctx).menu, sidebarDrawer)}<a class="site-title" href="${escapeAttr(
     withBase(ctx.config.base, '/'),
   )}">${logoHtml(tc.logo, ctx.config.base, siteTitle(ctx))}${titleText}</a><div class="site-header__right">${drawerButtonHtml(
     'nav',
     labels(ctx).menu,
-    tc.nav.length > 0,
+    nav.length > 0,
   )}${headerNavHtml(
-    tc.nav,
+    nav,
     ctx.config.base,
     ctx.rendered.page.route,
   )}${switcher}${searchHtml(ctx)}${socialLinksHtml(tc.socialLinks)}${themeToggleHtml()}</div></header>`
@@ -555,6 +601,7 @@ export const docLayout: Layout = (ctx) => {
     <div class="${layoutClasses.join(' ')}">
       ${sidebarHtml(ctx.sidebar, ctx.config.base, ctx.rendered.page.route)}
       <main class="content">
+        ${versionBannerHtml(ctx)}
 ${content}
         ${editLink(ctx)}
         ${lastUpdatedHtml(ctx)}
@@ -581,6 +628,7 @@ export const pageLayout: Layout = (ctx) => {
   const content = localizedHtml(ctx)
   const body = `    ${headerHtml(ctx, false)}
     <main class="page-layout content">
+        ${versionBannerHtml(ctx)}
 ${content}
         ${editLink(ctx)}
         ${lastUpdatedHtml(ctx)}
@@ -668,6 +716,7 @@ export const blogLayout: Layout = (ctx) => {
     <div class="${layoutClasses.join(' ')}">
       ${sidebarHtml(ctx.sidebar, ctx.config.base, ctx.rendered.page.route)}
       <main class="content blog-post">
+        ${versionBannerHtml(ctx)}
         ${postMetaHtml(ctx)}
 ${content}
         ${editLink(ctx)}
@@ -757,6 +806,7 @@ export const homeLayout: Layout = (ctx) => {
     content.trim() === '' ? '' : `<div class="home-body content">${content}</div>`
   const body = `    ${headerHtml(ctx, false)}
     <main class="home-layout">
+      ${versionBannerHtml(ctx)}
       ${heroHtml(ctx)}
       ${featuresHtml(ctx)}
       ${renderedBody}

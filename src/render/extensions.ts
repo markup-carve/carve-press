@@ -26,6 +26,7 @@ import { createShikiExtensionFromHighlighter, createShikiHighlighter, type Shiki
 import { compareExtension } from './compare.js'
 import { imageDefaultsExtension } from './images.js'
 import { playgroundExtension, type PlaygroundAssetUrls } from './playground.js'
+import { substitutionsExtension } from './substitutions.js'
 import { tableScrollExtension } from './table-scroll.js'
 
 function presetExtensions(preset: CarvePressConfig['carve']['preset']): CarveExtension[] {
@@ -92,6 +93,7 @@ export async function buildExtensionStack(
     codeGroup({ highlighter }),
     headingPermalinks(),
     imageDefaultsExtension({ root, publicDir: config.publicDir }),
+    ...(Object.keys(config.substitutions).length === 0 ? [] : [substitutionsExtension(config.substitutions)]),
     ...presetExtensions(config.carve.preset),
     ...config.carve.extensions,
   ]
