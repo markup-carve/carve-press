@@ -767,3 +767,19 @@ describe('asset hashing', () => {
     expect(html).toContain('/assets/style.css')
   })
 })
+
+describe('search index coverage', () => {
+  it('indexes every route the build published', async () => {
+    const { result, outDir } = await build()
+    const payload = JSON.parse(
+      await readFile(resolve(outDir, 'assets/search-index.json'), 'utf8'),
+    ) as { records: Array<{ route: string }> }
+
+    const indexed = new Set(payload.records.map((record) => record.route))
+    const missing = result.routes.filter((route) => !indexed.has(route))
+
+    // The check that was missing: pages without an `##` produced no records at
+    // all, so a third of this site was unsearchable and nothing said so.
+    expect(missing).toEqual([])
+  })
+})

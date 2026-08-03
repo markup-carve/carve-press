@@ -31,6 +31,8 @@
 
 ### Fixed
 
+- Search indexes every page. Records existed only per heading, so a page written without an `##` produced none at all and could not be found, and prose above a page's first heading belonged to no record on any page. Each page now carries a record of its own alongside its sections, and results are deduplicated per page in the client.
+
 - The feed's channel link now carries the site base, so a project site's feed points at the site rather than at the domain root.
 - Documentation output no longer collides with compiled TypeScript output because the docs build writes `.site`.
 - `.site/` is ignored by Git.

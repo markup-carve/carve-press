@@ -34,7 +34,8 @@ function initSearch(root, input, panel, resultsList, status) {
     const route = String(record.route || '/').replace(/^\/+/, '')
     const slug = String(record.slug || '')
     const path = route === '' ? siteRoot : `${siteRoot}${route}`
-    return `${path}#${encodeURIComponent(slug)}`
+    // A page-level record has no heading to jump to, so it links the page.
+    return slug === '' ? path : `${path}#${encodeURIComponent(slug)}`
   }
 
   async function load() {
@@ -108,11 +109,20 @@ function initSearch(root, input, panel, resultsList, status) {
       return
     }
     const docs = await load()
-    results = docs
-      .search(query)
-      .slice(0, 8)
-      .map((hit) => recordsById.get(hit.id))
-      .filter((record) => record !== undefined)
+    // One result per page: a page now has a record of its own plus one per
+    // section, and listing the same page three times pushes the other answers
+    // off the list. Hits arrive best-first, so the first one wins - which is
+    // also the most specific place to land.
+    const seen = new Set()
+    const matches = []
+    for (const hit of docs.search(query)) {
+      const record = recordsById.get(hit.id)
+      if (record === undefined || seen.has(record.route)) continue
+      seen.add(record.route)
+      matches.push(record)
+      if (matches.length === 8) break
+    }
+    results = matches
     render()
   }
 
