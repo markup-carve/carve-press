@@ -1,6 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { resolve, relative, sep } from 'node:path'
-import { routeForPath, routeKey } from './route.js'
+import { rewriteRoute, routeForPath, routeKey } from './route.js'
 import { splitFrontmatter } from './frontmatter.js'
 import { BuildError } from '../errors.js'
 
@@ -53,7 +53,11 @@ async function walk(dir: string, base: string, found: string[]): Promise<void> {
   }
 }
 
-export async function discoverPages(srcDir: string, srcExclude: string[]): Promise<Page[]> {
+export async function discoverPages(
+  srcDir: string,
+  srcExclude: string[],
+  rewrites: Record<string, string> = {},
+): Promise<Page[]> {
   const relPaths: string[] = []
   await walk(srcDir, srcDir, relPaths)
   const excludes = srcExclude.map(globToRegExp)
@@ -61,11 +65,22 @@ export async function discoverPages(srcDir: string, srcExclude: string[]): Promi
   // filesystem's readdir order.
   relPaths.sort()
 
+  // A rewrite that matches nothing is a silent no-op otherwise, and the author
+  // has no way to tell a typo from a page that moved.
+  const unused = Object.keys(rewrites).filter((key) =>
+    key.endsWith('/*')
+      ? !relPaths.some((relPath) => relPath.replace(/\\/g, '/').startsWith(key.slice(0, -1)))
+      : !relPaths.includes(key.replace(/\\/g, '/')),
+  )
+  if (unused.length > 0) {
+    throw new BuildError(`${unused.length} rewrite(s) match no source file`, unused)
+  }
+
   const pages: Page[] = []
   const seen = new Map<string, string>()
   for (const relPath of relPaths) {
     if (excludes.some((re) => re.test(relPath))) continue
-    const route = routeForPath(relPath)
+    const route = rewriteRoute(relPath, rewrites) ?? routeForPath(relPath)
     // Keyed on routeKey, not route: `foo.crv` and `foo/index.crv` yield
     // different routes but the same output file under cleanUrls, so comparing
     // raw routes would let one silently overwrite the other.

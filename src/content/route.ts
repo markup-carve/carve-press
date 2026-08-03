@@ -24,3 +24,35 @@ export function outPathForRoute(route: string, cleanUrls: boolean): string {
 export function routeKey(route: string): string {
   return route === '/' ? '/' : route.replace(/\/$/, '')
 }
+
+/**
+ * Publish a page at a route that does not follow its path. A source tree
+ * organized for editing (`packages/a/docs/index.crv`) rarely matches the URL
+ * tree a reader should see (`/a/`).
+ *
+ * A key is a content-relative source path; a trailing `/*` on both sides moves
+ * a whole directory. Patterns are matched longest-first, so a specific entry
+ * beats the prefix it sits under regardless of config order.
+ */
+export function rewriteRoute(relPath: string, rewrites: Record<string, string>): string | undefined {
+  const normalized = relPath.replace(/\\/g, '/')
+  const exact = rewrites[normalized]
+  if (exact !== undefined) return normalizeRewriteTarget(exact)
+
+  const patterns = Object.keys(rewrites)
+    .filter((key) => key.endsWith('/*'))
+    .sort((a, b) => b.length - a.length)
+  for (const key of patterns) {
+    const prefix = key.slice(0, -1)
+    if (!normalized.startsWith(prefix)) continue
+    const target = rewrites[key]!
+    if (!target.endsWith('/*')) return normalizeRewriteTarget(target)
+    return normalizeRewriteTarget(`${target.slice(0, -1)}${normalized.slice(prefix.length)}`)
+  }
+  return undefined
+}
+
+function normalizeRewriteTarget(target: string): string {
+  const withSlash = target.startsWith('/') ? target : `/${target}`
+  return routeForPath(withSlash.replace(/^\//, ''))
+}

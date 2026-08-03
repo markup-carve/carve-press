@@ -284,6 +284,25 @@ describe('P2 site features', () => {
     await expect(readFile(resolve(root, 'state/routes.json'), 'utf8')).resolves.toBe('[\n  "/"\n]\n')
   })
 
+  it('builds pages at rewritten routes and rejects a rewrite that matches nothing', async () => {
+    const { root } = await site({
+      'index.crv': '---\ntitle: Home\n---\n# Home\n\n[Deep](/a/guide/start)\n',
+      'packages/a/docs/guide/start.crv': '---\ntitle: Start\n---\n# Start\n',
+    })
+
+    const outDir = await build(root, { rewrites: { 'packages/a/docs/*': '/a/*' } })
+
+    // Published where the rewrite says, and the link to it validates.
+    await expect(readFile(resolve(outDir, 'a/guide/start/index.html'), 'utf8')).resolves.toContain('Start')
+    await expect(
+      readFile(resolve(outDir, 'packages/a/docs/guide/start/index.html'), 'utf8'),
+    ).rejects.toThrow()
+
+    await expect(build(root, { rewrites: { 'packages/b/*': '/b/*' } })).rejects.toThrow(
+      /match no source file/,
+    )
+  })
+
   it('expands a prefix pattern into one stub per page, keeping the splat for hosts', async () => {
     const { root } = await site({
       'index.crv': '---\ntitle: Home\n---\n# Home\n',

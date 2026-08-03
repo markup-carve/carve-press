@@ -2,6 +2,9 @@
 
 ### Added
 
+- `rewrites`: publish a page at a route that does not follow its source path, by exact path or directory pattern.
+- `islands`: opt-in mount points hydrated by site-supplied ES modules, with `load`, `idle`, or `visible` strategies and the block's own content as the fallback. No client framework is bundled.
+
 - Content-hashed asset filenames, so a deploy is never served from a stale cache. `assets: { hash: false }` restores the plain names.
 - Prefix redirects: `'/old/*': '/new/*'` expands against the real route table, one stub per page, while `_redirects` keeps the splat.
 - Sitemap entries carry `lastmod` when a page's last-updated time is known.

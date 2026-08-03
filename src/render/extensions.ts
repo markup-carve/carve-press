@@ -25,6 +25,7 @@ import { withBase } from '../layout/shell.js'
 import { createShikiExtensionFromHighlighter, createShikiHighlighter, type ShikiOptions } from './shiki.js'
 import { compareExtension } from './compare.js'
 import { imageDefaultsExtension } from './images.js'
+import { islandsExtension } from './islands.js'
 import { playgroundExtension, type PlaygroundAssetUrls } from './playground.js'
 import { substitutionsExtension } from './substitutions.js'
 import { tableScrollExtension } from './table-scroll.js'
@@ -93,6 +94,11 @@ export async function buildExtensionStack(
     codeGroup({ highlighter }),
     headingPermalinks(),
     imageDefaultsExtension({ root, publicDir: config.publicDir }),
+    // Always present, even with nothing configured: an `::: island` block that
+    // names an island the config does not define has to fail rather than render
+    // as an anonymous div nobody will hydrate. A page without such a block
+    // still emits no island markup and loads no island script.
+    islandsExtension(config.islands),
     ...(Object.keys(config.substitutions).length === 0 ? [] : [substitutionsExtension(config.substitutions)]),
     ...presetExtensions(config.carve.preset),
     ...config.carve.extensions,

@@ -24,9 +24,9 @@ This table is a hand-maintained snapshot, not a benchmark. Check the project doc
 | Redirects for a renamed page | Built in: `redirects` map plus `redirectFrom` on the page, emitting a meta-refresh stub with a canonical link and a `_redirects` file. | Not built in; an open feature request. Hand-written stubs or host rules. | Official `plugin-client-redirects` writes redirecting pages at build time. | Astro's `redirects` config emits meta-refresh pages in a static build; adapters write host config instead. | Not in the theme itself; a community plugin covers it. |
 | Redirect validation | Targets must resolve to a real route, a source may not collide with a page, and a source may not escape the output directory. | n/a | Not documented as validated against the route table. | Not documented as validated against the route table. | n/a |
 | Rename detection | Built in: a committed `routes.json`, and a route that disappears without a redirect fails the build. | Not documented. | Not documented. | Not documented. | Not documented. |
-| Route rewrites (publish a page at a different URL) | Not built in; the route follows the file path. | `rewrites`, object or function, with pattern support. | `slug` frontmatter and plugin routing. | `slug` frontmatter. | Plugin-based URL handling. |
+| Route rewrites (publish a page at a different URL) | `rewrites`, exact paths or a directory pattern. | `rewrites`, object or function, with pattern support. | `slug` frontmatter and plugin routing. | `slug` frontmatter. | Plugin-based URL handling. |
 | Ecosystem size | Early and small. | Larger Vite and Vue ecosystem. | Larger React and plugin ecosystem. | Larger Astro integration ecosystem. | Larger Python and MkDocs plugin ecosystem. |
-| Component islands | Not built in. | Vue components in Markdown. | React components in MDX. | Astro islands and integrations. | Markdown plus theme/plugin extensions; not an islands-first model. |
+| Component islands | Mount points hydrated by modules the site supplies, with a static fallback; no framework is bundled. | Vue components in Markdown. | React components in MDX. | Astro islands and integrations. | Markdown plus theme/plugin extensions; not an islands-first model. |
 
 ## Where CarvePress is ahead
 
@@ -43,8 +43,7 @@ Being honest about the row above: only VitePress lacks built-in redirects. Astro
 ## Where CarvePress is behind
 
 - No doc versioning, where Docusaurus has it in core.
-- No route rewrites, where VitePress's `rewrites` lets the URL tree differ from the source tree.
-- No component islands, and no plugin ecosystem worth the name yet.
+- No plugin ecosystem worth the name yet, and islands are mount points rather than components written inline in the page, which is what Vue-in-Markdown or MDX give you.
 - No translation workflow beyond prefix locales and a label map.
 
 ::: note "How to read this"

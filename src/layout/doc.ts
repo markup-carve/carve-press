@@ -22,6 +22,8 @@ export interface LayoutContext {
   config: CarvePressConfig
   /** Logical asset name to emitted filename, when the build hashed them. */
   assets?: Record<string, string>
+  /** Island name to the emitted module URL; empty when no islands are configured. */
+  islandUrls?: Record<string, string>
   rendered: RenderedPage
   sidebar: SidebarGroup[]
   prev?: FlatLink
@@ -555,6 +557,18 @@ function assetUrl(ctx: LayoutContext, name: string): string {
   return withBase(ctx.config.base, `/assets/${ctx.assets?.[name] ?? name}`)
 }
 
+function islandsScript(ctx: LayoutContext): string {
+  const urls = ctx.islandUrls ?? {}
+  if (Object.keys(urls).length === 0) return ''
+  // Only on pages that actually mount one, so a docs page without an island
+  // downloads nothing extra.
+  if (!ctx.rendered.html.includes('data-island=')) return ''
+  return `\n    <script>window.__carvePressIslands=${JSON.stringify(urls).replace(
+    /</g,
+    '\\u003c',
+  )}</script>\n    <script src="${escapeAttr(assetUrl(ctx, 'islands.js'))}" type="module"></script>`
+}
+
 function themeToggleScript(): string {
   return `    <script>(()=>{const b=document.querySelector('[data-theme-toggle]');if(!b)return;const d=document.documentElement,k='carve-press-theme',m=matchMedia('(prefers-color-scheme: dark)'),p=()=>m.matches?'dark':'light',c=()=>d.dataset.theme||p(),u=()=>{const n=c()==='dark'?'light':'dark';b.setAttribute('aria-label','Switch to '+n+' theme');b.dataset.themeToggleState=c()};u();b.addEventListener('click',()=>{const n=c()==='dark'?'light':'dark';d.dataset.theme=n;try{localStorage.setItem(k,n)}catch{}u()});m.addEventListener('change',()=>{try{if(localStorage.getItem(k))return}catch{}u()})})()</script>`
 }
@@ -622,7 +636,7 @@ ${content}
     </div>
     ${siteFooter(ctx)}
     <div class="drawer-scrim" data-drawer-scrim hidden></div>
-${themeToggleScript()}${labelsScript(ctx)}${searchScript(ctx)}${navScript(ctx)}${tableScrollScript(ctx)}${codeCopyScript(ctx)}${outlineScript(ctx)}${playgroundScript(ctx)}`
+${themeToggleScript()}${labelsScript(ctx)}${searchScript(ctx)}${navScript(ctx)}${tableScrollScript(ctx)}${codeCopyScript(ctx)}${outlineScript(ctx)}${islandsScript(ctx)}${playgroundScript(ctx)}`
 
   return htmlDocument({
     lang: localeLang(ctx),
@@ -647,7 +661,7 @@ ${content}
       </main>
     ${siteFooter(ctx)}
     <div class="drawer-scrim" data-drawer-scrim hidden></div>
-${themeToggleScript()}${labelsScript(ctx)}${searchScript(ctx)}${navScript(ctx)}${tableScrollScript(ctx)}${codeCopyScript(ctx)}${playgroundScript(ctx)}`
+${themeToggleScript()}${labelsScript(ctx)}${searchScript(ctx)}${navScript(ctx)}${tableScrollScript(ctx)}${codeCopyScript(ctx)}${islandsScript(ctx)}${playgroundScript(ctx)}`
 
   return htmlDocument({
     lang: localeLang(ctx),
@@ -740,7 +754,7 @@ ${content}
     </div>
     ${siteFooter(ctx)}
     <div class="drawer-scrim" data-drawer-scrim hidden></div>
-${themeToggleScript()}${labelsScript(ctx)}${searchScript(ctx)}${navScript(ctx)}${tableScrollScript(ctx)}${codeCopyScript(ctx)}${outlineScript(ctx)}${playgroundScript(ctx)}`
+${themeToggleScript()}${labelsScript(ctx)}${searchScript(ctx)}${navScript(ctx)}${tableScrollScript(ctx)}${codeCopyScript(ctx)}${outlineScript(ctx)}${islandsScript(ctx)}${playgroundScript(ctx)}`
 
   return htmlDocument({
     lang: localeLang(ctx),
@@ -827,7 +841,7 @@ export const homeLayout: Layout = (ctx) => {
     </main>
     ${siteFooter(ctx)}
     <div class="drawer-scrim" data-drawer-scrim hidden></div>
-${themeToggleScript()}${labelsScript(ctx)}${searchScript(ctx)}${navScript(ctx)}${tableScrollScript(ctx)}${codeCopyScript(ctx)}${playgroundScript(ctx)}`
+${themeToggleScript()}${labelsScript(ctx)}${searchScript(ctx)}${navScript(ctx)}${tableScrollScript(ctx)}${codeCopyScript(ctx)}${islandsScript(ctx)}${playgroundScript(ctx)}`
 
   return htmlDocument({
     lang: localeLang(ctx),
