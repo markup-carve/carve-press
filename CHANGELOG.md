@@ -11,10 +11,12 @@
 
 ### Changed
 
+- The code block copy control is an icon that appears on hover or keyboard focus, so a label no longer covers the first line of code. It stays visible on touch devices, which have no hover.
 - README now describes the implemented CLI, quick start, features, and docs site.
 - npm scripts include `docs:build`, `docs:dev`, and `docs:serve`.
 
 ### Fixed
 
+- The feed's channel link now carries the site base, so a project site's feed points at the site rather than at the domain root.
 - Documentation output no longer collides with compiled TypeScript output because the docs build writes `.site`.
 - `.site/` is ignored by Git.

@@ -100,6 +100,31 @@ describe('P2 site features', () => {
     expect(html).toContain('rel="alternate" type="application/rss+xml"')
   })
 
+  it('points the feed at the site under its base, not at the domain root', async () => {
+    const { root } = await site({ 'index.crv': '---\ntitle: Home\n---\n# Home\n' })
+
+    const rssDir = await build(root, {
+      hostname: 'https://example.github.io',
+      base: '/project/',
+      feed: {},
+    })
+    const rss = await readFile(resolve(rssDir, 'feed.xml'), 'utf8')
+    // Scoped to the channel head: every item link already starts with the base,
+    // so a whole-document match passes whether or not the channel is right.
+    const channel = rss.slice(0, rss.indexOf('<item>'))
+    expect(channel).toContain('<link>https://example.github.io/project/</link>')
+
+    const atomDir = await build(root, {
+      hostname: 'https://example.github.io',
+      base: '/project/',
+      feed: { type: 'atom' },
+    })
+    const atom = await readFile(resolve(atomDir, 'feed.xml'), 'utf8')
+    const head = atom.slice(0, atom.indexOf('<entry>'))
+    expect(head).toContain('<link href="https://example.github.io/project/"/>')
+    expect(head).toContain('<id>https://example.github.io/project/</id>')
+  })
+
   it('writes redirect HTML and _redirects while validating routes', async () => {
     const { root } = await site({
       'index.crv': '---\ntitle: Home\n---\n# Home\n',

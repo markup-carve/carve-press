@@ -3,10 +3,19 @@ import { resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 class FakeButton {
-  textContent = 'Copy'
+  textContent = ''
   dataset: Record<string, string> = {}
   removed = false
+  attributes: Record<string, string> = { 'aria-label': 'Copy code' }
   private listeners = new Map<string, () => void>()
+
+  getAttribute(name: string): string | null {
+    return this.attributes[name] ?? null
+  }
+
+  setAttribute(name: string, value: string): void {
+    this.attributes[name] = value
+  }
 
   addEventListener(name: string, listener: () => void): void {
     this.listeners.set(name, listener)
@@ -95,11 +104,13 @@ describe('code copy client', () => {
     await Promise.resolve()
 
     expect(copied).toEqual(['raw <code> & text'])
-    expect(button.textContent).toBe('Copied')
+    // The visible state is an icon swap driven by the data attribute; the
+    // accessible name is what actually announces the change.
+    expect(button.getAttribute('aria-label')).toBe('Copied')
     expect(button.dataset.copied).toBe('true')
 
     timeouts[0]?.()
-    expect(button.textContent).toBe('Copy')
+    expect(button.getAttribute('aria-label')).toBe('Copy code')
     expect(button.dataset.copied).toBeUndefined()
   })
 

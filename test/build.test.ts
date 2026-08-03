@@ -479,7 +479,9 @@ describe('buildSite', () => {
     expect(html).toContain('<title>Start DE | Fixture DE</title>')
     expect(html).toContain('placeholder="Suche"')
     expect(html).toContain('aria-label="Auf dieser Seite"')
-    expect(html).toContain('>Kopieren</button>')
+    // The button is an icon; its accessible name carries the translation.
+    expect(html).toContain('aria-label="Kopieren code"')
+    expect(html).toContain('data-copied-label="Kopiert"')
     expect(html).toContain('"copied":"Kopiert"')
     expect(html).toContain('href="/start">English</a>')
     expect(html).toContain('href="/de/start" aria-current="true">Deutsch</a>')

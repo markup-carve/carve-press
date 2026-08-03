@@ -857,32 +857,39 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
   border: 1px solid var(--rule);
   border-bottom: 0;
   border-radius: 4px 4px 0 0;
-  padding: 0.58rem 4rem 0.5rem 1rem;
+  padding: 0.58rem 3rem 0.5rem 1rem;
 }
 .code-block__title + .code-block__copy + template + pre {
   border-top-left-radius: 0;
   border-top-right-radius: 0;
 }
+/* An icon, and only while the reader is looking at this block: a permanent
+   label sits on top of the code and hides the end of the first line. It stays
+   in the DOM and in the tab order, so keyboard and screen reader users are not
+   trading access for tidiness. */
 .code-block__copy {
   position: absolute;
-  top: 0.45rem;
-  right: 0.55rem;
+  top: 0.4rem;
+  right: 0.45rem;
   z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 3.2rem;
-  height: 1.75rem;
-  padding: 0 0.55rem;
-  font-family: var(--body);
-  font-size: 0.72rem;
-  font-weight: 600;
+  width: 1.85rem;
+  height: 1.85rem;
+  padding: 0;
   color: var(--ink-soft);
   background: var(--paper);
   border: 1px solid var(--rule);
-  border-radius: 3px;
+  border-radius: 4px;
   cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
+.code-block:hover .code-block__copy,
+.code-block:focus-within .code-block__copy,
+.code-block__copy:focus-visible,
+.code-block__copy[data-copied='true'] { opacity: 1; }
 .code-block__copy:hover,
 .code-block__copy[data-copied='true'] {
   color: var(--verdigris);
@@ -891,6 +898,17 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
 .code-block__copy:focus-visible {
   outline: 2px solid var(--brass);
   outline-offset: 2px;
+}
+.code-block__copy svg { display: block; }
+.code-block__copy-check { display: none; }
+.code-block__copy[data-copied='true'] .code-block__copy-icon { display: none; }
+.code-block__copy[data-copied='true'] .code-block__copy-check { display: block; }
+/* Nothing hovers on a touch screen, so there the button is simply always there. */
+@media (hover: none) {
+  .code-block__copy { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .code-block__copy { transition: none; }
 }
 .carve-playground .code-block__copy,
 .carve-compare__pane .code-block__copy { display: none; }
