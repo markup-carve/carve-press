@@ -150,6 +150,10 @@ export interface PlaygroundConfig {
   chart?: string
 }
 
+export interface DevConfig {
+  incremental: boolean
+}
+
 export interface CarvePressConfig {
   title: string
   description?: string
@@ -173,6 +177,7 @@ export interface CarvePressConfig {
   redirects: Record<string, string>
   substitutions: Record<string, NormalizedSubstitution>
   playground: PlaygroundConfig
+  dev: DevConfig
   extensions: SiteExtension[]
   layouts: Record<string, Layout>
   locales: Record<string, LocaleConfig>
@@ -194,6 +199,7 @@ export type UserConfig = Partial<
   layouts?: Record<string, Layout>
   locales?: Record<string, LocaleConfig>
   playground?: PlaygroundConfig
+  dev?: Partial<DevConfig>
 }
 
 const DEFAULT_SHIKI: ShikiConfig = {
@@ -446,6 +452,9 @@ export function resolveConfig(user: UserConfig, root?: string): CarvePressConfig
     redirects: user.redirects ?? {},
     substitutions: normalizeSubstitutions(user.substitutions),
     playground: resolvePlaygroundConfig(user.playground, root),
+    dev: {
+      incremental: user.dev?.incremental ?? false,
+    },
     extensions: [
       ...(blogConfig === undefined ? [] : [blog(blogConfig)]),
       ...(search === false ? [] : [searchIndex(search)]),

@@ -12,6 +12,7 @@
 - GitHub Pages workflow that builds and tests pull requests, and deploys only pushes to `main` or manual runs.
 - Public logo and site CSS overrides for the docs.
 - Page `redirectFrom` frontmatter and route manifest rename detection.
+- Opt-in `dev.incremental` render reuse for the dev server, with rebuild logs reporting rendered and reused page counts.
 
 ### Changed
 
