@@ -139,6 +139,7 @@ export interface CarvePressConfig {
   srcExclude: string[]
   cleanUrls: boolean
   ignoreDeadLinks: boolean
+  routeManifest: string | false
   head: HeadTag[]
   theme: ThemeAssetsConfig
   themeConfig: ThemeConfig
@@ -365,6 +366,7 @@ export function resolveConfig(user: UserConfig, root?: string): CarvePressConfig
     srcExclude: user.srcExclude ?? [],
     cleanUrls: user.cleanUrls ?? true,
     ignoreDeadLinks: user.ignoreDeadLinks ?? false,
+    routeManifest: user.routeManifest ?? 'routes.json',
     head: user.head ?? [],
     theme: {
       ...(user.theme?.css === undefined ? {} : { css: user.theme.css }),
@@ -408,7 +410,7 @@ export function resolveConfig(user: UserConfig, root?: string): CarvePressConfig
       ...(blogConfig === undefined ? [] : [blog(blogConfig)]),
       ...(search === false ? [] : [searchIndex(search)]),
       ...(feedConfig === false ? [] : [feed(feedConfig)]),
-      ...(Object.keys(user.redirects ?? {}).length === 0 ? [] : [redirects(user.redirects ?? {})]),
+      redirects(user.redirects ?? {}),
       ...(user.extensions ?? []),
     ],
     layouts: user.layouts ?? {},

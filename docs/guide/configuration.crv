@@ -31,6 +31,7 @@ export default defineConfig({
 | `srcExclude` | `string[]` | `[]` | `['drafts/**']` |
 | `cleanUrls` | `boolean` | `true` | `false` |
 | `ignoreDeadLinks` | `boolean` | `false` | `true` |
+| `routeManifest` | `string | false` | `'routes.json'` | `'state/routes.json'` |
 | `head` | `[string, Record<string, string>][]` | `[]` | `[['meta', { name: 'theme-color', content: '#111827' }]]` |
 | `redirects` | `Record<string, string>` | `{}` | `{ '/old/': '/new/' }` |
 | `layouts` | `Record<string, Layout>` | `{}` | `{ landing: myLayout }` |
@@ -101,4 +102,3 @@ Generated sidebar groups use `generate: '/prefix/'`; hand-written groups use `it
 | `themeConfig.editLink` | edit-link object | root edit link | `{ pattern: '...', text: 'Bearbeiten' }` |
 | `themeConfig.outline` | `{ level: false | number | [number, number] | 'deep' }` | root outline | `{ level: 'deep' }` |
 | `themeConfig.labels` | `Partial<ThemeLabels>` | root labels | `{ search: 'Suchen' }` |
-

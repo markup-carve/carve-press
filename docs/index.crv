@@ -20,6 +20,8 @@ features:
     details: CarvePress writes HTML, CSS, and small progressive scripts without bundling a client framework.
   - title: Validated builds
     details: Internal links, navigation entries, frontmatter page links, and cross-references fail the build when they drift.
+  - title: URLs that survive a rename
+    details: A route that disappears fails the build unless a redirect covers it, and redirects are declared on the page that replaced the old one.
   - title: Live compare blocks
     details: A compare block keeps Carve source beside rendered HTML for syntax documentation that proves itself.
   - title: Browser playground

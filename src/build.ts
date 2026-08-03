@@ -31,6 +31,7 @@ import {
   validatePageNavOverrides,
 } from './validate.js'
 import { BuildEventBus } from './events.js'
+import type { RedirectEntry } from './events.js'
 import { BuildError, SourceError } from './errors.js'
 
 const require = createRequire(import.meta.url)
@@ -509,6 +510,78 @@ async function collectLastUpdatedTimes(root: string, srcDir: string, pages: Page
   return times
 }
 
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isFile()
+  } catch (error) {
+    if (
+      error !== null &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+    ) {
+      return false
+    }
+    const reason = error instanceof Error ? error.message : String(error)
+    throw new BuildError(`cannot inspect route manifest ${path}`, [reason])
+  }
+}
+
+function manifestText(routes: Iterable<string>): string {
+  return `${JSON.stringify([...routes].sort(), null, 2)}\n`
+}
+
+async function readRouteManifest(path: string): Promise<string[]> {
+  let raw
+  try {
+    raw = await readFile(path, 'utf8')
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    throw new BuildError(`cannot read route manifest ${path}`, [reason])
+  }
+  let parsed
+  try {
+    parsed = JSON.parse(raw) as unknown
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    throw new BuildError(`cannot parse route manifest ${path}`, [reason])
+  }
+  if (!Array.isArray(parsed) || parsed.some((route) => typeof route !== 'string')) {
+    throw new BuildError(`route manifest ${path} must be a JSON array of route strings`)
+  }
+  return parsed as string[]
+}
+
+async function validateRouteManifest(opts: {
+  root: string
+  manifest: string | false
+  routes: Set<string>
+  redirects: RedirectEntry[]
+}): Promise<void> {
+  if (opts.manifest === false) return
+  const manifestPath = resolve(opts.root, opts.manifest)
+  if (!(await fileExists(manifestPath))) return
+  const previous = await readRouteManifest(manifestPath)
+  const redirectSources = new Set(opts.redirects.map((entry) => entry.source))
+  const missing = previous.filter((route) => !opts.routes.has(route) && !redirectSources.has(route))
+  if (missing.length === 0) return
+  throw new BuildError(
+    `${missing.length} published route(s) disappeared without a redirect (${opts.manifest})`,
+    [
+      ...missing,
+      '',
+      'Restore the page, add redirectFrom to the page that replaced it, or add a redirects entry.',
+    ],
+  )
+}
+
+async function writeRouteManifest(root: string, manifest: string | false, routes: Set<string>): Promise<void> {
+  if (manifest === false) return
+  const manifestPath = resolve(root, manifest)
+  await mkdir(dirname(manifestPath), { recursive: true })
+  await writeFile(manifestPath, manifestText(routes), 'utf8')
+}
+
 /** Load `carve-press.config.{ts,js,mjs}` from a project root. */
 export async function loadConfig(root: string, opts: { bustCache?: boolean } = {}): Promise<UserConfig> {
   for (const name of ['carve-press.config.ts', 'carve-press.config.js', 'carve-press.config.mjs']) {
@@ -557,6 +630,7 @@ export async function buildSite(opts: {
   const discovered = await discoverPages(srcDir, config.srcExclude)
   const discoveredContent = await bus.emit('contentDiscovered', { pages: discovered })
   validateUniqueRoutes(discoveredContent.pages)
+  const redirectPayload = await bus.emit('redirectsCollected', { pages: discoveredContent.pages, redirects: [] })
   const { pages, notFoundPage } = partitionNotFoundPage(discoveredContent.pages)
   const lastUpdated =
     shouldCollectLastUpdated(config)
@@ -568,6 +642,12 @@ export async function buildSite(opts: {
   const host = profileBaseHost(config.hostname)
 
   const routes = new Set(pages.map((p) => p.route))
+  await validateRouteManifest({
+    root: opts.root,
+    manifest: config.routeManifest,
+    routes,
+    redirects: redirectPayload.redirects,
+  })
   const rendered: RenderedPage[] = []
   const metas = new Map<string, PageMeta>()
   for (const page of pages) {
@@ -718,5 +798,6 @@ export async function buildSite(opts: {
   await writeFile(notFoundOutPath, notFoundHtml, 'utf8')
 
   await bus.emit('buildCompleted', { rendered, outDir })
+  await writeRouteManifest(opts.root, config.routeManifest, routes)
   return { rendered, outDir, routes: [...routes] }
 }

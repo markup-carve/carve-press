@@ -36,6 +36,12 @@ The job uses Node 22, runs `npm ci`, `npm run build`, `npm test`, and `npm run d
 
 Project pages need `base: '/carve-press/'` because the site is served below `https://markup-carve.github.io/carve-press/`. Keep authored internal links rooted at the site route, such as `/guide/getting-started`; CarvePress rewrites rendered URLs with the configured base.
 
+## Route Manifest
+
+CarvePress writes a route manifest at `routes.json` by default. The file is a sorted JSON array of content routes and should be committed. On later builds, any route in the manifest that is no longer present must be covered by a redirect source from `redirects` or page `redirectFrom`, or the build fails.
+
+Fix a missing route by restoring the page, adding `redirectFrom` to the page that replaced it, or adding a `redirects` entry in config. Redirect stubs are not written into the manifest, so removing a redirect later does not look like a removed content page. Set `routeManifest: false` to disable this check.
+
 ## Netlify And Cloudflare Pages
 
 Set the build command to:
@@ -45,7 +51,9 @@ npm ci
 npm run docs:build
 ```
 
-Publish `.site`. CarvePress can also write a Netlify-style redirects file from the `redirects` config; this dogfood site maps `/old-guide/` to `/guide/getting-started`.
+Publish `.site`. CarvePress can also write a Netlify-style redirects file from the `redirects` config and page `redirectFrom` frontmatter; this dogfood site maps `/old-guide/` to `/guide/getting-started`.
+
+On GitHub Pages, redirect stubs are static HTML files. They return `200` and use a meta refresh, not an HTTP `301`, because Pages serves static files.
 
 If you use clean URLs with a host that needs explicit fallback routing, add redirects in `publicDir`:
 

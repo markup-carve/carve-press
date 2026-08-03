@@ -8,6 +8,7 @@
 - Documentation pages covering setup, configuration, authoring, code blocks, Carve syntax, playground, theme, i18n, blog, deployment, extensions, CLI, config types, and comparison.
 - GitHub Pages workflow that builds and tests pull requests, and deploys only pushes to `main` or manual runs.
 - Public logo and site CSS overrides for the docs.
+- Page `redirectFrom` frontmatter and route manifest rename detection.
 
 ### Changed
 

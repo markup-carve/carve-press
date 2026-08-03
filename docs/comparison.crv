@@ -21,8 +21,31 @@ This table is a hand-maintained snapshot, not a benchmark. Check the project doc
 | Build-time link validation | Internal links, nav, sidebar, page nav, and Carve crossrefs are fatal by default. | `ignoreDeadLinks` defaults to false, so dead links fail by default. | `onBrokenLinks` defaults to throw in production builds; Markdown link handling is configurable. | Not documented as a built-in equivalent. | Not documented as a built-in; available through plugins. |
 | Live source/render compare | Built-in `::: compare`. | Not a documented default capability. | Not a documented default capability. | Not a documented default capability. | Not a documented default capability. |
 | `llms.txt` | Built-in extension. | Their own docs publish one; generating it for your site is not a documented default. | Not documented as a default. | Not documented as a default. | Not documented as a default. |
+| Redirects for a renamed page | Built in: `redirects` map plus `redirectFrom` on the page, emitting a meta-refresh stub with a canonical link and a `_redirects` file. | Not built in; an open feature request. Hand-written stubs or host rules. | Official `plugin-client-redirects` writes redirecting pages at build time. | Astro's `redirects` config emits meta-refresh pages in a static build; adapters write host config instead. | Not in the theme itself; a community plugin covers it. |
+| Redirect validation | Targets must resolve to a real route, a source may not collide with a page, and a source may not escape the output directory. | n/a | Not documented as validated against the route table. | Not documented as validated against the route table. | n/a |
+| Rename detection | Built in: a committed `routes.json`, and a route that disappears without a redirect fails the build. | Not documented. | Not documented. | Not documented. | Not documented. |
+| Route rewrites (publish a page at a different URL) | Not built in; the route follows the file path. | `rewrites`, object or function, with pattern support. | `slug` frontmatter and plugin routing. | `slug` frontmatter. | Plugin-based URL handling. |
 | Ecosystem size | Early and small. | Larger Vite and Vue ecosystem. | Larger React and plugin ecosystem. | Larger Astro integration ecosystem. | Larger Python and MkDocs plugin ecosystem. |
 | Component islands | Not built in. | Vue components in Markdown. | React components in MDX. | Astro islands and integrations. | Markdown plus theme/plugin extensions; not an islands-first model. |
+
+## Where CarvePress is ahead
+
+- /Nothing to lose a URL silently./ A page that disappears fails the build unless something redirects the old route, and every redirect target is checked against the real route table. The other generators here can emit redirects; none of them documents a check that notices a URL went missing in the first place. This is the one capability with no equivalent in the table.
+- /Redirects declared on the page that replaced the old one./ `redirectFrom` travels with the page and is deleted with it. A central map is fine for a handful of legacy URLs and nobody ever prunes it. The idea is borrowed from Jekyll's `jekyll-redirect-from`.
+- /Validation as the default, not a lint step./ Internal links, nav and sidebar entries, `prev` and `next` overrides, cross-references, and redirect targets all fail the build, and every failure of a kind is reported at once rather than one build cycle at a time.
+- /Source and rendered output in the same block./ `::: compare` renders a Carve fence beside the HTML it produces, so a syntax page cannot drift from the engine.
+- /Static output with no client framework./ HTML, CSS, and four small scripts. The Carve engine reaches the browser only on pages that embed a live playground.
+
+::: note "Redirects are table stakes, mostly"
+Being honest about the row above: only VitePress lacks built-in redirects. Astro, and so Starlight, emits meta-refresh pages from its own `redirects` config, and Docusaurus ships an official client-redirects plugin. What is unusual here is the combination - redirects that are validated, declarable on the page, and backed by a build that refuses to drop a URL without one.
+:::
+
+## Where CarvePress is behind
+
+- No doc versioning, where Docusaurus has it in core.
+- No route rewrites, where VitePress's `rewrites` lets the URL tree differ from the source tree.
+- No component islands, and no plugin ecosystem worth the name yet.
+- No translation workflow beyond prefix locales and a label map.
 
 ::: note "How to read this"
 Rows are coarse capabilities, not fine print, and every project here moves faster than a hand-written table. Where a cell says "not documented", it means the project's own documentation does not present it as a built-in - a plugin may well cover it. Where CarvePress is behind, the row says so.
