@@ -34,6 +34,7 @@ export default defineConfig({
 | `routeManifest` | `string | false` | `'routes.json'` | `'state/routes.json'` |
 | `head` | `[string, Record<string, string>][]` | `[]` | `[['meta', { name: 'theme-color', content: '#111827' }]]` |
 | `redirects` | `Record<string, string>` | `{}` | `{ '/old/': '/new/' }` |
+| `substitutions` | `Record<string, string \| { value, format }>` | `{}` | `{ minnode: '20' }` |
 | `layouts` | `Record<string, Layout>` | `{}` | `{ landing: myLayout }` |
 | `locales` | `Record<string, LocaleConfig>` | `{}` | `{ '/de/': { lang: 'de-DE', label: 'Deutsch' } }` |
 | `dev.incremental` | `boolean` | `false` | `true` |
