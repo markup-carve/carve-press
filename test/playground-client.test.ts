@@ -509,6 +509,7 @@ describe('playground client', () => {
       'index',
       'list-table',
       'math-block',
+      'semantic-span',
       'spoiler',
       'table-of-contents',
       'tabs',
