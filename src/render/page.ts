@@ -6,9 +6,11 @@ import {
   parse,
   renderHtml,
   resolve,
+  type BeforeRenderContext,
   type CarveExtension,
   type Document,
   type Profile,
+  type RenderOptions,
 } from '@markup-carve/carve'
 import type { Page } from '../content/discover.js'
 import { outlineFromAst, type OutlineEntry } from '../outline.js'
@@ -172,13 +174,32 @@ function enforceProfileMaxLength(source: string, profile: Profile | undefined): 
   }
 }
 
-function applyTransforms(doc: Document, extensions: CarveExtension[]): Document {
+function applyTransforms(
+  doc: Document,
+  extensions: CarveExtension[],
+  options: Readonly<RenderOptions>,
+): Document {
   let out = doc
   for (const extension of extensions) {
     if (extension.afterParse !== undefined) out = extension.afterParse(out)
   }
+  // The render below is unrolled, so the read-only context `carveToHtml` hands
+  // `beforeRender` has to be built here (spec §2.2). A hook runs before any
+  // render starts and so has nothing to inherit from: without this it renders
+  // its own output with DEFAULTS, and a `symbols` map or `allowRawHtml: false`
+  // reaches the heading but not the node a hook builds from the same heading.
+  //
+  // Frozen shallow copy, not the object handed to `renderHtml` a few lines
+  // later, so a hook cannot clear a setting a later guard reads. Only HTML is
+  // ever the target here, and this generator exposes no static mode.
+  const hookContext: BeforeRenderContext = Object.freeze({
+    options: Object.freeze({ ...options }),
+    mode: 'interactive',
+    isStatic: false,
+    targetIsHtml: true,
+  })
   for (const extension of extensions) {
-    if (extension.beforeRender !== undefined) out = extension.beforeRender(out)
+    if (extension.beforeRender !== undefined) out = extension.beforeRender(out, hookContext)
   }
   return out
 }
@@ -254,10 +275,15 @@ export function renderPage(page: Page, ctx: RenderContext): RenderedPage {
   let ast: Document
   try {
     enforceProfileMaxLength(expanded.source, ctx.profile)
-    ast = applyTransforms(resolve(parse(expanded.source, { extensions: ctx.extensions })), ctx.extensions)
+    const renderOptions: RenderOptions = { extensions: ctx.extensions }
+    ast = applyTransforms(
+      resolve(parse(expanded.source, { extensions: ctx.extensions })),
+      ctx.extensions,
+      renderOptions,
+    )
     if (ctx.profile !== undefined) applyProfile(ast, ctx.profile, ctx.profileBaseHost)
     rewriteContentUrls(ast as unknown as AnyNode, ctx.base)
-    html = renderHtml(ast, { extensions: ctx.extensions })
+    html = renderHtml(ast, renderOptions)
   } catch (error) {
     if (error instanceof ProfileViolationError) throw profileError(page, error)
     if (ctx.profile !== undefined && error instanceof RangeError) {

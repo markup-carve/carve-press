@@ -10,18 +10,39 @@ name: Engine drift
 # and dropped every footnote marker (carve-hexapdf#10). A site generator has the
 # same exposure: the engine decides what every page renders as.
 #
-# It reports rather than gates on lag: upstream moving is not a defect here, and
-# a job that goes red for something outside the repository teaches people to
-# ignore it. It DOES fail when a pin is not a 40-hex revision, or is not a real
-# commit on that repository's main. carve-js has rewritten history before -
-# three sibling repos pinned revisions a fresh clone cannot check out
+# The `drift` job reports revision distance rather than gating on it, and that
+# is deliberate: a distance is a proxy, 300 commits can change nothing and one
+# can change a construct. It DOES fail when a pin is not a 40-hex revision, or
+# is not a real commit on that repository's main. carve-js has rewritten history
+# before - three sibling repos pinned revisions a fresh clone cannot check out
 # (carve#499) - so an unreachable pin is a real failure mode, not a hypothetical.
+#
+# What a distance could never do is fail, and that is the half this workflow was
+# missing. Every scheduled run was green while the pin drifted 333 commits and
+# 256 of 1131 corpus documents rendered wrongly (carve-press#19). A warning is
+# the right instrument when the remedy is upstream and unavailable here - it is
+# what the carve-php satellites report, because only a release can close their
+# gap. It is the wrong instrument here: the remedy is one line of package.json
+# in this repository. So the `corpus` job below measures what the pinned engine
+# DOES, in documents, and fails.
 
 on:
   schedule:
     # 05:00 UTC daily, after the upstream repos have had a night to settle.
     - cron: "0 5 * * *"
   workflow_dispatch:
+
+env:
+  # How many corpus documents the pinned engine may render differently from
+  # carve `main` THAT carve-js `main` GETS RIGHT, before this fails.
+  #
+  # The qualifier is the whole design. A raw count is two lags added together:
+  # the pin behind carve-js, plus carve-js behind carve. Only the first is
+  # fixable here, and a gate that fails with a remedy the repo cannot perform
+  # gets its tolerance raised until it means nothing. Not zero either: carve-js
+  # merges through the day and a pin bumped this morning legitimately trails a
+  # fix merged this afternoon.
+  DRIFT_MAX_DOCUMENTS: 10
 
 jobs:
   drift:
@@ -71,6 +92,79 @@ jobs:
           echo "${DIR} main is ${behind} commit(s) ahead"
           if [ "${behind}" -gt 0 ]; then
             echo "::warning::${DEP} is ${behind} ${DIR} commit(s) behind main"
+          fi
+
+  corpus:
+    name: The pinned engine still renders carve main's corpus
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out the corpus from carve main
+        uses: actions/checkout@v4
+        with:
+          repository: markup-carve/carve
+          path: carve-main
+
+      - name: Check out carve-js
+        uses: actions/checkout@v4
+        with:
+          repository: markup-carve/carve-js
+          path: upstream/carve-js
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The lockfile records the git dependencies as `git+ssh://`, so a runner
+      # without an SSH key cannot fetch them. Same step as ci.yml and pages.yml.
+      - name: Prefer HTTPS for Git dependencies
+        run: |
+          git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+          git config --global url."https://github.com/".insteadOf git@github.com:
+
+      # The engine AS THIS REPO INSTALLS IT. `npm ci` and not `npm install`, so
+      # what is measured is the pin the lockfile records rather than whatever a
+      # loose resolution would have picked today.
+      - run: npm ci
+
+      # The reference the pin is judged against: the same corpus through
+      # carve-js `main`. Whatever both get wrong is the engine trailing the
+      # language and no pin here can close it; the difference is this repo's.
+      - name: Build carve-js main
+        run: |
+          set -euo pipefail
+          cd upstream/carve-js
+          npm ci
+          npm run build
+
+      - name: Render every corpus document through the pinned engine
+        run: |
+          set -euo pipefail
+          out="$(node tools/corpus-through-engine.mjs \
+            node_modules/@markup-carve/carve/dist/index.js \
+            carve-main/tests/corpus --list \
+            --reference upstream/carve-js/dist/index.js | tee /dev/stderr)"
+          field() { printf '%s\n' "$out" | sed -n "s/^$1=//p"; }
+          documents="$(field documents)"
+          wrong="$(field wrong)"
+          reference_wrong="$(field reference_wrong)"
+          attributable="$(field attributable)"
+
+          echo "the pinned engine renders ${wrong} of ${documents} carve main documents differently"
+          echo "carve-js main renders ${reference_wrong} of them differently"
+          echo "so ${attributable} are attributable to the pin in this repository"
+
+          if [ "${reference_wrong}" -gt 0 ]; then
+            echo "::notice::carve-js main itself renders ${reference_wrong} of ${documents} carve main documents differently. That is upstream engine debt (carve#608) and moving the pin here cannot close it."
+          fi
+
+          if [ "${attributable}" -gt "${DRIFT_MAX_DOCUMENTS}" ]; then
+            echo "::error::${attributable} of ${documents} corpus documents render differently through the pinned engine but correctly through carve-js main, over the tolerance of ${DRIFT_MAX_DOCUMENTS}. Bump the '@markup-carve/carve' revision in package.json and refresh the lockfile."
+            exit 1
+          fi
+          if [ "${attributable}" -gt 0 ]; then
+            echo "::warning::${attributable} of ${documents} corpus documents would be fixed by bumping the engine pin (tolerance ${DRIFT_MAX_DOCUMENTS})"
           fi
 
   # The pins make the org dependencies deterministic; the rest of the tree still
