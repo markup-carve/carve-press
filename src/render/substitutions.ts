@@ -80,10 +80,9 @@ function replaceBlocks(blocks: BlockNode[], substitutions: SubstitutionMap, warn
         block.children = replaceInlines(block.children, substitutions, warned)
         break
       case 'block_quote':
+        // A quote carries no attribution of its own. A caption on a quote makes
+        // a FIGURE, and that caption is walked as a figure's (carve#1213).
         replaceBlocks(block.children, substitutions, warned)
-        if (block.attribution !== undefined) {
-          block.attribution = replaceInlines(block.attribution, substitutions, warned)
-        }
         break
       case 'list':
         for (const item of block.items) replaceBlocks(item.children, substitutions, warned)

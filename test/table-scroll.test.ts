@@ -33,7 +33,9 @@ describe('tableScrollExtension', () => {
 
   it('delegates table rendering to the core renderer', () => {
     const html = render('|=> H | B | < |\n| a | b | c |\n')
-    expect(html).toContain('<th style="text-align: right;">H</th>')
+    // The engine scopes header cells: a header cell in a body row is a row
+    // header, and the scope rides ahead of the author's own attributes.
+    expect(html).toContain('<th scope="row" style="text-align: right;">H</th>')
     expect(html).toContain('<td colspan="2">B</td>')
     expect(html).toContain('<td>a</td><td>b</td><td>c</td>')
   })
