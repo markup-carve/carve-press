@@ -63,13 +63,14 @@ jobs:
       # superseded freeze is still deterministic, it just measures against a
       # corpus nobody else is using.
       #
-      # 0f6b990, 1245 documents, the freeze the maintainer declared on
-      # markup-carve/carve#1366.
+      # 22f7f47, 1259 documents, the release freeze. The previous ref here was
+      # 0f6b990 at 1245 documents; the 14 it gained are additive and rendered
+      # correctly on the old pin as well as this one.
       - name: Check out the corpus at the spec freeze
         uses: actions/checkout@v4
         with:
           repository: markup-carve/carve
-          ref: 0f6b990383090c805064922286eb6571e22206d2
+          ref: 22f7f47732bd949fd21e3d6ebedfd90f3723dc80
           path: carve-freeze
 
       - uses: actions/setup-node@v4
