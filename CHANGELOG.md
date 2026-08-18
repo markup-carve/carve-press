@@ -1,9 +1,30 @@
-## [Unreleased]
+# Changelog
+
+## [0.1.1] - 2026-08-18
+
+### Security
+
+- The Carve engine moves to 0.1.4, a security release. A list-valued URL
+  attribute was only probed on its FIRST entry, so
+  `srcset="safe.png 1x, javascript:alert(1) 2x"` passed sanitization on the
+  second one. Any site built from untrusted Carve should take this release.
 
 ### Added
 
 - A skip link as the first tab stop on every page. Reaching the text previously took 23 tab stops through the header and sidebar.
 
+### Changed
+
+- The Carve engine is an ordinary registry range (`^0.1.4`) instead of a pinned carve-js commit, so an install no longer clones the engine over git. `carve-grammars` stays a commit pin: the pin is 50 commits ahead of the published 0.1.3, and a range would be a downgrade.
+
+### Fixed
+
+- Every page advertised a feed for its locale, but a locale with no posts had no feed written, so the link 404'd. Locale feeds are now always written.
+- The mobile menu's links could not be tapped. The nav drawer is nested inside the header, which is a stacking context at mobile widths, so the drawer painted below the scrim however high its own z-index was: every tap landed on the scrim and closed the menu instead of following the link.
+
+## [0.1.0] - 2026-08-03
+
+### Added
 
 - Locale-aware derived outputs: search records carry their locale and the client filters to the reader's, feeds are written per locale with each page linking its own, and sitemap entries carry `hreflang` alternates for translations that exist.
 - A scale fixture in `test/perf` covering a 300-page full build and an incremental dev rebuild, asserting work done rather than wall-clock time.
@@ -36,11 +57,6 @@
 - npm scripts include `docs:build`, `docs:dev`, and `docs:serve`.
 
 ### Fixed
-
-- Every page advertised a feed for its locale, but a locale with no posts had no feed written, so the link 404'd. Locale feeds are now always written.
-
-
-- The mobile menu's links could not be tapped. The nav drawer is nested inside the header, which is a stacking context at mobile widths, so the drawer painted below the scrim however high its own z-index was: every tap landed on the scrim and closed the menu instead of following the link.
 
 - Search indexes every page. Records existed only per heading, so a page written without an `##` produced none at all and could not be found, and prose above a page's first heading belonged to no record on any page. Each page now carries a record of its own alongside its sections, and results are deduplicated per page in the client.
 
