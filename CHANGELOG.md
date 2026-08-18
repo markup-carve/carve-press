@@ -15,7 +15,7 @@
 
 ### Changed
 
-- The Carve engine is an ordinary registry range (`^0.1.4`) instead of a pinned carve-js commit, so an install no longer clones the engine over git. `carve-grammars` stays a commit pin: the pin is 50 commits ahead of the published 0.1.3, and a range would be a downgrade.
+- The Carve engine and `carve-grammars` are both ordinary registry ranges (`^0.1.4`) instead of pinned commits, so an install no longer clones anything over git. The grammars pin was kept while the published version was 0.1.3 and the pin led it; `carve-grammars` 0.1.4 has since shipped three commits AHEAD of that pin, including the grammar and serializer fixes, so the range is now an upgrade rather than a downgrade.
 
 ### Fixed
 

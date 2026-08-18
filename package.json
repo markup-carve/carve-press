@@ -1,6 +1,14 @@
 {
   "name": "@markup-carve/carve-press",
   "version": "0.1.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/markup-carve/carve-press.git"
+  },
+  "homepage": "https://github.com/markup-carve/carve-press#readme",
+  "bugs": {
+    "url": "https://github.com/markup-carve/carve-press/issues"
+  },
   "description": "Static site generator for the Carve markup language",
   "type": "module",
   "license": "MIT",
@@ -52,7 +60,7 @@
   },
   "dependencies": {
     "@markup-carve/carve": "^0.1.4",
-    "@markup-carve/carve-grammars": "github:markup-carve/carve-grammars#7ef51b6ae5f7eff2556d90d8aa64b78d03a92b0f",
+    "@markup-carve/carve-grammars": "^0.1.4",
     "@shikijs/transformers": "^1.29.0",
     "minisearch": "^7.2.0",
     "shiki": "^1.24.0",
