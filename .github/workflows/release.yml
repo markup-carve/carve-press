@@ -1,0 +1,170 @@
+# carve-press was tagged v0.1.0 and released on GitHub, and npm has never
+# served it. The repo had ci.yml, engine-drift.yml and pages.yml and no
+# release workflow at all, so nothing could publish it - the release page said
+# shipped and the registry said absent. This workflow is the missing half.
+#
+# THE GATE RUNS BEFORE PUBLISH, AND PUBLISH SITS BEHIND IT VIA `needs:`. A
+# check placed in front of a publish step in the SAME job goes green when it is
+# skipped; only a separate job makes the publish unreachable rather than merely
+# later. That is what half-released carve-py.
+#
+# THE GATE MEASURES THE PACKED TARBALL. This package ships `dist/`, which
+# exists only because `prepare` runs - a source tree that builds says nothing
+# about what npm would serve.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  # A rehearsal: everything runs and the publish becomes --dry-run. The first
+  # run of a release workflow should not be the moment a tag makes it
+  # irreversible, because npm refuses to replace a published version.
+  workflow_dispatch:
+
+jobs:
+  guard:
+    name: The tag agrees with the package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: package.json version matches the tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            tag="$(node -p 'require("./package.json").version')"
+            echo "rehearsal: no tag exists, using package.json ($tag)"
+          else
+            tag="${GITHUB_REF_NAME#v}"
+          fi
+          got="$(node -p 'require("./package.json").version')"
+          [ "$got" = "$tag" ] \
+            || { echo "::error::package.json declares '$got', tag is '$tag'"; exit 1; }
+          echo "version $got"
+
+      - name: The changelog describes this version
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          [ "${{ github.event_name }}" = "workflow_dispatch" ] && v="$(node -p 'require("./package.json").version')"
+          grep -qE "^## \[?${v}\]? - " CHANGELOG.md \
+            || { echo "::error::CHANGELOG.md has no section for ${v}"; exit 1; }
+
+      # npm verifies the attestation's repository claim against this field and
+      # answers 422 when they differ. tree-sitter-carve 0.1.3 failed here twice,
+      # live, because no rehearsal can reach it: `npm publish --dry-run
+      # --provenance` skips provenance entirely, so the registry never sees a
+      # bundle. Comparing the two strings costs nothing.
+      - name: package.json points at this repository
+        run: |
+          want="https://github.com/${{ github.repository }}"
+          got="$(node -p 'require("./package.json").repository?.url ?? ""')"
+          norm="$(printf %s "$got" | sed -e 's|^git+||' -e 's|\.git$||')"
+          [ "$norm" = "$want" ] \
+            || { echo "::error::package.json repository.url is '$got' (normalizes to '$norm'); npm provenance requires '$want'"; exit 1; }
+          echo "repository.url matches $want"
+
+      # No git dependencies. The grammars dependency was a bare commit pin that
+      # had fallen three commits BEHIND the published package, so an install
+      # cloned a stale grammar over git and nothing said so.
+      - name: No dependency is installed over git
+        run: |
+          bad="$(node -p '
+            const d = require("./package.json");
+            Object.entries({...d.dependencies, ...d.peerDependencies} ?? {})
+              .filter(([, v]) => /^(github:|git\+|git:)/.test(v))
+              .map(([k, v]) => k + " -> " + v).join("\n")')"
+          [ -z "$bad" ] \
+            || { echo "::error::git dependencies would ship to consumers:"; echo "$bad"; exit 1; }
+          echo "all dependencies resolve from the registry"
+
+      - name: The npm credential actually authenticates
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          code="$(curl -sS -o /tmp/npm-who.json -w '%{http_code}' \
+            -H "Authorization: Bearer $NPM_TOKEN" https://registry.npmjs.org/-/whoami)"
+          [ "$code" = "200" ] \
+            || { echo "::error::NPM_TOKEN does not authenticate (HTTP $code)"; exit 1; }
+          echo "npm: authenticated as $(node -p 'require("/tmp/npm-who.json").username')"
+
+  verify:
+    name: Build, test, and inspect the packed tarball
+    runs-on: ubuntu-latest
+    needs: [guard]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm test
+
+      # `files` lists dist/ and the theme assets. dist/ is generated, so a
+      # tarball built without `prepare` having run would be an empty shell that
+      # installs cleanly and fails on first import.
+      - name: The tarball carries the built output
+        run: |
+          tarball="$(npm pack --silent)"
+          listing="$(tar -tzf "$tarball")"
+          missing=0
+          for want in dist/index.js dist/index.d.ts dist/cli.js theme/default.css README.md LICENSE; do
+            printf '%s\n' "$listing" | grep -q "^package/$want$" \
+              || { echo "::error::the tarball is missing $want"; missing=1; }
+          done
+          n="$(printf '%s\n' "$listing" | grep -c '^package/dist/.*\.js$')"
+          [ "$n" -ge 10 ] \
+            || { echo "::error::only $n compiled file(s) under dist/; prepare did not run"; missing=1; }
+          echo "$n compiled files under dist/"
+          exit $missing
+
+      # What a consumer gets, not what the source tree does.
+      - name: The packed tarball imports and builds a site
+        run: |
+          tarball="$(npm pack --silent)"
+          mkdir -p /tmp/consumer && cd /tmp/consumer
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund "$GITHUB_WORKSPACE/$tarball"
+          node --input-type=module -e '
+            const m = await import("@markup-carve/carve-press");
+            const names = Object.keys(m);
+            if (names.length === 0) throw new Error("the package exports nothing");
+            console.log("exports:", names.slice(0, 12).join(", "));
+          '
+
+  publish-npm:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    needs: [guard, verify]
+    # --provenance signs an attestation binding the tarball to this commit, and
+    # that needs an OIDC token. `id-token` is never granted implicitly, not even
+    # when the repository default is read-write; omitting this block does not
+    # weaken provenance, it makes the publish FAIL.
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - run: npm run build
+
+      # A missing credential FAILS rather than skipping. A skipped publish that
+      # leaves the job green is what half-released carve-py.
+      - name: The npm credential is present
+        run: |
+          [ -n "${{ secrets.NPM_TOKEN }}" ] \
+            || { echo "::error::NPM_TOKEN is not available to this repository"; exit 1; }
+
+      - name: Publish to npm
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            npm publish --dry-run --provenance --access public
+            echo "::notice::rehearsal - nothing was published to npm"
+          else
+            npm publish --provenance --access public
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
