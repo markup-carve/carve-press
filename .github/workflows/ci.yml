@@ -18,3 +18,90 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+
+  # The corpus, in the blocking path.
+  #
+  # engine-drift.yml has measured this since carve-press#19, and measures it
+  # correctly - but on `schedule` and `workflow_dispatch` only. It has never run
+  # on a pull request, so no pin bump has ever been checked before it merged,
+  # and it does not run at a release either. A gate that does not run at the cut
+  # does not gate the cut, and the pin this job would have caught was sitting 22
+  # commits back rendering 9 documents wrongly while every check on every pull
+  # request was green.
+  #
+  # This is the FAST half, and it is a different question from the scheduled
+  # one. It asks what the engine as installed does, against a recorded ceiling,
+  # so it needs no second engine build: a checkout and one render pass. The
+  # attributable comparison against carve-js `main` needs that second build and
+  # stays in engine-drift.yml, where a few minutes do not sit in front of a
+  # merge.
+  #
+  # Everything else in CI asserts hand-written expectations, which a stale
+  # engine satisfies exactly as well as a current one. This is the only check
+  # here that can tell one from the other.
+  corpus:
+    name: The installed engine still renders carve main's corpus
+    runs-on: ubuntu-latest
+    env:
+      # How many of carve main's documents the engine as installed may render
+      # differently before this fails.
+      #
+      # NOT a tolerance for this repo's own lag - that is what the scheduled
+      # attributable check is for. This is carve-js `main` itself against the
+      # frozen spec corpus, measured at 29 of 1239 when this landed, and no pin
+      # in this repository can move it. It is a CEILING so that a pin bump
+      # cannot quietly make rendering worse, and the step below asks for it to
+      # be lowered whenever the real number drops, so it ratchets rather than
+      # rots.
+      CORPUS_MAX_WRONG: 29
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out the corpus from carve main
+        uses: actions/checkout@v4
+        with:
+          repository: markup-carve/carve
+          path: carve-main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The lockfile records the git dependencies as `git+ssh://`, so a runner
+      # without an SSH key cannot fetch them. Same step as the other jobs.
+      - name: Prefer HTTPS for Git dependencies
+        run: |
+          git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+          git config --global url."https://github.com/".insteadOf git@github.com:
+
+      # `npm ci` and not `npm install`, so what is measured is the pin the
+      # lockfile records rather than whatever a loose resolution picks today.
+      - run: npm ci
+
+      - name: Render every corpus document through the engine as installed
+        run: |
+          set -euo pipefail
+          out="$(node tools/corpus-through-engine.mjs \
+            node_modules/@markup-carve/carve/dist/index.js \
+            carve-main/tests/corpus --list | tee /dev/stderr)"
+          documents="$(printf '%s\n' "$out" | sed -n 's/^documents=//p')"
+          wrong="$(printf '%s\n' "$out" | sed -n 's/^wrong=//p')"
+
+          # The script exits non-zero when the corpus population does not match
+          # what the spec's example pages declare, so reaching this line already
+          # means the whole corpus was read. Guard the extraction anyway: an
+          # empty `wrong` would make every comparison below vacuously true.
+          if [ -z "${wrong}" ] || [ -z "${documents}" ]; then
+            echo "::error::the run logged no documents=/wrong= counters, so nothing was measured and nothing here is a result"
+            exit 1
+          fi
+
+          echo "the installed engine renders ${wrong} of ${documents} carve main documents differently"
+
+          if [ "${wrong}" -gt "${CORPUS_MAX_WRONG}" ]; then
+            echo "::error::${wrong} of ${documents} corpus documents render differently through the engine as installed, over the ceiling of ${CORPUS_MAX_WRONG}. If a pin moved in this pull request, it made rendering worse; if it did not, the engine did."
+            exit 1
+          fi
+          if [ "${wrong}" -lt "${CORPUS_MAX_WRONG}" ]; then
+            echo "::warning::only ${wrong} of ${documents} documents render differently now, under the ceiling of ${CORPUS_MAX_WRONG}. Lower CORPUS_MAX_WRONG in .github/workflows/ci.yml to ${wrong} so the ceiling keeps meaning something."
+          fi
