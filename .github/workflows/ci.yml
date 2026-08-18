@@ -30,45 +30,47 @@ jobs:
   # request was green.
   #
   # This is the FAST half, and it is a different question from the scheduled
-  # one. It asks what the engine as installed does, against a recorded ceiling,
-  # so it needs no second engine build: a checkout and one render pass. The
+  # one. It asks what the engine as installed does against a FIXED corpus, so it
+  # needs no second engine build: a checkout and one render pass. The
   # attributable comparison against carve-js `main` needs that second build and
   # stays in engine-drift.yml, where a few minutes do not sit in front of a
-  # merge.
+  # merge - and where the corpus is deliberately left floating, because
+  # watching upstream move is that job's entire purpose and it subtracts
+  # carve-js `main` from its own result so growth alone cannot breach it.
   #
   # Everything else in CI asserts hand-written expectations, which a stale
   # engine satisfies exactly as well as a current one. This is the only check
   # here that can tell one from the other.
   corpus:
-    name: The installed engine still renders carve main's corpus
+    name: The installed engine against the frozen spec corpus
     runs-on: ubuntu-latest
-    env:
-      # How many of carve main's documents the engine as installed may render
-      # differently before this fails.
-      #
-      # NOT a tolerance for this repo's own lag - that is what the scheduled
-      # attributable check is for. This is carve-js `main` itself against the
-      # frozen spec corpus, and no pin in this repository can move it. It is a
-      # CEILING so that a pin bump cannot quietly make rendering worse, and the
-      # step below asks for it to be lowered whenever the real number drops, so
-      # it ratchets rather than rots.
-      #
-      # 24 of 1241 at the freeze, with the pin this branch moves to. It only
-      # ever comes down. It was 29 of 1239, set exactly at the residual of the
-      # day, which is why two documents landing upstream at the freeze tipped it
-      # one over - the ceiling had no room in it at all, and the correct answer
-      # to that was never to add room. The 24 are carve-js not implementing the
-      # spec's 349/350/355/356/357/359 rulings yet; they are listed by name on
-      # failure, and belong to carve-js.
-      CORPUS_MAX_WRONG: 24
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check out the corpus from carve main
+      # PINNED, not tracking carve `main`.
+      #
+      # This checkout used to float, which made the job measure the spec's pace
+      # rather than anything in this repository. A breach then said "if a pin
+      # moved in this pull request, it made rendering worse; if it did not, the
+      # engine did" - and in the case that actually fires, upstream growing a
+      # category overnight, both halves of that are wrong and it accuses a
+      # branch that changed nothing.
+      #
+      # How fast that end moves: the corpus freeze was declared three times in
+      # one night, 287b4b8 at 1239 documents, then 0490ae5 at 1241, then this
+      # one at 1245. Not one of those was anything a branch here did. That is
+      # the argument for pinning rather than one against it - a pin to a
+      # superseded freeze is still deterministic, it just measures against a
+      # corpus nobody else is using.
+      #
+      # 0f6b990, 1245 documents, the freeze the maintainer declared on
+      # markup-carve/carve#1366.
+      - name: Check out the corpus at the spec freeze
         uses: actions/checkout@v4
         with:
           repository: markup-carve/carve
-          path: carve-main
+          ref: 0f6b990383090c805064922286eb6571e22206d2
+          path: carve-freeze
 
       - uses: actions/setup-node@v4
         with:
@@ -85,38 +87,40 @@ jobs:
       # lockfile records rather than whatever a loose resolution picks today.
       - run: npm ci
 
+      # BY NAME, not by count.
+      #
+      # With the corpus pinned and the engine pinned, the divergent set is a
+      # constant that only a change here can move, so it is recorded as a list
+      # of names in tools/corpus-divergences-at-freeze.txt. A ceiling could not
+      # carry that: one document regressing while another is fixed leaves the
+      # total unchanged, and the total is all a ceiling ever sees. The script
+      # returns three distinct verdicts - a name that is divergent now and was
+      # not fails and says it is this branch; a recorded name that renders
+      # correctly now warns and asks for the line to be deleted so the record
+      # ratchets; a recorded name the corpus does not hold at all is neither,
+      # and says the checkout is not the pinned freeze instead of returning a
+      # verdict about rendering.
+      #
+      # The corpus ref above, the engine revision in package.json and that file
+      # all move together in one change: bump the pin, re-measure through the
+      # installed engine, and rewrite the file from that run.
       - name: Render every corpus document through the engine as installed
         run: |
           set -euo pipefail
-          out="$(node tools/corpus-through-engine.mjs \
+          node tools/corpus-through-engine.mjs \
             node_modules/@markup-carve/carve/dist/index.js \
-            carve-main/tests/corpus --list | tee /dev/stderr)"
-          documents="$(printf '%s\n' "$out" | sed -n 's/^documents=//p')"
-          wrong="$(printf '%s\n' "$out" | sed -n 's/^wrong=//p')"
+            carve-freeze/tests/corpus \
+            --list --baseline=tools/corpus-divergences-at-freeze.txt | tee "${RUNNER_TEMP}/corpus-run.txt"
+          documents="$(sed -n 's/^documents=//p' "${RUNNER_TEMP}/corpus-run.txt")"
+          wrong="$(sed -n 's/^wrong=//p' "${RUNNER_TEMP}/corpus-run.txt")"
 
-          # The script exits non-zero when the corpus population does not match
-          # what the spec's example pages declare, so reaching this line already
-          # means the whole corpus was read. Guard the extraction anyway: an
-          # empty `wrong` would make every comparison below vacuously true.
-          if [ -z "${wrong}" ] || [ -z "${documents}" ]; then
+          # Reaching this line already means the population guard passed and the
+          # recorded set held. Guard the extraction anyway: an empty value would
+          # make the line below a claim about nothing, which is the failure
+          # shape this job exists to not have.
+          if [ -z "${documents}" ] || [ -z "${wrong}" ]; then
             echo "::error::the run logged no documents=/wrong= counters, so nothing was measured and nothing here is a result"
             exit 1
           fi
 
-          echo "the installed engine renders ${wrong} of ${documents} carve main documents differently"
-
-          if [ "${wrong}" -gt "${CORPUS_MAX_WRONG}" ]; then
-            # By name, not by count. A count says how many documents are wrong
-            # and nothing about which, so the first thing anyone reading a red
-            # run has to do is re-derive the list locally - and a count alone
-            # also hides a swap, one construct fixed and another broken at the
-            # same total. `--list` above already printed every one of them to
-            # the log; this repeats them inside the annotation, which is the
-            # part that shows up without opening the run.
-            printf '%s\n' "$out" | sed -n 's/^wrong: /  /p'
-            echo "::error::${wrong} of ${documents} corpus documents render differently through the engine as installed, over the ceiling of ${CORPUS_MAX_WRONG}: $(printf '%s\n' "$out" | sed -n 's/^wrong: //p' | paste -sd' ' -). If a pin moved in this pull request, it made rendering worse; if it did not, the engine did."
-            exit 1
-          fi
-          if [ "${wrong}" -lt "${CORPUS_MAX_WRONG}" ]; then
-            echo "::warning::only ${wrong} of ${documents} documents render differently now, under the ceiling of ${CORPUS_MAX_WRONG}. Lower CORPUS_MAX_WRONG in .github/workflows/ci.yml to ${wrong} so the ceiling keeps meaning something."
-          fi
+          echo "the residual against the frozen corpus is ${wrong} of ${documents} documents, the same set recorded at the freeze"

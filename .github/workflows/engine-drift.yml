@@ -100,6 +100,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # DELIBERATELY UNPINNED, unlike the corpus job in ci.yml.
+      #
+      # The two jobs ask different questions. ci.yml asks whether this
+      # repository changed rendering, so both ends have to be fixed or a breach
+      # says nothing about the branch that hit it - it is pinned at the spec
+      # freeze. This job asks whether the pin here has fallen behind what
+      # carve-js can already do, and noticing upstream move is the whole point:
+      # a corpus category landing overnight is exactly the event it exists to
+      # see, and pinning it away would make the watchtower blind on purpose.
+      #
+      # Growth alone cannot breach it either. It gates on `attributable`, which
+      # subtracts carve-js `main`'s own residual, so a new document that both
+      # engines get wrong contributes nothing and only a document `main` renders
+      # correctly and the pin does not can move the number. And it runs on
+      # `schedule` and `workflow_dispatch`, never on a pull request, so it has
+      # no branch to accuse.
       - name: Check out the corpus from carve main
         uses: actions/checkout@v4
         with:

@@ -1,0 +1,48 @@
+# Documents the engine this repository INSTALLS renders differently from the
+# spec corpus, measured at the pinned freeze.
+#
+#   corpus  markup-carve/carve 0f6b990383090c805064922286eb6571e22206d2, 1245 documents
+#   engine  markup-carve/carve-js 099db2ccf7216f3712dfcb701d69df00c8ec3062,
+#           as package-lock.json resolves it and `npm ci` builds it
+#
+# Both ends are fixed, so this list is the whole result rather than a snapshot
+# of one. A NAME APPEARING HERE THAT DID NOT BEFORE is this repository's change,
+# which in practice means the engine pin a pull request moved made rendering
+# worse. A name disappearing is an improvement, recorded by deleting the line.
+# A count alone can say neither, because a document regressing while another is
+# fixed leaves the total untouched.
+#
+# It is a residual and not a defect list for this repository. Every one of the
+# 24 is carve-js not having implemented a spec ruling yet - the 349, 350, 355,
+# 356, 357 and 359 rulings on container content columns, table continuation and
+# joined header rows, nested quote ends, and footnote definition bodies. They
+# belong to carve-js and no change here closes them; the four documents the 360
+# ruling added at this freeze already render correctly.
+#
+# The corpus ref in .github/workflows/ci.yml, the engine revision in
+# package.json, and this list all move together in one change: bump the pin,
+# re-measure through the installed engine, and rewrite this file from that run.
+349-a-container-whose-table-ends-on-a-continuation-row-3.crv
+349-a-container-whose-table-ends-on-a-continuation-row-5.crv
+349-a-container-whose-table-ends-on-a-continuation-row-6.crv
+349-a-container-whose-table-ends-on-a-continuation-row.crv
+350-a-definition-at-a-container-s-content-column-2.crv
+350-a-definition-at-a-container-s-content-column-5.crv
+350-a-definition-at-a-container-s-content-column-6.crv
+350-a-definition-at-a-container-s-content-column.crv
+355-a-container-whose-table-ends-on-a-joined-header-row-2.crv
+355-a-container-whose-table-ends-on-a-joined-header-row-3.crv
+355-a-container-whose-table-ends-on-a-joined-header-row.crv
+356-a-quote-inside-a-quote-is-asked-what-it-ends-on-3.crv
+356-a-quote-inside-a-quote-is-asked-what-it-ends-on-4.crv
+356-a-quote-inside-a-quote-is-asked-what-it-ends-on-5.crv
+356-a-quote-inside-a-quote-is-asked-what-it-ends-on-6.crv
+356-a-quote-inside-a-quote-is-asked-what-it-ends-on-7.crv
+356-a-quote-inside-a-quote-is-asked-what-it-ends-on-8.crv
+356-a-quote-inside-a-quote-is-asked-what-it-ends-on-9.crv
+356-a-quote-inside-a-quote-is-asked-what-it-ends-on.crv
+357-a-block-at-a-container-s-content-column-ends-the-paragraph-whatever-it-renders-2.crv
+357-a-block-at-a-container-s-content-column-ends-the-paragraph-whatever-it-renders-3.crv
+357-a-block-at-a-container-s-content-column-ends-the-paragraph-whatever-it-renders-4.crv
+357-a-block-at-a-container-s-content-column-ends-the-paragraph-whatever-it-renders-5.crv
+359-a-footnote-definition-s-block-runs-to-the-end-of-its-body.crv

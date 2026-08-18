@@ -10,12 +10,18 @@
  * (carve-press#19). Only rendering the documents says what an engine does.
  *
  *   node tools/corpus-through-engine.mjs <engine-entry> <corpus-dir>
- *        [--reference <engine-entry>] [--list]
+ *        [--reference <engine-entry>] [--list] [--baseline=<file>]
  *
  * With `--reference`, a second engine renders the same documents and the
  * difference is reported as `attributable`: the documents this repository can
  * fix by moving its pin, as opposed to the ones carve-js has not implemented
  * yet, which no pin here can close.
+ *
+ * With `--baseline`, the divergent documents are held against a recorded list
+ * of NAMES rather than a count, and the run exits non-zero when a document that
+ * rendered correctly at the freeze renders differently now. A count cannot
+ * carry that: one document regressing while another is fixed leaves the total
+ * untouched and a ceiling silent.
  *
  * Prints `key=value` lines for the workflow to read.
  */
@@ -26,15 +32,19 @@ import { pathToFileURL } from 'node:url'
 const argv = process.argv.slice(2)
 const positional = []
 let referencePath
+let baselinePath
 let list = false
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--reference') referencePath = argv[++i]
   else if (argv[i] === '--list') list = true
+  else if (argv[i].startsWith('--baseline=')) baselinePath = argv[i].slice('--baseline='.length)
   else positional.push(argv[i])
 }
 const [enginePath, corpusDir] = positional
 if (enginePath === undefined || corpusDir === undefined) {
-  process.stderr.write('usage: corpus-through-engine.mjs <engine-entry> <corpus-dir> [--reference <engine-entry>] [--list]\n')
+  process.stderr.write(
+    'usage: corpus-through-engine.mjs <engine-entry> <corpus-dir> [--reference <engine-entry>] [--list] [--baseline=<file>]\n',
+  )
   process.exit(2)
 }
 
@@ -130,6 +140,82 @@ function diverging(carveToHtml, dir, all) {
   return { wrong, threw }
 }
 
+/**
+ * Hold the divergent documents against the list recorded at the pinned freeze.
+ *
+ * The corpus is pinned to a commit and the engine to a revision the lockfile
+ * records, so both ends of this measurement are fixed and only a change in THIS
+ * repository can move the divergent set. That is what makes a name appearing
+ * here attributable: it is the engine pin this pull request moved, not the spec
+ * moving underneath a floating checkout.
+ *
+ * Comparing counts would miss the case that matters most - one document
+ * regressing while another is fixed leaves the total unchanged and a ceiling
+ * silent - so the comparison is by name.
+ *
+ * @param {string} path Recorded divergences file.
+ * @param {Set<string>} wrong Documents that rendered differently in this run.
+ * @param {string[]} present Every document the pinned corpus actually holds.
+ * @returns {number} Process exit status.
+ */
+function compareAgainstBaseline(path, wrong, present) {
+  if (!existsSync(path)) {
+    process.stderr.write(`::error::no recorded divergences at ${path}; without them this run has nothing to be worse than\n`)
+    return 2
+  }
+
+  const recorded = readFileSync(path, 'utf8')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '' && !line.startsWith('#'))
+
+  if (recorded.length === 0) {
+    process.stderr.write(
+      `::error::${path} names no documents at all; that is a wiring problem, not a tree that renders the whole corpus correctly\n`,
+    )
+    return 1
+  }
+
+  // A recorded name the corpus does not hold means the corpus is not the one
+  // the record was measured against, so neither verdict below would mean
+  // anything. Report that instead of returning one.
+  const held = new Set(present)
+  const absent = recorded.filter((name) => !held.has(name))
+  if (absent.length > 0) {
+    process.stderr.write(
+      `::error::the recorded divergences name ${absent.length} document(s) this corpus does not hold ` +
+        `(${absent.slice(0, 10).join(', ')}${absent.length > 10 ? ', ...' : ''}). The corpus checked out here is not the ` +
+        'pinned freeze they were measured against, so nothing in this run is a statement about this repository. Fix the ' +
+        'ref in the workflow, or re-measure and re-record if the pin moved on purpose.\n',
+    )
+    return 1
+  }
+
+  const recordedSet = new Set(recorded)
+  const regressed = [...wrong].filter((name) => !recordedSet.has(name)).sort()
+  const improved = recorded.filter((name) => !wrong.has(name)).sort()
+
+  if (regressed.length > 0) {
+    process.stderr.write(
+      `::error::${regressed.length} document(s) render differently now that rendered correctly at the freeze: ` +
+        `${regressed.join(', ')}. The corpus ref and the engine revision are both pinned, so this is a change in this ` +
+        'pull request and not upstream movement.\n',
+    )
+    return 1
+  }
+
+  if (improved.length > 0) {
+    process.stderr.write(
+      `::warning::${improved.length} document(s) recorded as divergent render correctly now: ${improved.join(', ')}. ` +
+        `Delete those lines from ${path} so the record keeps meaning what it says.\n`,
+    )
+  }
+
+  process.stdout.write(`regressed=${regressed.length}\n`)
+  process.stdout.write(`improved=${improved.length}\n`)
+  return 0
+}
+
 const all = pairs(corpusDir)
 const declared = declaredCorpusSize(corpusDir)
 if (all.length !== declared) {
@@ -162,3 +248,7 @@ process.stdout.write(`wrong=${measured.wrong.size}\n`)
 process.stdout.write(`threw=${measured.threw}\n`)
 process.stdout.write(`reference_wrong=${referenceWrong}\n`)
 process.stdout.write(`attributable=${attributable}\n`)
+
+if (baselinePath !== undefined) {
+  process.exit(compareAgainstBaseline(baselinePath, measured.wrong, all.map((pair) => pair.name)))
+}
