@@ -164,14 +164,40 @@ function compareAgainstBaseline(path, wrong, present) {
     return 2
   }
 
-  const recorded = readFileSync(path, 'utf8')
+  const lines = readFileSync(path, 'utf8')
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line !== '' && !line.startsWith('#'))
 
-  if (recorded.length === 0) {
+  // ZERO HAS TO BE SPELLABLE, and it did not used to be. This guard read an
+  // empty list as a mis-wired path, on the premise that no pinned engine
+  // renders the whole corpus correctly. At the release freeze that premise
+  // stopped holding: carve-js 2dc3232e renders all 1259 documents of carve
+  // 22f7f47 as the corpus expects, so the honest record is no names at all.
+  //
+  // A guard whose premise has expired cannot just be deleted, because the case
+  // it was protecting against is still real - a truncated or wrongly-pathed
+  // file also names nothing, and reading that as "everything renders correctly"
+  // is the silent pass this whole script exists to not have. So the two are
+  // separated by making the empty record EXPLICIT: `(none)` on a line of its
+  // own is a measurement, and a file that merely happens to hold no names is
+  // still the wiring problem it always was.
+  const NONE = '(none)'
+  const declaresNone = lines.includes(NONE)
+  const recorded = lines.filter((line) => line !== NONE)
+
+  if (declaresNone && recorded.length > 0) {
     process.stderr.write(
-      `::error::${path} names no documents at all; that is a wiring problem, not a tree that renders the whole corpus correctly\n`,
+      `::error::${path} declares ${NONE} and also names ${recorded.length} document(s); ` +
+        'those are contradictory records and neither can be trusted\n',
+    )
+    return 1
+  }
+
+  if (recorded.length === 0 && !declaresNone) {
+    process.stderr.write(
+      `::error::${path} names no documents at all; that is a wiring problem, not a tree that renders ` +
+        `the whole corpus correctly. If it genuinely does, record that as ${NONE} on a line of its own.\n`,
     )
     return 1
   }
