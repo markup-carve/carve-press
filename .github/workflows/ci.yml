@@ -48,12 +48,19 @@ jobs:
       #
       # NOT a tolerance for this repo's own lag - that is what the scheduled
       # attributable check is for. This is carve-js `main` itself against the
-      # frozen spec corpus, measured at 29 of 1239 when this landed, and no pin
-      # in this repository can move it. It is a CEILING so that a pin bump
-      # cannot quietly make rendering worse, and the step below asks for it to
-      # be lowered whenever the real number drops, so it ratchets rather than
-      # rots.
-      CORPUS_MAX_WRONG: 29
+      # frozen spec corpus, and no pin in this repository can move it. It is a
+      # CEILING so that a pin bump cannot quietly make rendering worse, and the
+      # step below asks for it to be lowered whenever the real number drops, so
+      # it ratchets rather than rots.
+      #
+      # 24 of 1241 at the freeze, with the pin this branch moves to. It only
+      # ever comes down. It was 29 of 1239, set exactly at the residual of the
+      # day, which is why two documents landing upstream at the freeze tipped it
+      # one over - the ceiling had no room in it at all, and the correct answer
+      # to that was never to add room. The 24 are carve-js not implementing the
+      # spec's 349/350/355/356/357/359 rulings yet; they are listed by name on
+      # failure, and belong to carve-js.
+      CORPUS_MAX_WRONG: 24
     steps:
       - uses: actions/checkout@v4
 
@@ -99,7 +106,15 @@ jobs:
           echo "the installed engine renders ${wrong} of ${documents} carve main documents differently"
 
           if [ "${wrong}" -gt "${CORPUS_MAX_WRONG}" ]; then
-            echo "::error::${wrong} of ${documents} corpus documents render differently through the engine as installed, over the ceiling of ${CORPUS_MAX_WRONG}. If a pin moved in this pull request, it made rendering worse; if it did not, the engine did."
+            # By name, not by count. A count says how many documents are wrong
+            # and nothing about which, so the first thing anyone reading a red
+            # run has to do is re-derive the list locally - and a count alone
+            # also hides a swap, one construct fixed and another broken at the
+            # same total. `--list` above already printed every one of them to
+            # the log; this repeats them inside the annotation, which is the
+            # part that shows up without opening the run.
+            printf '%s\n' "$out" | sed -n 's/^wrong: /  /p'
+            echo "::error::${wrong} of ${documents} corpus documents render differently through the engine as installed, over the ceiling of ${CORPUS_MAX_WRONG}: $(printf '%s\n' "$out" | sed -n 's/^wrong: //p' | paste -sd' ' -). If a pin moved in this pull request, it made rendering worse; if it did not, the engine did."
             exit 1
           fi
           if [ "${wrong}" -lt "${CORPUS_MAX_WRONG}" ]; then
