@@ -58,10 +58,10 @@ jobs:
             repo: markup-carve/carve-grammars
             path: carve-grammars
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Check out ${{ matrix.repo }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ matrix.repo }}
           path: ${{ matrix.path }}
@@ -98,7 +98,7 @@ jobs:
     name: The pinned engine still renders carve main's corpus
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # DELIBERATELY UNPINNED, unlike the corpus job in ci.yml.
       #
@@ -117,18 +117,18 @@ jobs:
       # `schedule` and `workflow_dispatch`, never on a pull request, so it has
       # no branch to accuse.
       - name: Check out the corpus from carve main
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: markup-carve/carve
           path: carve-main
 
       - name: Check out carve-js
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: markup-carve/carve-js
           path: upstream/carve-js
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
 
@@ -189,8 +189,8 @@ jobs:
   suite:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       # The lockfile records the git dependencies as `git+ssh://`, so a runner
