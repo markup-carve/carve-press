@@ -311,22 +311,55 @@ function decodeDumpedResult(stdout: string): string | undefined {
  * failure still produces a result, with its message, on the first run.
  */
 async function dumpFixture(bin: string, htmlPath: string, userDataDir: string): Promise<string | undefined> {
+  // Both attempts failing used to return undefined, and the caller asserted
+  // `expect(result).toBeDefined()`. That reports "expected undefined to be
+  // defined" and nothing else - not Chrome's exit status, not its stderr, not
+  // what the page had actually rendered by the time the DOM was dumped. A run
+  // on 2026-08-19 (the v0.1.1 tag) failed exactly that way while the SAME
+  // commit passed on main minutes earlier, and the log could not say why.
+  //
+  // The page's own try/catch writes #result on error, so a dump with no
+  // #result at all means the DOM was captured before that catch ran - the
+  // virtual-time budget expiring mid-flight rather than the fixture reporting
+  // a failure. Keeping the evidence is what makes the next occurrence
+  // actionable instead of a shrug.
+  const diagnostics: string[] = []
   for (let attempt = 0; attempt < 2; attempt++) {
-    const { stdout } = await execFileAsync(
-      bin,
-      [
-        ...chromeFlags,
-        `--user-data-dir=${userDataDir}`,
-        '--virtual-time-budget=600000',
-        '--dump-dom',
-        pathToFileURL(htmlPath).href,
-      ],
-      { maxBuffer: 1024 * 1024 * 5, timeout: 60000 },
-    )
+    let stdout = ''
+    let stderr = ''
+    try {
+      ;({ stdout, stderr } = await execFileAsync(
+        bin,
+        [
+          ...chromeFlags,
+          `--user-data-dir=${userDataDir}`,
+          '--virtual-time-budget=600000',
+          '--dump-dom',
+          pathToFileURL(htmlPath).href,
+        ],
+        { maxBuffer: 1024 * 1024 * 5, timeout: 60000 },
+      ))
+    } catch (error) {
+      const failure = error as { stdout?: string; stderr?: string; message?: string }
+      stdout = failure.stdout ?? ''
+      stderr = failure.stderr ?? ''
+      diagnostics.push(`attempt ${attempt + 1}: chrome failed - ${failure.message ?? 'unknown'}`)
+    }
     const result = decodeDumpedResult(stdout)
     if (result !== undefined) return result
+    diagnostics.push(
+      `attempt ${attempt + 1}: no #result in the dumped DOM` +
+        ` (dom ${stdout.length}b, playground rendered: ${/carve-playground__rendered/.test(stdout)},` +
+        ` mermaid rendered: ${(stdout.match(/mermaid-rendered/g) ?? []).length})` +
+        (stderr.trim() ? `\n  chrome stderr: ${stderr.trim().split('\n').slice(-4).join(' | ')}` : ''),
+    )
   }
-  return undefined
+  throw new Error(
+    'the Chrome fixture produced no #result after 2 attempts. The page writes #result even on\n' +
+      'error, so the DOM was dumped before its catch ran - usually the virtual-time budget\n' +
+      'expiring while work was still in flight.\n  ' +
+      diagnostics.join('\n  '),
+  )
 }
 
 async function runRuntimeFixture(

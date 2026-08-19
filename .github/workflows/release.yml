@@ -27,7 +27,7 @@ jobs:
     name: The tag agrees with the package
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: package.json version matches the tag
         run: |
@@ -92,8 +92,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [guard]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
       - run: npm ci
@@ -143,8 +143,8 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org
