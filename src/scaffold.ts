@@ -140,7 +140,7 @@ Run \`carve-press dev\` to preview your site locally.
 }
 
 function normalizePagePath(path: string): string {
-  const normalized = path.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\.(crv|carve)$/, '')
+  const normalized = path.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\.crv$/, '')
   if (normalized === '' || normalized.includes('..')) throw new BuildError(`invalid page path "${path}"`)
   return `${normalized}.crv`
 }

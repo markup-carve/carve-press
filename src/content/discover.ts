@@ -18,7 +18,12 @@ export interface Page {
   bodyStartLine: number
 }
 
-const RE_PAGE = /\.(crv|carve)$/
+/**
+ * `.crv` is the only Carve extension - the spec states it and no second form,
+ * and intellij-carve dropped `.carve` in 0.1.2 with an instruction to rename.
+ * A site that routed `.carve` published pages no other tool in the org reads.
+ */
+const RE_PAGE = /\.crv$/
 
 /** Translate a `srcExclude` glob into a matcher. Only `*` and `**` are supported. */
 function globToRegExp(glob: string): RegExp {
