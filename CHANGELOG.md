@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- **Only `.crv` is discovered, routed and scaffolded** (#30). `.carve` matched
+  too, so a site published pages no other tool in the org reads - the spec
+  states one extension, and intellij-carve dropped `.carve` in 0.1.2. Rename
+  any `.carve` content file; it is no longer a page.
 - **`package.json` is importable, so the installed version can be read back**
   (#28). The subpath was not in `exports`, so reading it threw
   `ERR_PACKAGE_PATH_NOT_EXPORTED` - which reads as the package being absent
