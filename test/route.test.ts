@@ -19,8 +19,12 @@ describe('routeForPath', () => {
     expect(routeForPath('examples\\core.crv')).toBe('/examples/core')
   })
 
-  it('accepts the .carve extension too', () => {
-    expect(routeForPath('page.carve')).toBe('/page')
+  it('does not accept the .carve extension', () => {
+    // `.crv` is the only Carve extension: `.carve` was dropped in intellij-carve
+    // 0.1.2 with an instruction to rename, and jekyll-carve and mkdocs-carve both
+    // assert they do not match it. A `.carve` file is not a page, so its extension
+    // stays in the route rather than being stripped.
+    expect(routeForPath('page.carve')).toBe('/page.carve')
   })
 
   it('normalizes a leading ./', () => {

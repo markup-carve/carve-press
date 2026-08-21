@@ -1,4 +1,4 @@
-const RE_EXT = /\.(crv|carve)$/
+const RE_EXT = /\.crv$/
 
 /** Map a content-relative file path to its route. Routes always start with `/`. */
 export function routeForPath(relPath: string): string {
