@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **`package.json` is importable, so the installed version can be read back**
+  (#28). The subpath was not in `exports`, so reading it threw
+  `ERR_PACKAGE_PATH_NOT_EXPORTED` - which reads as the package being absent
+  rather than the subpath being closed. Only that one file is opened; every
+  other path stays refused.
+
 ## [0.1.1] - 2026-08-18
 
 ### Security
