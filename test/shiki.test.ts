@@ -285,7 +285,7 @@ describe('code-group highlighting', () => {
     })
     const extensions = await buildExtensionStack(config, config.shiki)
     const html = carveToHtml('::: code-group\n```js\nconst x = 1\n```\n:::\n', { extensions })
-    const panel = html.match(/<div class="code-group-panel">[\s\S]*?<\/div>/)?.[0] ?? ''
+    const panel = html.match(/<div class="code-group-panel"[^>]*>[\s\S]*?<\/div>/)?.[0] ?? ''
     expect(panel).toContain('shiki')
     expect(panel).toContain('<span')
     expect(panel).not.toContain('<pre><code class="language-js">')
@@ -299,7 +299,7 @@ describe('code-group highlighting', () => {
     const extensions = await buildExtensionStack(config, config.shiki)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const html = carveToHtml('::: code-group\n```brainfuck\n+++\n```\n:::\n', { extensions })
-    const panel = html.match(/<div class="code-group-panel">[\s\S]*?<\/div>/)?.[0] ?? ''
+    const panel = html.match(/<div class="code-group-panel"[^>]*>[\s\S]*?<\/div>/)?.[0] ?? ''
     expect(panel).toContain('+++')
     expect(panel).toContain('<pre><code class="language-brainfuck">')
     expect(panel).not.toContain('shiki')

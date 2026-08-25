@@ -60,8 +60,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@markup-carve/carve": "^0.1.4",
-    "@markup-carve/carve-grammars": "^0.1.4",
+    "@markup-carve/carve": "github:markup-carve/carve-js#c00ef24da8cbc22f0df3f4004e36a363ae378af2",
+    "@markup-carve/carve-grammars": "github:markup-carve/carve-grammars#4fe92d6c138a18386e5ba77173f311e823d9158a",
     "@shikijs/transformers": "^1.29.0",
     "minisearch": "^7.2.0",
     "shiki": "^1.24.0",
