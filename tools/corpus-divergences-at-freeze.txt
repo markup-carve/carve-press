@@ -1,8 +1,8 @@
 # Documents the engine this repository INSTALLS renders differently from the
 # spec corpus, measured at the pinned freeze.
 #
-#   corpus  markup-carve/carve 22f7f47, 1259 documents
-#   engine  markup-carve/carve-js 2dc3232e426a93ce40ffe3b099c0bb8731fd25e7,
+#   corpus  markup-carve/carve 70e46b5, 1422 documents
+#   engine  markup-carve/carve-js c00ef24da8cbc22f0df3f4004e36a363ae378af2,
 #           as package-lock.json resolves it and `npm ci` builds it
 #
 # Both ends are fixed, so this list is the whole result rather than a snapshot
@@ -12,13 +12,21 @@
 # A count alone can say neither, because a document regressing while another is
 # fixed leaves the total untouched.
 #
-# THE LIST IS `(none)`, and that is a result rather than a missing record. At the
-# previous pin it held 24 names - the 349, 350, 355, 356, 357 and 359 rulings on
-# container content columns, table continuation and joined header rows, nested
-# quote ends, and footnote definition bodies. Every one of them is carve-js
-# implementing the ruling between 099db2cc and the freeze; none was closed here.
-# The 14 documents the corpus gained between 0f6b990 and 22f7f47 render
-# correctly too, and already did at the previous pin.
+# THE LIST IS `(none)`, and that is a result rather than a missing record. It was
+# `(none)` at the previous freeze too, and staying there across a 218-commit
+# engine move and a 163-document corpus growth is the claim worth recording.
+#
+# WHY THE FREEZE MOVED TO 70e46b5 RATHER THAN SOMEWHERE ELSE. It is the spec
+# commit the pinned engine itself pins: carve-js c00ef24d's `spec` submodule
+# names it. That makes this job ask what carve-go and carve-py ask of their own
+# artifacts - is the engine as conformant as the spec it was written against -
+# instead of holding it to a corpus written before it. Holding the new engine to
+# the old 22f7f47 corpus reported 210 documents "rendering differently now that
+# rendered correctly at the freeze", none of which was a regression: they are
+# rulings the spec changed and the engine implemented, and the old corpus still
+# carries the pre-ruling HTML.
+#
+# The residual against 70e46b5 is 0 of 1422.
 #
 # An empty list makes this gate strictly stronger, not weaker: any document that
 # renders differently from now on is a name that was not here before, which is

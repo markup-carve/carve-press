@@ -27,6 +27,22 @@ name: Engine drift
 # DOES, in documents, and fails.
 
 on:
+  # THE `drift` JOB RUNS ON PULL REQUESTS, the other two do not, and the split is
+  # the point of this trigger list.
+  #
+  # `drift` asserts things about THIS repository's package.json and nothing else:
+  # that each org dependency names a 40-hex revision, that the revision is a real
+  # commit, and that it is on main. Every one of those is decided by the diff in
+  # front of it, so a pull request can always clear them, and a pull request is
+  # the only moment at which clearing them is cheap.
+  #
+  # Running on schedule alone left them unasserted exactly when they were broken.
+  # PR #25 replaced both git pins with the registry ranges "^0.1.4", every
+  # required check stayed green because none of them reads the pins, and the
+  # assertion that exists to catch precisely that did not run until the next
+  # morning - by which time it read as one more red scheduled job beside a corpus
+  # failure, rather than as a review comment on the change that caused it.
+  pull_request:
   schedule:
     # 05:00 UTC daily, after the upstream repos have had a night to settle.
     - cron: "0 5 * * *"
@@ -97,6 +113,11 @@ jobs:
   corpus:
     name: The pinned engine still renders carve main's corpus
     runs-on: ubuntu-latest
+    # NOT on pull requests, and the comment on the corpus checkout below says
+    # why at length: this job can breach because markup-carve/carve moved
+    # overnight, which is a state no branch here caused and some branches here
+    # cannot clear. `drift` above has no such exposure and does run on them.
+    if: github.event_name != 'pull_request'
     steps:
       - uses: actions/checkout@v5
 
@@ -188,6 +209,11 @@ jobs:
   # changing underneath.
   suite:
     runs-on: ubuntu-latest
+    # ci.yml already runs the suite on every pull request against the installed
+    # tree. What this copy adds is a run on a day nobody pushed, so that an
+    # unpinned dependency changing underneath is noticed; on a pull request it
+    # would only be the same suite twice.
+    if: github.event_name != 'pull_request'
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
