@@ -11,6 +11,23 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
+      # A git dependency ships to every CONSUMER of this package: npm re-resolves
+      # a published package's specs from its own manifest and never sees the
+      # lockfile committed here, so a `github:` spec in `dependencies` costs each
+      # install a git clone, a reachable GitHub, and any `insteadOf` rewrite the
+      # machine happens to carry - and gives up the registry integrity hash.
+      #
+      # The specs sat on `main` for months while every required check stayed
+      # green, because none of them read the specs: #25 tried to remove them and
+      # was failed by a SCHEDULED job, hours after the merge. engine-drift.yml
+      # rejects the shape too, but it is the assertion a reviewer sees on the
+      # pull request that matters, which is why this runs first and on every push.
+      - name: No dependency is installed over git
+        run: node tools/no-git-dependencies.mjs
+
+      # Kept for TRANSITIVE git specs: nothing in this manifest resolves over git
+      # any more, but a dependency of a dependency still can, and this costs
+      # nothing when there are none.
       - name: Prefer HTTPS for Git dependencies
         run: |
           git config --global url."https://github.com/".insteadOf ssh://git@github.com/
