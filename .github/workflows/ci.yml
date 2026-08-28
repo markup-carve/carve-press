@@ -17,10 +17,11 @@ jobs:
       # install a git clone, a reachable GitHub, and any `insteadOf` rewrite the
       # machine happens to carry - and gives up the registry integrity hash.
       #
-      # It reached `main` here (carve-press#35) while every required check stayed
-      # green, because none of them read the specs. engine-drift.yml rejects the
-      # shape too, but it is the assertion a reviewer sees on the pull request
-      # that matters, which is why this runs first and on every push.
+      # The specs sat on `main` for months while every required check stayed
+      # green, because none of them read the specs: #25 tried to remove them and
+      # was failed by a SCHEDULED job, hours after the merge. engine-drift.yml
+      # rejects the shape too, but it is the assertion a reviewer sees on the
+      # pull request that matters, which is why this runs first and on every push.
       - name: No dependency is installed over git
         run: node tools/no-git-dependencies.mjs
 
