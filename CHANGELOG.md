@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-09
+
+### Changed
+
+- The Carve engine moves to 0.1.6 and `carve-grammars` to 0.1.7, both fix-only
+  releases. The engine corrects fence, definition and block-opener handling
+  nested inside list items, quotes and container bodies, and the grammars
+  correct several syntax-highlighting runs that bled past their delimiters.
+
 ### Fixed
 
 - **Only `.crv` is discovered, routed and scaffolded** (#30). `.carve` matched
