@@ -66,6 +66,7 @@ export const PLAYGROUND_EXTENSION_EXCLUSIONS = {
   applyMigrationFixes: 'migration utility, not an extension factory',
   applyProfile: 'profile utility, not an extension factory',
   applyReversibleAstPatch: 'AST utility, not an extension factory',
+  applySourcePatch: 'source-patch utility, not an extension factory',
   bbcodeToCarve: 'migration utility, not an extension factory',
   buildMarker: 'stamp utility, not an extension factory',
   canonicalType: 'profile utility, not an extension factory',
@@ -74,6 +75,7 @@ export const PLAYGROUND_EXTENSION_EXCLUSIONS = {
   carveToAnsiWithReport: 'renderer entry point, not an extension factory',
   carveToAstJson: 'renderer entry point, not an extension factory',
   carveToCarve: 'renderer entry point, not an extension factory',
+  carveToCarvePatch: 'source-patch utility, not an extension factory',
   carveToCarveWithReport: 'renderer entry point, not an extension factory',
   carveToHtml: 'renderer entry point, not an extension factory',
   carveToHtmlWithReport: 'renderer entry point, not an extension factory',
@@ -85,6 +87,7 @@ export const PLAYGROUND_EXTENSION_EXCLUSIONS = {
   createAstPatch: 'AST utility, not an extension factory',
   createEditorSession: 'editor-session utility, not an extension factory',
   createReversibleAstPatch: 'AST utility, not an extension factory',
+  createSourcePatch: 'source-patch utility, not an extension factory',
   defaultAttributes: 'site policy extension; the playground has no project defaults to apply',
   diffAst: 'AST utility, not an extension factory',
   djotMigrationWarnings: 'migration utility, not an extension factory',
@@ -129,6 +132,7 @@ export const PLAYGROUND_EXTENSION_EXCLUSIONS = {
   // so enabling it only in the playground would make the two disagree on the
   // same source - the same reason defaultAttributes is excluded.
   smartQuotes: 'site policy extension; the site this playground mirrors does not enable smart quotes',
+  sourceFingerprint: 'source-patch utility, not an extension factory',
   stampCarve: 'stamp utility, not an extension factory',
   stripTrailingMarker: 'stamp utility, not an extension factory',
   tabNormalize: 'source transform utility, not an extension factory',

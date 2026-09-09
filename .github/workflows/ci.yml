@@ -80,17 +80,17 @@ jobs:
       # superseded freeze is still deterministic, it just measures against a
       # corpus nobody else is using.
       #
-      # 70e46b5, 1422 documents. THE FREEZE IS THE SPEC COMMIT THE PINNED ENGINE
-      # PINS - carve-js c00ef24d's own `spec` submodule names it - and that is a
-      # rule rather than this bump's convenience. It makes this job ask what
+      # a9a2fa7, 1680 documents. THE FREEZE IS THE SPEC COMMIT THE PINNED ENGINE
+      # PINS - carve-js 379474f (0.1.6)'s own `spec` submodule names it - and that
+      # is a rule rather than this bump's convenience. It makes this job ask what
       # carve-go and carve-py ask of their artifacts: is the engine as
       # conformant as the spec it was written against. Any other choice holds it
       # to a corpus written for a different engine.
       #
-      # The previous ref was 22f7f47 at 1259 documents, chosen the same way for
-      # the engine pinned then. Holding the CURRENT engine to it reported 210
-      # documents "rendering differently now that rendered correctly at the
-      # freeze" and not one was a regression - they are rulings the spec changed
+      # The previous ref was 70e46b5 at 1422 documents, the spec carve-js 0.1.5
+      # pinned. Holding the CURRENT engine to it reported one document,
+      # 06-task-lists-2, "rendering differently now that rendered correctly at
+      # the freeze" and it was not a regression - it is a ruling the spec changed
       # and the engine implemented, with the old corpus still carrying the
       # pre-ruling HTML. That is what a freeze left behind its engine measures,
       # and it is why this ref moves with the pin rather than outliving it.
@@ -98,7 +98,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: markup-carve/carve
-          ref: 70e46b554f886a2ea6434c54edcb335a62b1e534
+          ref: a9a2fa790d1e4d036b7c1693491c7f4b4f02218a
           path: carve-freeze
 
       - uses: actions/setup-node@v5
