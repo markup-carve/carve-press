@@ -134,6 +134,7 @@ jobs:
   publish-npm:
     name: Publish to npm
     runs-on: ubuntu-latest
+    environment: release
     needs: [guard, verify]
     # --provenance signs an attestation binding the tarball to this commit, and
     # that needs an OIDC token. `id-token` is never granted implicitly, not even
