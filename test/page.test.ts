@@ -1,6 +1,6 @@
 import { Profile } from '@markup-carve/carve'
-import { describe, it, expect } from 'vitest'
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { afterEach, describe, it, expect, vi } from 'vitest'
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import type { Page } from '../src/content/discover.js'
@@ -27,6 +27,7 @@ function idsFromHtml(html: string): string[] {
 }
 
 describe('renderPage', () => {
+  afterEach(() => vi.restoreAllMocks())
   it('renders HTML, outline, and a search doc', () => {
     const r = renderPage(page('# T\n\n## Install\n\nrun it\n'), ctx)
     expect(r.html).toContain('<section id="T">')
@@ -122,5 +123,43 @@ describe('renderPage', () => {
       expect(formatted).toMatch(/outer\.crv:2:1 /)
       expect(formatted).not.toMatch(/start\.crv/)
     }
+  })
+
+  it('expands standard nested includes with sections and heading shifts', async () => {
+    const dir = await mkdtemp(resolve(tmpdir(), 'cp-page-standard-'))
+    await mkdir(resolve(dir, 'chapters'))
+    await writeFile(resolve(dir, 'start.crv'), '# T\n')
+    await writeFile(
+      resolve(dir, 'chapters/one.crv'),
+      '# Part\n\n{{ ../shared.crv }}\n\n# Omitted\n',
+    )
+    await writeFile(resolve(dir, 'shared.crv'), 'Nested text.\n')
+    const p: Page = {
+      ...page('# T\n\n{{ chapters/one.crv #Part @shift:1 }}\n'),
+      srcPath: resolve(dir, 'start.crv'),
+    }
+
+    const rendered = renderPage(p, { ...ctx, includeRoots: [dir] })
+    expect(rendered.html).toContain('<h2>Part</h2>')
+    expect(rendered.html).toContain('Nested text.')
+    expect(rendered.html).not.toContain('Omitted')
+    expect(rendered.includeFiles.map((file) => file.path)).toEqual([
+      resolve(dir, 'chapters/one.crv'),
+      resolve(dir, 'shared.crv'),
+    ])
+  })
+
+  it('reports a standard include warning without leaking the absolute root', async () => {
+    const dir = await mkdtemp(resolve(tmpdir(), 'cp-page-warning-'))
+    await writeFile(resolve(dir, 'start.crv'), '# T\n')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const p: Page = {
+      ...page('# T\n\n{{ missing.crv }}\n'),
+      srcPath: resolve(dir, 'start.crv'),
+    }
+
+    renderPage(p, { ...ctx, includeRoots: [dir] })
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('include-unresolved'))
+    expect(warn.mock.calls.flat().join('\n')).not.toContain(dir)
   })
 })

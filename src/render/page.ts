@@ -1,4 +1,4 @@
-import { dirname } from 'node:path'
+import { dirname, isAbsolute, relative, resolve as resolvePath } from 'node:path'
 import {
   ProfileViolationError,
   applyProfile,
@@ -11,10 +11,12 @@ import {
   type Document,
   type Profile,
   type RenderOptions,
+  expandIncludes as expandStandardIncludes,
 } from '@markup-carve/carve'
+import { fileSystemResolver } from '@markup-carve/carve/node'
 import type { Page } from '../content/discover.js'
 import { outlineFromAst, type OutlineEntry } from '../outline.js'
-import { expandIncludes, type IncludeFile } from '../include/expand.js'
+import { expandIncludes as expandLegacyIncludes, type IncludeFile } from '../include/expand.js'
 import { SourceError } from '../errors.js'
 
 export interface SearchDoc {
@@ -246,9 +248,9 @@ function rewriteContentUrls(node: AnyNode, base: string): void {
 }
 
 export function renderPage(page: Page, ctx: RenderContext): RenderedPage {
-  let expanded: ReturnType<typeof expandIncludes>
+  let expanded: ReturnType<typeof expandLegacyIncludes>
   try {
-    expanded = expandIncludes(page.source, {
+    expanded = expandLegacyIncludes(page.source, {
       srcPath: page.relPath,
       baseDir: dirname(page.srcPath),
       roots: ctx.includeRoots,
@@ -266,6 +268,11 @@ export function renderPage(page: Page, ctx: RenderContext): RenderedPage {
     }
     throw error
   }
+  if (page.source.includes('@include:')) {
+    console.warn(
+      `carve-press: ${page.relPath}: %% @include: is deprecated; use {{ path }} includes`,
+    )
+  }
 
   // This is `carveToHtml` unrolled: parse, resolve, transforms, profile,
   // render. The steps have to be separate because the base rewrite operates on
@@ -276,8 +283,31 @@ export function renderPage(page: Page, ctx: RenderContext): RenderedPage {
   try {
     enforceProfileMaxLength(expanded.source, ctx.profile)
     const renderOptions: RenderOptions = { extensions: ctx.extensions }
+    const parsed = parse(expanded.source, { extensions: ctx.extensions })
+    const root = ctx.includeRoots.at(-1)
+    const included = expandStandardIncludes(parsed, expanded.source, {
+      resolve: root === undefined ? undefined : fileSystemResolver(root),
+      sourcePath: page.srcPath,
+      extensions: ctx.extensions,
+    })
+    for (const warning of included.warnings) {
+      let file = warning.file ?? page.relPath
+      if (root !== undefined && isAbsolute(file)) {
+        const withinRoot = relative(root, file)
+        file = withinRoot.startsWith('..') || isAbsolute(withinRoot) ? '[outside-root]' : withinRoot
+      }
+      console.warn(
+        `carve-press: ${file}:${warning.line}:${warning.column} ${warning.rule} - ${warning.message}`,
+      )
+    }
+    for (const dependency of included.dependencies) {
+      const path = isAbsolute(dependency.id)
+        ? dependency.id
+        : resolvePath(dirname(page.srcPath), dependency.id)
+      if (!expanded.files.some((file) => file.path === path)) expanded.files.push({ path })
+    }
     ast = applyTransforms(
-      resolve(parse(expanded.source, { extensions: ctx.extensions })),
+      resolve(included.doc),
       ctx.extensions,
       renderOptions,
     )

@@ -38,17 +38,23 @@ Every page is a `.crv` file with optional YAML frontmatter followed by Carve con
 
 ## Includes
 
-Include directives are comments, so they render nothing after expansion:
+Standard Carve include directives merge another file before rendering:
 
 ```carve "include a snippet"
-%% @include: ./snippets/install.crv
+{{ ./snippets/install.crv }}
 ```
 
 This page includes one real line from a shared snippet:
 
-%% @include: ../snippets/install.crv{1,1}
+{{ ../snippets/install.crv @lines:1-1 }}
 
-You can include a range with `{2,4}`, an open range with `{2,}`, or a heading section with `#heading-id`.
+Use `@lines:2-4` for a physical line range, `#heading-id` for a heading subtree,
+and `@shift:1` or `@shift:auto` to adjust included heading levels. Nested paths
+resolve from the file containing each directive and remain contained to the
+project root.
+
+The older `%% @include:` spelling remains available for one compatibility
+release and prints a deprecation warning. New content should use `{{ path }}`.
 
 ## Cross-References
 
