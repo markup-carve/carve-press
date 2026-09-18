@@ -102,28 +102,36 @@ jobs:
           DIR: ${{ matrix.path }}
         run: |
           set -euo pipefail
-          spec="$(node -p "require('./package.json').dependencies['${DEP}']")"
-          # An EXACT published version. A range names no commit, so every check
-          # below would lose its subject; a git spec costs each consumer a clone
-          # (tools/no-git-dependencies.mjs rejects that one per pull request).
-          if ! printf '%s' "${spec}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "::error::${DEP} is \"${spec}\" - it must be an EXACT published version (no range, no git spec), or this job has no commit to measure and a build takes whatever the range resolved to that day"
+          spec="$(node -p "const p=require('./package.json'); p.devDependencies?.['${DEP}'] ?? p.dependencies?.['${DEP}']")"
+          rev=""
+          # An unreleased engine may be pinned in devDependencies. Runtime and
+          # peer dependencies remain registry-only, while this exact commit
+          # gives the drift check a subject before the next engine release.
+          if printf '%s' "${spec}" | grep -qE '^github:[^#]+#[0-9a-f]{40}$'; then
+            rev="${spec##*#}"
+            if ! git -C "${DIR}" rev-parse -q --verify "${rev}^{commit}" >/dev/null 2>&1; then
+              echo "::error::${DEP} pins ${rev}, which is not a commit in ${DIR}"
+              exit 1
+            fi
+          elif ! printf '%s' "${spec}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::${DEP} is \"${spec}\" - it must be an exact published version or a development-only GitHub commit pin"
             exit 1
           fi
           # The version names a commit through its release tag. The two repos
           # spell the tag differently - carve-js `0.1.5`, carve-grammars
           # `v0.1.5` - so both spellings are tried rather than hard-coded.
-          rev=""
-          for tag in "${spec}" "v${spec}"; do
-            if git -C "${DIR}" rev-parse -q --verify "refs/tags/${tag}^{commit}" >/dev/null 2>&1; then
-              rev="$(git -C "${DIR}" rev-parse "refs/tags/${tag}^{commit}")"
-              echo "${DEP} ${spec} resolves through tag ${tag}"
-              break
-            fi
-          done
           if [ -z "${rev}" ]; then
-            echo "::error::${DEP} pins ${spec}, and neither ${spec} nor v${spec} is a tag in ${DIR} - the version is not one this repository has released"
-            exit 1
+            for tag in "${spec}" "v${spec}"; do
+              if git -C "${DIR}" rev-parse -q --verify "refs/tags/${tag}^{commit}" >/dev/null 2>&1; then
+                rev="$(git -C "${DIR}" rev-parse "refs/tags/${tag}^{commit}")"
+                echo "${DEP} ${spec} resolves through tag ${tag}"
+                break
+              fi
+            done
+            if [ -z "${rev}" ]; then
+              echo "::error::${DEP} pins ${spec}, and neither ${spec} nor v${spec} is a tag in ${DIR} - the version is not one this repository has released"
+              exit 1
+            fi
           fi
           if ! git -C "${DIR}" merge-base --is-ancestor "${rev}" origin/main; then
             echo "::error::${DIR} ${rev} is not on main, so the pin came from an unmerged or rewritten branch"
