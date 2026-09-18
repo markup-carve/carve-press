@@ -53,8 +53,8 @@ and `@shift:1` or `@shift:auto` to adjust included heading levels. Nested paths
 resolve from the file containing each directive and remain contained to the
 project root.
 
-The older `%% @include:` spelling remains available for one compatibility
-release and prints a deprecation warning. New content should use `{{ path }}`.
+The former `%% @include:` spelling is no longer expanded. Replace it with the
+standard directive before upgrading.
 
 ## Cross-References
 

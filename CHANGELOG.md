@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** standard `{{ path }}` directives replace the private
+  `%% @include:` syntax. Includes now use the engine's containment, section,
+  heading-shift, cycle, warning, and dependency rules.
+
 ## [0.1.2] - 2026-09-09
 
 ### Changed

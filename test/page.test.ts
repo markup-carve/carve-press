@@ -1,9 +1,10 @@
 import { Profile } from '@markup-carve/carve'
-import { afterEach, describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import type { Page } from '../src/content/discover.js'
+import { SourceError } from '../src/errors.js'
 import { renderPage } from '../src/render/page.js'
 
 const page = (source: string): Page => ({
@@ -27,7 +28,6 @@ function idsFromHtml(html: string): string[] {
 }
 
 describe('renderPage', () => {
-  afterEach(() => vi.restoreAllMocks())
   it('renders HTML, outline, and a search doc', () => {
     const r = renderPage(page('# T\n\n## Install\n\nrun it\n'), ctx)
     expect(r.html).toContain('<section id="T">')
@@ -95,34 +95,17 @@ describe('renderPage', () => {
     expect(() => renderPage(page('# T\n'), { ...ctx, profile })).not.toThrow()
   })
 
-  it('reports an include failure at the original file and line', () => {
-    const p = page('# T\n\n%% @include: ./missing.crv\n')
-    try {
-      renderPage(p, ctx)
-      throw new Error('expected renderPage to throw')
-    } catch (error) {
-      expect(error).toHaveProperty('format')
-      expect((error as { format: () => string }).format()).toMatch(/start\.crv:6:1/)
-    }
-  })
-
-  it('preserves the source location for include failures inside included files', async () => {
-    const dir = await mkdtemp(resolve(tmpdir(), 'cp-page-'))
-    await writeFile(resolve(dir, 'outer.crv'), 'intro\n%% @include: ./missing.crv\n')
-
+  it('rejects the removed private include spelling at its source line', async () => {
+    const dir = await mkdtemp(resolve(tmpdir(), 'cp-page-legacy-'))
+    await writeFile(resolve(dir, 'legacy.crv'), 'LEGACY CONTENT\n')
     const p: Page = {
-      ...page('# T\n\n%% @include: ./outer.crv\n'),
+      ...page('# T\n\n%% @include: ./legacy.crv\n'),
       srcPath: resolve(dir, 'start.crv'),
     }
 
-    try {
-      renderPage(p, { ...ctx, includeRoots: [dir] })
-      expect.unreachable('should have thrown')
-    } catch (error) {
-      const formatted = (error as { format: () => string }).format()
-      expect(formatted).toMatch(/outer\.crv:2:1 /)
-      expect(formatted).not.toMatch(/start\.crv/)
-    }
+    expect(() => renderPage(p, { ...ctx, includeRoots: [dir] })).toThrow(
+      expect.objectContaining({ line: 6, column: 1, message: expect.stringContaining('no longer expanded') }),
+    )
   })
 
   it('expands standard nested includes with sections and heading shifts', async () => {
@@ -149,17 +132,35 @@ describe('renderPage', () => {
     ])
   })
 
-  it('reports a standard include warning without leaking the absolute root', async () => {
+  it('fails a standard include warning at the original line without leaking the root', async () => {
     const dir = await mkdtemp(resolve(tmpdir(), 'cp-page-warning-'))
     await writeFile(resolve(dir, 'start.crv'), '# T\n')
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const p: Page = {
       ...page('# T\n\n{{ missing.crv }}\n'),
       srcPath: resolve(dir, 'start.crv'),
     }
 
-    renderPage(p, { ...ctx, includeRoots: [dir] })
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('include-unresolved'))
-    expect(warn.mock.calls.flat().join('\n')).not.toContain(dir)
+    try {
+      renderPage(p, { ...ctx, includeRoots: [dir] })
+      expect.unreachable('should reject an unresolved include')
+    } catch (error) {
+      const formatted = (error as SourceError).format()
+      expect(formatted).toMatch(/start\.crv:6:1 include-unresolved/)
+      expect(formatted).not.toContain(dir)
+    }
+  })
+
+  it('refuses an include that traverses beyond the project root', async () => {
+    const dir = await mkdtemp(resolve(tmpdir(), 'cp-page-containment-'))
+    const site = resolve(dir, 'site')
+    await mkdir(site)
+    await writeFile(resolve(dir, 'secret.crv'), 'SECRET\n')
+    await writeFile(resolve(site, 'start.crv'), '# T\n')
+    const p: Page = {
+      ...page('# T\n\n{{ ../secret.crv }}\n'),
+      srcPath: resolve(site, 'start.crv'),
+    }
+
+    expect(() => renderPage(p, { ...ctx, includeRoots: [site] })).toThrow(/include-unresolved/)
   })
 })
