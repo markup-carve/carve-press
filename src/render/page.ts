@@ -1,4 +1,4 @@
-import { dirname } from 'node:path'
+import { dirname, isAbsolute, relative, resolve as resolvePath } from 'node:path'
 import {
   ProfileViolationError,
   applyProfile,
@@ -11,11 +11,16 @@ import {
   type Document,
   type Profile,
   type RenderOptions,
+  expandIncludes as expandStandardIncludes,
 } from '@markup-carve/carve'
+import { fileSystemResolver } from '@markup-carve/carve/node'
 import type { Page } from '../content/discover.js'
 import { outlineFromAst, type OutlineEntry } from '../outline.js'
-import { expandIncludes, type IncludeFile } from '../include/expand.js'
 import { SourceError } from '../errors.js'
+
+interface IncludeFile {
+  path: string
+}
 
 export interface SearchDoc {
   route: string
@@ -246,25 +251,16 @@ function rewriteContentUrls(node: AnyNode, base: string): void {
 }
 
 export function renderPage(page: Page, ctx: RenderContext): RenderedPage {
-  let expanded: ReturnType<typeof expandIncludes>
-  try {
-    expanded = expandIncludes(page.source, {
-      srcPath: page.relPath,
-      baseDir: dirname(page.srcPath),
-      roots: ctx.includeRoots,
-    })
-  } catch (error) {
-    // Include errors carry a body-relative line; shift it back to the original
-    // file so the reported location is clickable.
-    if (error instanceof SourceError && error.srcPath === page.relPath) {
-      throw new SourceError(
-        page.relPath,
-        error.line + page.bodyStartLine - 1,
-        error.column,
-        error.message,
-      )
-    }
-    throw error
+  const legacyInclude = /(^|\n)([ \t]*)%%[ \t]*@include:/.exec(page.source)
+  if (legacyInclude !== null) {
+    const directiveOffset = legacyInclude.index + legacyInclude[1]!.length
+    const bodyLine = page.source.slice(0, directiveOffset).split('\n').length
+    throw new SourceError(
+      page.relPath,
+      bodyLine + page.bodyStartLine - 1,
+      legacyInclude[2]!.length + 1,
+      '%% @include: is no longer expanded; use {{ path }}',
+    )
   }
 
   // This is `carveToHtml` unrolled: parse, resolve, transforms, profile,
@@ -273,11 +269,41 @@ export function renderPage(page: Page, ctx: RenderContext): RenderedPage {
   // instead of parsing the page a second time.
   let html: string
   let ast: Document
+  const includeFiles: IncludeFile[] = []
   try {
-    enforceProfileMaxLength(expanded.source, ctx.profile)
+    enforceProfileMaxLength(page.source, ctx.profile)
     const renderOptions: RenderOptions = { extensions: ctx.extensions }
+    const parsed = parse(page.source, { extensions: ctx.extensions })
+    const root = ctx.includeRoots.at(-1)
+    const included = expandStandardIncludes(parsed, page.source, {
+      resolve: root === undefined ? undefined : fileSystemResolver(root),
+      sourcePath: page.srcPath,
+      extensions: ctx.extensions,
+    })
+    for (const warning of included.warnings) {
+      let file = warning.file ?? page.relPath
+      const isPage = warning.file === undefined
+        || (isAbsolute(warning.file) && resolvePath(warning.file) === resolvePath(page.srcPath))
+      if (root !== undefined && isAbsolute(file)) {
+        const withinRoot = relative(root, file)
+        file = withinRoot.startsWith('..') || isAbsolute(withinRoot) ? '[outside-root]' : withinRoot
+      }
+      const line = isPage ? warning.line + page.bodyStartLine - 1 : warning.line
+      throw new SourceError(
+        file,
+        line,
+        warning.column,
+        `${warning.rule} - ${warning.message}`,
+      )
+    }
+    for (const dependency of included.dependencies) {
+      const path = isAbsolute(dependency.id)
+        ? dependency.id
+        : resolvePath(dirname(page.srcPath), dependency.id)
+      if (!includeFiles.some((file) => file.path === path)) includeFiles.push({ path })
+    }
     ast = applyTransforms(
-      resolve(parse(expanded.source, { extensions: ctx.extensions })),
+      resolve(included.doc),
       ctx.extensions,
       renderOptions,
     )
@@ -306,7 +332,7 @@ export function renderPage(page: Page, ctx: RenderContext): RenderedPage {
     page,
     html,
     outline,
-    includeFiles: expanded.files,
+    includeFiles,
     searchDoc: {
       route: page.route,
       title,

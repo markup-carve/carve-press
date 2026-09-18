@@ -79,7 +79,7 @@ describe('createDevRebuilder', () => {
       resolve(root, 'carve-press.config.js'),
       config("{ title: 'Docs', routeManifest: false, dev: { incremental: true } }"),
     )
-    await writeFile(resolve(root, 'docs/index.crv'), page('Home', '# Home\n\n%% @include: ./snippets/shared.txt'))
+    await writeFile(resolve(root, 'docs/index.crv'), page('Home', '# Home\n\n{{ snippets/shared.txt }}'))
     await writeFile(resolve(root, 'docs/start.crv'), page('Start'))
     await writeFile(resolve(root, 'docs/snippets/shared.txt'), 'Included text.\n')
     const rebuilder = createDevRebuilder(root)

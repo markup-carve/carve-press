@@ -60,7 +60,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@markup-carve/carve": "0.1.6",
     "@markup-carve/carve-grammars": "0.1.7",
     "@shikijs/transformers": "^1.29.0",
     "minisearch": "^7.2.0",
@@ -68,8 +67,12 @@
     "yaml": "^2.9.0"
   },
   "devDependencies": {
+    "@markup-carve/carve": "github:markup-carve/carve-js#e6b5b5be24fef6f45e2050d0a27a27eea47c9213",
     "@types/node": "^22.0.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
+  },
+  "peerDependencies": {
+    "@markup-carve/carve": ">=0.1.7 <0.2.0"
   }
 }
