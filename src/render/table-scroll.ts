@@ -45,7 +45,10 @@ function captionText(nodes: InlineNode[]): string {
         parts.push(node.abbr)
         return
       case 'substitution':
-        parts.push(node.newText)
+        // The inserted half, which is what the caption reads as. Inline content
+        // since markup-carve/carve#2083, so it recurses like `insert` below
+        // rather than reading a string off the node.
+        for (const child of node.new) visit(child)
         return
       case 'critic_comment':
         parts.push(node.text)
