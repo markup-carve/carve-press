@@ -40,6 +40,15 @@ describe('tableScrollExtension', () => {
     expect(html).toContain('<td>a</td><td>b</td><td>c</td>')
   })
 
+  it('names a region after the inserted half of a substitution', () => {
+    // The halves are inline content since markup-carve/carve#2083, so the
+    // region name comes from walking `new` rather than reading a string. A
+    // reader is told what the table says NOW, not what it used to say.
+    const html = render('| a | b |\n^ Price {~/old/~>/new/~} now\n')
+    expect(html).toContain('role="region" aria-label="Price new now"')
+    expect(html).not.toContain('aria-label="Price old now"')
+  })
+
   it('keeps authored table attributes on the table', () => {
     const html = render('{#prices .wide data-x="1&2"}\n| a | b |\n')
     expect(html).toContain('<div class="table-scroll" tabindex="0">')
