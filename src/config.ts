@@ -1,7 +1,7 @@
 import { statSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { Profile, type CarveExtension } from '@markup-carve/carve'
-import type { LanguageRegistration } from '@shikijs/types'
+import type { LanguageRegistration } from 'shiki'
 import { BuildError } from './errors.js'
 import type { BuildEventBus } from './events.js'
 import { normalizeIslands, type IslandsConfig, type NormalizedIsland } from './render/islands.js'
