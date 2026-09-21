@@ -1,12 +1,24 @@
 # Changelog
 
-## [Unreleased]
+## [0.1.3] - 2026-09-21
+
+### Added
+
+- A `{.diff}` attribute on a language-tagged fence renders its `+`, `-` and
+  space markers as `diff-marker` spans and marks changed lines `diff add` or
+  `diff remove`, while the code keeps its language highlighting. The default
+  theme colors the added and removed lines (#39).
 
 ### Changed
 
 - **Breaking:** standard `{{ path }}` directives replace the private
   `%% @include:` syntax. Includes now use the engine's containment, section,
-  heading-shift, cycle, warning, and dependency rules.
+  heading-shift, cycle, warning, and dependency rules. A leftover
+  `%% @include:` line fails the build instead of dropping its content, and so
+  does an unresolved include (#42).
+- The Carve engine moves to 0.1.7 and `carve-grammars` to 0.1.9. The
+  grammars correct emphasis, include-directive and reference-definition
+  highlighting (#43, #45, #46).
 
 ## [0.1.2] - 2026-09-09
 
