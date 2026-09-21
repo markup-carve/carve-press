@@ -94,6 +94,25 @@ describe('createShikiExtension', () => {
     expect(html).toContain('plain')
   })
 
+  it('presents a {.diff} language fence while keeping the highlighting', () => {
+    const html = carveToHtml('{.diff}\n```js\n  keep();\n- old();\n+ fresh();\n```\n', { extensions: [ext] })
+    expect(html).toContain('has-diff')
+    expect(html).toContain('class="line diff remove"')
+    expect(html).toContain('class="line diff add"')
+    expect(html).toContain('class="diff-marker">-</span>')
+    expect(html).toContain('class="diff-marker">+</span>')
+    // The marker is removed before tokenization: the removed line reads `old()`,
+    // not `- old()`, and the language still tokenizes it (Shiki color spans).
+    expect(html).toMatch(/class="diff-marker">-<\/span>[\s\S]*?old/)
+    expect(html).toContain('<span style=')
+  })
+
+  it('leaves an ordinary language fence without the diff presentation', () => {
+    const html = carveToHtml('```js\n- old();\n```\n', { extensions: [ext] })
+    expect(html).not.toContain('has-diff')
+    expect(html).not.toContain('diff-marker')
+  })
+
   it('escapes HTML in an unhighlighted block', () => {
     const html = carveToHtml('```\n<script>x</script>\n```\n', { extensions: [ext] })
     expect(html).not.toContain('<script>x')
