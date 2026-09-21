@@ -9,6 +9,7 @@ import {
   transformerNotationHighlight,
   transformerNotationWordHighlight,
 } from '@shikijs/transformers'
+import { diffCodeTransformer } from '@markup-carve/carve-grammars/shiki/diff'
 import type { Attrs, BlockExtensionRenderContext, CarveExtension } from '@markup-carve/carve'
 import type { ShikiLanguage } from '../config.js'
 
@@ -408,11 +409,20 @@ export async function createShikiHighlighter(opts: ShikiOptions): Promise<ShikiH
         ctx,
       })
     }
+    // A `{.diff}` block attribute keeps the language highlighting and presents
+    // the leading +/-/space as diff markers. A fresh transformer per block: it
+    // captures that block's markers while Shiki tokenizes. The cast bridges the
+    // grammars' Shiki 4 typings to Shiki 1; the hooks it uses exist in both.
+    const isLanguageDiff = attrs?.classes?.includes('diff') === true
     const html = highlighter.codeToHtml(content, {
       lang,
       themes: { light: opts.themes.light, dark: opts.themes.dark },
       defaultColor: 'light',
-      transformers: [...baseTransformers, lineHighlightTransformer(highlightedLines)],
+      transformers: [
+        ...baseTransformers,
+        lineHighlightTransformer(highlightedLines),
+        ...(isLanguageDiff ? [diffCodeTransformer() as unknown as ShikiTransformer] : []),
+      ],
     })
     return wrapCodeBlock({
       html: ctx === undefined ? html : mergeAttrsIntoPre(html, renderedAttrs, ctx),

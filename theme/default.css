@@ -856,6 +856,20 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
 }
 .content pre code { font-family: inherit; background: none; border: 0; padding: 0; white-space: pre; }
 
+/* {.diff} language-fence presentation, from carve-grammars' diffCodeTransformer. */
+.shiki.has-diff {
+  --carve-diff-add-background: rgb(46 160 67 / 15%);
+  --carve-diff-add-marker: #1a7f37;
+  --carve-diff-remove-background: rgb(248 81 73 / 15%);
+  --carve-diff-remove-marker: #cf222e;
+}
+.shiki.has-diff .line { display: inline-block; width: 100%; }
+.shiki.has-diff .line.diff.add { background: var(--carve-diff-add-background); }
+.shiki.has-diff .line.diff.remove { background: var(--carve-diff-remove-background); }
+.shiki.has-diff .diff-marker { display: inline-block; width: 1ch; font-weight: 700; }
+.shiki.has-diff .line.diff.add .diff-marker { color: var(--carve-diff-add-marker); }
+.shiki.has-diff .line.diff.remove .diff-marker { color: var(--carve-diff-remove-marker); }
+
 .code-block {
   position: relative;
   margin: 1.3rem 0;
