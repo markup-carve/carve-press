@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { bundledLanguages, bundledLanguagesAlias, createHighlighter, type Highlighter } from 'shiki'
-import type { LanguageRegistration, ShikiTransformer } from '@shikijs/types'
+import type { LanguageRegistration, ShikiTransformer } from 'shiki'
 import {
   transformerNotationDiff,
   transformerNotationErrorLevel,
