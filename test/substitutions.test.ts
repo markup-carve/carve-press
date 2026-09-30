@@ -93,6 +93,16 @@ describe('substitutions', () => {
     expect(html).toContain('body 9')
   })
 
+  it('replaces a token in a placement directive title', async () => {
+    const config = resolveConfig({ title: 'T', carve: { preset: 'docs' }, substitutions: { v: '9' } })
+    const extensions = await buildExtensionStack(config, shiki)
+
+    const html = carveToHtml('# Head\n\n::: toc "Contents |v|"\n:::\n', { extensions })
+
+    expect(html).toContain('Contents 9')
+    expect(html).not.toContain('|v|')
+  })
+
   it('does not reach into a table row, where pipes are cell delimiters', async () => {
     const extensions = await stack({ v: '9' })
 

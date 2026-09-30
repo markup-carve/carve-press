@@ -1,4 +1,4 @@
-import type { BlockNode, CarveExtension, Document, InlineNode } from '@markup-carve/carve'
+import type { BlockNode, CarveExtension, Document, InlineNode, TableCell } from '@markup-carve/carve'
 import type { NormalizedSubstitution } from '../config.js'
 
 type SubstitutionMap = Record<string, NormalizedSubstitution>
@@ -72,6 +72,18 @@ function replaceInlines(nodes: InlineNode[], substitutions: SubstitutionMap, war
   return out
 }
 
+/**
+ * A cell holds inline content when it came from Carve source and block content
+ * when it was imported from another format (carve 0.1.9), so either half can be
+ * absent and the block half needs the block walk rather than the inline one.
+ */
+function replaceCells(cells: TableCell[], substitutions: SubstitutionMap, warned: Set<string>): void {
+  for (const cell of cells) {
+    if (cell.children !== undefined) cell.children = replaceInlines(cell.children, substitutions, warned)
+    if (cell.blocks !== undefined) replaceBlocks(cell.blocks, substitutions, warned)
+  }
+}
+
 function replaceBlocks(blocks: BlockNode[], substitutions: SubstitutionMap, warned: Set<string>): void {
   for (const block of blocks) {
     switch (block.type) {
@@ -89,9 +101,7 @@ function replaceBlocks(blocks: BlockNode[], substitutions: SubstitutionMap, warn
         break
       case 'table':
         if (block.caption !== undefined) block.caption = replaceInlines(block.caption, substitutions, warned)
-        for (const row of block.rows) {
-          for (const cell of row.cells) cell.children = replaceInlines(cell.children, substitutions, warned)
-        }
+        for (const row of block.rows) replaceCells(row.cells, substitutions, warned)
         break
       case 'admonition':
         if (block.title !== undefined) block.title = replaceInlines(block.title, substitutions, warned)
@@ -100,6 +110,11 @@ function replaceBlocks(blocks: BlockNode[], substitutions: SubstitutionMap, warn
       case 'div':
       case 'line_block':
         replaceBlocks(block.children, substitutions, warned)
+        break
+      case 'directive':
+        // A placement directive's body is generated, but the title beside the
+        // kind is authored, and `::: toc` reaches this repo's default preset.
+        if (block.title !== undefined) block.title = replaceInlines(block.title, substitutions, warned)
         break
       case 'definition_list':
         for (const item of block.items) {
@@ -114,9 +129,7 @@ function replaceBlocks(blocks: BlockNode[], substitutions: SubstitutionMap, warn
           block.target.children = replaceInlines(block.target.children, substitutions, warned)
         }
         if (block.target.type === 'table') {
-          for (const row of block.target.rows) {
-            for (const cell of row.cells) cell.children = replaceInlines(cell.children, substitutions, warned)
-          }
+          for (const row of block.target.rows) replaceCells(row.cells, substitutions, warned)
         }
         break
     }

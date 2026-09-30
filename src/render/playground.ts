@@ -1,4 +1,5 @@
 import { carveToAstJson, carveToHtml, type Attrs, type CarveExtension } from '@markup-carve/carve'
+import { fenceContent } from './fence.js'
 
 interface CodeBlockNode {
   type: string
@@ -65,7 +66,7 @@ export function playgroundExtension(assets: PlaygroundAssetUrls = {}): CarveExte
 
         const children = (adm.children ?? []) as CodeBlockNode[]
         const carve = children.find((child) => child.type === 'code_block' && child.lang === 'carve')
-        const source = carve?.content ?? FALLBACK_SAMPLE
+        const source = carve === undefined ? FALLBACK_SAMPLE : fenceContent(carve.content)
         const sourceBlock = carve ?? syntheticCarveBlock(source)
         const rendered = carveToHtml(source)
         const group = `playground-${++counter}`

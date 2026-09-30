@@ -12,6 +12,7 @@ import {
 import { diffCodeTransformer } from '@markup-carve/carve-grammars/shiki/diff'
 import type { Attrs, BlockExtensionRenderContext, CarveExtension } from '@markup-carve/carve'
 import type { ShikiLanguage } from '../config.js'
+import { fenceContent } from './fence.js'
 
 export interface ShikiOptions {
   langs: ShikiLanguage[]
@@ -442,7 +443,7 @@ export function createShikiExtensionFromHighlighter(highlight: ShikiHighlightCal
     blockRenderers: {
       code_block(node, ctx) {
         const lang = (node as { lang?: string }).lang
-        const content = (node as { content: string }).content
+        const content = fenceContent((node as { content: string }).content)
         const attrs = (node as { attrs?: Attrs }).attrs
         const html = highlight(content, lang, attrs, ctx)
         if (isCodeBlockWrapper(html)) return html
