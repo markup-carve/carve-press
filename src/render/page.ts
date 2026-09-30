@@ -234,6 +234,37 @@ function rewriteSrcset(value: string, base: string): string {
     .join(', ')
 }
 
+/**
+ * Every nested node, whatever key holds it.
+ *
+ * Only `children` used to be walked, so a link in a list item (`list.items`), a
+ * table cell (`table.rows` / `table_row.cells`), a footnote body
+ * (`document.footnoteDefs`) or a figure caption (`figure.caption`) never
+ * reached the base rewrite (#49). Enumerating by shape rather than by a list of
+ * keys keeps a construct added to the AST later from silently opting out again.
+ */
+function childNodes(node: AnyNode): AnyNode[] {
+  const out: AnyNode[] = []
+  const visit = (value: unknown): void => {
+    if (value === null || typeof value !== 'object') return
+    if (Array.isArray(value)) {
+      for (const entry of value) visit(entry)
+      return
+    }
+    const candidate = value as AnyNode
+    if (typeof candidate.type === 'string') {
+      out.push(candidate)
+      return
+    }
+    for (const entry of Object.values(value)) visit(entry)
+  }
+  for (const [key, value] of Object.entries(node)) {
+    if (key === 'pos' || key === 'attrs') continue
+    visit(value)
+  }
+  return out
+}
+
 function rewriteContentUrls(node: AnyNode, base: string): void {
   if (node.type === 'link' && node.href !== undefined) node.href = rewriteUrl(node.href, base)
   if (node.type === 'image' && node.src !== undefined) node.src = rewriteUrl(node.src, base)
@@ -247,7 +278,7 @@ function rewriteContentUrls(node: AnyNode, base: string): void {
     if (keyValues.srcset !== undefined) keyValues.srcset = rewriteSrcset(keyValues.srcset, base)
   }
 
-  for (const child of node.children ?? []) rewriteContentUrls(child, base)
+  for (const child of childNodes(node)) rewriteContentUrls(child, base)
 }
 
 export function renderPage(page: Page, ctx: RenderContext): RenderedPage {
