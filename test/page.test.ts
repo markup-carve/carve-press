@@ -164,3 +164,88 @@ describe('renderPage', () => {
     expect(() => renderPage(p, { ...ctx, includeRoots: [site] })).toThrow(/include-unresolved/)
   })
 })
+
+describe('renderPage base rewriting', () => {
+  const based = { ...ctx, base: '/my-site/' }
+  const hrefs = (source: string): string[] =>
+    [...renderPage(page(source), based).html.matchAll(/(?:href|src)="([^"]*)"/g)]
+      .map((m) => m[1]!)
+      .filter((url) => url.endsWith('/g/x') || url.endsWith('/i.png'))
+
+  it('prefixes a link in a paragraph', () => {
+    expect(hrefs('Prose [A](/g/x)\n')).toEqual(['/my-site/g/x'])
+  })
+
+  it('prefixes a link in a bullet list item', () => {
+    expect(hrefs('- Bullet [A](/g/x)\n')).toEqual(['/my-site/g/x'])
+  })
+
+  it('prefixes a link in an ordered list item', () => {
+    expect(hrefs('1. Num [A](/g/x)\n')).toEqual(['/my-site/g/x'])
+  })
+
+  it('prefixes a link in a task list item', () => {
+    expect(hrefs('- [ ] Task [A](/g/x)\n')).toEqual(['/my-site/g/x'])
+  })
+
+  it('prefixes a reference-style link in a list item', () => {
+    expect(hrefs('- Ref [A][r]\n\n[r]: /g/x\n')).toEqual(['/my-site/g/x'])
+  })
+
+  it('prefixes a link in a nested list item', () => {
+    expect(hrefs('- outer\n\n  - inner [A](/g/x)\n')).toEqual(['/my-site/g/x'])
+  })
+
+  it('prefixes an image in a list item', () => {
+    expect(hrefs('- ![Alt](/i.png)\n')).toEqual(['/my-site/i.png'])
+  })
+
+  it('prefixes a link in a table cell', () => {
+    expect(hrefs('| h |\n|---|\n| [A](/g/x) |\n')).toEqual(['/my-site/g/x'])
+  })
+
+  it('prefixes an image in a table cell', () => {
+    expect(hrefs('| h |\n|---|\n| ![Alt](/i.png) |\n')).toEqual(['/my-site/i.png'])
+  })
+
+  it('prefixes a link in a footnote body', () => {
+    expect(hrefs('T[^1]\n\n[^1]: Note [A](/g/x)\n')).toEqual(['/my-site/g/x'])
+  })
+
+  it('prefixes a link in a figure caption', () => {
+    expect(hrefs('![Alt](/i.png)\n^ Cap [A](/g/x)\n')).toEqual(['/my-site/i.png', '/my-site/g/x'])
+  })
+
+  it('prefixes the image a figure places', () => {
+    expect(hrefs('![Alt](/i.png)\n^ Cap\n')).toEqual(['/my-site/i.png'])
+  })
+
+  it('prefixes a link in a blockquote', () => {
+    expect(hrefs('> Quote [A](/g/x)\n')).toEqual(['/my-site/g/x'])
+  })
+
+  it('prefixes a link in a container body', () => {
+    expect(hrefs(':::note\nBody [A](/g/x)\n:::\n')).toEqual(['/my-site/g/x'])
+  })
+
+  it('prefixes a link in a heading', () => {
+    expect(hrefs('## Head [A](/g/x)\n')).toEqual(['/my-site/g/x'])
+  })
+
+  it('prefixes links in a definition list term and description', () => {
+    expect(hrefs(': Term [A](/g/x)\n\n  Desc [B](/g/x)\n')).toEqual([
+      '/my-site/g/x',
+      '/my-site/g/x',
+    ])
+  })
+
+  it('leaves an external link and a relative link alone', () => {
+    const html = renderPage(page('- [A](https://x.test/g/x) and [B](./g/x)\n'), based).html
+    expect(html).toContain('href="https://x.test/g/x"')
+    expect(html).toContain('href="./g/x"')
+  })
+
+  it('does not prefix twice when the link already carries the base', () => {
+    expect(hrefs('- Bullet [A](/my-site/g/x)\n')).toEqual(['/my-site/g/x'])
+  })
+})
