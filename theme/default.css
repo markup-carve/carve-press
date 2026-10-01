@@ -24,6 +24,8 @@
   --code-line-warning: rgb(156 116 48 / 0.18);
   --code-line-error: rgb(180 71 47 / 0.18);
   --code-word-highlight: rgb(156 116 48 / 0.28);
+  --highlight: rgb(156 116 48 / 0.3);
+  --highlight-ink: #1b1d21;
 
   --display: Spectral, 'Iowan Old Style', Palatino, Georgia, serif;
   --body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -50,6 +52,8 @@
     --code-line-warning: rgb(199 154 77 / 0.2);
     --code-line-error: rgb(220 103 78 / 0.2);
     --code-word-highlight: rgb(199 154 77 / 0.32);
+    --highlight: rgb(199 154 77 / 0.34);
+    --highlight-ink: #e6e4de;
   }
   :root:not([data-theme='light']) .shiki,
   :root:not([data-theme='light']) .shiki span {
@@ -72,6 +76,8 @@
   --code-line-warning: rgb(199 154 77 / 0.2);
   --code-line-error: rgb(220 103 78 / 0.2);
   --code-word-highlight: rgb(199 154 77 / 0.32);
+  --highlight: rgb(199 154 77 / 0.34);
+  --highlight-ink: #e6e4de;
 }
 /* Keep this Shiki override in sync with the media-query override above. */
 :root[data-theme='dark'] .shiki,
@@ -1352,6 +1358,62 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
 .code-group-radio:nth-of-type(4):checked ~ .code-group-panel:nth-of-type(4),
 .code-group-radio:nth-of-type(5):checked ~ .code-group-panel:nth-of-type(5) { display: block; }
 .code-group-panel pre { margin: 0; border: 0; border-radius: 0; }
+
+/* -------------------------------------------------------------------- tabs */
+
+/*
+ * Same shape as the code group above, and the same reason for every selector.
+ * The engine emits each radio with its own label next to it, then ALL the
+ * panels, so a panel is never adjacent to its label: the pairing has to be
+ * positional across `~`. `:has()` would read a descendant and let a nested tab
+ * set reveal a panel of the set around it.
+ */
+.tabs { border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; margin: 1.4rem 0; background: var(--paper-sunk); }
+.tabs-radio { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.tabs-label {
+  display: inline-block;
+  padding: 0.5rem 0.85rem;
+  font-family: var(--body);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.tabs-radio:checked + .tabs-label { color: var(--verdigris); border-bottom-color: var(--verdigris); }
+.tabs-radio:focus-visible + .tabs-label { outline: 2px solid var(--brass); outline-offset: -2px; }
+.tabs-panel { border-top: 1px solid var(--rule); padding: 0.1rem 0.9rem; }
+/* Hiding is keyed on :checked, not on a radio being present, so a set with nothing checked keeps showing its panels instead of going blank. */
+.tabs-radio:checked ~ .tabs-panel { display: none; }
+.tabs-radio:nth-of-type(1):checked ~ .tabs-panel:nth-of-type(1),
+.tabs-radio:nth-of-type(2):checked ~ .tabs-panel:nth-of-type(2),
+.tabs-radio:nth-of-type(3):checked ~ .tabs-panel:nth-of-type(3),
+.tabs-radio:nth-of-type(4):checked ~ .tabs-panel:nth-of-type(4),
+.tabs-radio:nth-of-type(5):checked ~ .tabs-panel:nth-of-type(5),
+.tabs-radio:nth-of-type(6):checked ~ .tabs-panel:nth-of-type(6),
+.tabs-radio:nth-of-type(7):checked ~ .tabs-panel:nth-of-type(7),
+.tabs-radio:nth-of-type(8):checked ~ .tabs-panel:nth-of-type(8),
+.tabs-radio:nth-of-type(9):checked ~ .tabs-panel:nth-of-type(9),
+.tabs-radio:nth-of-type(10):checked ~ .tabs-panel:nth-of-type(10),
+.tabs-radio:nth-of-type(11):checked ~ .tabs-panel:nth-of-type(11),
+.tabs-radio:nth-of-type(12):checked ~ .tabs-panel:nth-of-type(12) { display: block; }
+/* Past the ladder's last position every panel shows: a long set degrades to a stack instead of going blank. */
+.tabs-radio:nth-of-type(n + 13):checked ~ .tabs-panel { display: block; }
+.tabs-panel > :first-child { margin-top: 0.7rem; }
+.tabs-panel > :last-child { margin-bottom: 0.7rem; }
+
+mark {
+  background: var(--highlight);
+  color: var(--highlight-ink);
+  border-radius: 2px;
+  padding: 0 0.15em;
+}
+/* The highlight owns the ink, so a link or a revision mark inside it must not repaint over the pair. */
+mark a,
+mark del,
+mark ins { color: inherit; }
 
 /* ---------------------------------------------------------------- furniture */
 
