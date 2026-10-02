@@ -60,6 +60,9 @@ type Reading = {
   divBodyHidden: string
   divTitle: string
   printInline: string
+  inlineFontSize: string
+  smallFontSize: string
+  smallHidden: string
   mathInlineDisplay: string
   mathDisplaySpan: MathBox
   mathDisplayDiv: MathBox
@@ -91,6 +94,10 @@ function renderAll(): string {
     `<div id="interactive">${carveToHtml(SOURCE, { extensions })}</div>`,
     `<div id="static">${carveToHtml(SOURCE, { extensions, mode: 'static' })}</div>`,
     `<div id="bare">${carveToHtml(SOURCE)}</div>`,
+    // The same source again inside the theme's own small print. `figcaption` is
+    // 0.8rem, so an `em` radius here has to come out smaller than in body text;
+    // a `rem` radius would come out identical.
+    `<figure id="small"><figcaption>${carveToHtml(SOURCE, { extensions })}</figcaption></figure>`,
   ].join('\n')
 }
 
@@ -168,6 +175,9 @@ ${css}
       divBodyHidden: filterOf('#bare div.spoiler > p:not(.admonition-title)'),
       divTitle: filterOf('#bare div.spoiler > .admonition-title'),
       printInline,
+      inlineFontSize: getComputedStyle(pick('#interactive .spoiler')).fontSize,
+      smallFontSize: getComputedStyle(pick('#small span.spoiler')).fontSize,
+      smallHidden: filterOf('#small span.spoiler'),
       mathInlineDisplay: getComputedStyle(pick('#interactive span.math.inline')).display,
       mathDisplaySpan: mathBox('#interactive span.math.display'),
       mathDisplayDiv: mathBox('#interactive div.math.display'),
@@ -240,6 +250,26 @@ describe('spoiler and math against engine-rendered output', () => {
       expect(reading.dataTheme).toBe(palette.attribute ? 'dark' : null)
 
       expect(reading.inlineHidden, 'an inline spoiler reaches the page unobscured').toMatch(/^blur\(/)
+
+      // The radius is `em`, so it is a proportion of the text it hides rather
+      // than one absolute value for the whole page. Measuring two sizes is what
+      // a revert to `rem` would fail: there both readings would be equal.
+      const px = (value: string, what: string): number => {
+        const match = /^blur\(([\d.]+)px\)$/.exec(value)
+        expect(match, `${what} is not a pixel blur: ${value}`).not.toBeNull()
+        return Number(match![1])
+      }
+      const bodySize = Number.parseFloat(reading.inlineFontSize)
+      const smallSize = Number.parseFloat(reading.smallFontSize)
+      expect(smallSize, 'the small-print fixture is not smaller than body text').toBeLessThan(bodySize)
+      const bodyRadius = px(reading.inlineHidden, 'the body-text blur')
+      const smallRadius = px(reading.smallHidden, 'the small-print blur')
+      expect(
+        smallRadius,
+        'the blur does not scale with its text: a spoiler in small print blurs by the same absolute radius as one in body text',
+      ).toBeLessThan(bodyRadius)
+      expect(bodyRadius / bodySize, 'the body-text blur is not 0.25em').toBeCloseTo(0.25, 3)
+      expect(smallRadius / smallSize, 'the small-print blur is not 0.25em').toBeCloseTo(0.25, 3)
       expect(reading.inlineFocused, 'the spoiler never reveals').toBe('none')
       expect(reading.inlineAfterBlur, 'the reveal is permanent once triggered').toMatch(/^blur\(/)
       expect(reading.inlineRevealed, 'static render blurs content it meant to show').toBe('none')
