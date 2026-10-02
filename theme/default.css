@@ -1144,6 +1144,86 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
 .admonition.danger { border-left-color: #b4472f; }
 .admonition.danger .admonition-title { color: #b4472f; }
 
+/* ----------------------------------------------------------------- spoiler */
+
+/*
+ * A spoiler is obscured, not protected. The text stays in the DOM, selectable
+ * and copyable, so a blur hides a plot point from a reader and withholds
+ * nothing from a determined one. Do not read any of this as a privacy or
+ * security control.
+ *
+ * Keyed by element, not by class alone: the engine spells the inline form
+ * `<span class="spoiler">` and the block form `<details class="spoiler">`,
+ * `<section>` in static render, `<div>` when the extension is off. A class-only
+ * box rule would draw a panel around a word mid-sentence (carve-css#25).
+ */
+
+:where(details, section, div).spoiler {
+  margin: 1.5rem 0;
+  padding: 1rem 1.15rem;
+  background: var(--paper-sunk);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--verdigris);
+  border-radius: 3px;
+}
+:where(details, section, div).spoiler > :last-child { margin-bottom: 0; }
+:where(details, section, div).spoiler > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--verdigris);
+}
+.spoiler-title {
+  font-size: 0.95rem;
+  color: var(--verdigris);
+  margin: 0 0 0.5rem;
+}
+
+/*
+ * `<details>` already withholds its body until the reader opens it, so only the
+ * shapes with no native disclosure carry a blur: the inline span and the
+ * extension-less `<div>` fallback. Reveal is `:hover` or `:focus-within`, and
+ * the limit is real: an inline span carries no `tabindex`, so keyboard reveal
+ * only works where the host adds one. `spoiler-revealed` is what all three
+ * engines emit in static render for content meant to be read, and is never
+ * blurred.
+ */
+span.spoiler:not(.spoiler-revealed),
+div.spoiler:not(.spoiler-revealed) > :not(.admonition-title) {
+  filter: blur(0.3rem);
+}
+span.spoiler:not(.spoiler-revealed):is(:hover, :focus-within),
+div.spoiler:not(.spoiler-revealed):is(:hover, :focus-within) > :not(.admonition-title) {
+  filter: none;
+}
+
+/* A blur on paper cannot be revealed. The selectors repeat the ones above
+ * rather than naming `.spoiler`: a lower-specificity print rule loses the
+ * cascade and prints the blur anyway. */
+@media print {
+  span.spoiler:not(.spoiler-revealed),
+  div.spoiler:not(.spoiler-revealed) > :not(.admonition-title) {
+    filter: none;
+  }
+}
+
+/* -------------------------------------------------------------------- math */
+
+/*
+ * Display math reaches the page on two carriers: core `$$` math is a
+ * `<span class="math display">` and a fenced math block is a
+ * `<div class="math display">`. The treatment is the same for both, so the
+ * keying is the class pair rather than the element, and `display: block` is
+ * what lets the span take it. Inline math needs no rule - a
+ * `<span class="math inline">` already sits in the line undisturbed.
+ */
+
+.math.display {
+  display: block;
+  margin: 1.5rem 0;
+  overflow-x: auto;
+  text-align: center;
+}
+
 /* ------------------------------------------------- compare: the proof sheet */
 
 .carve-compare {
