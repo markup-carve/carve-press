@@ -1,8 +1,11 @@
 name: CI
 on: [push, pull_request]
+# Each job declares timeout-minutes so a hung step fails fast
+# instead of inheriting the 360-minute GitHub default.
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       matrix:
         node: [20, 22]
@@ -61,6 +64,7 @@ jobs:
   corpus:
     name: The installed engine against the frozen spec corpus
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
 

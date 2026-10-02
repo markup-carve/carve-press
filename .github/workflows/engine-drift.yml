@@ -73,9 +73,12 @@ env:
   # fix merged this afternoon.
   DRIFT_MAX_DOCUMENTS: 10
 
+# Each job declares timeout-minutes so a hung step fails fast
+# instead of inheriting the 360-minute GitHub default.
 jobs:
   drift:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -147,6 +150,7 @@ jobs:
   corpus:
     name: The pinned engine still renders carve main's corpus
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     # NOT on pull requests, and the comment on the corpus checkout below says
     # why at length: this job can breach because markup-carve/carve moved
     # overnight, which is a state no branch here caused and some branches here
@@ -243,6 +247,7 @@ jobs:
   # changing underneath.
   suite:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     # ci.yml already runs the suite on every pull request against the installed
     # tree. What this copy adds is a run on a day nobody pushed, so that an
     # unpinned dependency changing underneath is noticed; on a pull request it
