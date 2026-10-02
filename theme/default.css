@@ -26,6 +26,10 @@
   --code-word-highlight: rgb(156 116 48 / 0.28);
   --highlight: rgb(156 116 48 / 0.3);
   --highlight-ink: #1b1d21;
+  --insert: rgb(47 125 107 / 0.16);
+  --insert-ink: #1f5a4c;
+  --delete: rgb(180 71 47 / 0.14);
+  --delete-ink: #8f3520;
 
   --display: Spectral, 'Iowan Old Style', Palatino, Georgia, serif;
   --body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -54,6 +58,10 @@
     --code-word-highlight: rgb(199 154 77 / 0.32);
     --highlight: rgb(199 154 77 / 0.34);
     --highlight-ink: #e6e4de;
+    --insert: rgb(98 179 156 / 0.16);
+    --insert-ink: #7cc5b0;
+    --delete: rgb(220 103 78 / 0.18);
+    --delete-ink: #e8907c;
   }
   :root:not([data-theme='light']) .shiki,
   :root:not([data-theme='light']) .shiki span {
@@ -78,6 +86,10 @@
   --code-word-highlight: rgb(199 154 77 / 0.32);
   --highlight: rgb(199 154 77 / 0.34);
   --highlight-ink: #e6e4de;
+  --insert: rgb(98 179 156 / 0.16);
+  --insert-ink: #7cc5b0;
+  --delete: rgb(220 103 78 / 0.18);
+  --delete-ink: #e8907c;
 }
 /* Keep this Shiki override in sync with the media-query override above. */
 :root[data-theme='dark'] .shiki,
@@ -1410,10 +1422,28 @@ mark {
   border-radius: 2px;
   padding: 0 0.15em;
 }
+/* A revision fell back to the user agent: an underline and a strikethrough in the
+ * ink of plain text, while the highlight beside it adapts to the palette. This
+ * theme already reads a revision in a code block as a wash (--code-line-add and
+ * --code-line-remove), so the inline pair uses the same hues at prose contrast. */
+ins {
+  background: var(--insert);
+  color: var(--insert-ink);
+}
+del {
+  background: var(--delete);
+  color: var(--delete-ink);
+}
+
 /* The highlight owns the ink, so a link or a revision mark inside it must not repaint over the pair. */
 mark a,
 mark del,
 mark ins { color: inherit; }
+/* And its own fill: `={+ins+}=` nests the insertion inside the highlight, where a
+ * second rectangle breaks the one region the highlight claims. Per the ruling in
+ * markup-carve/carve-css#19 the nested fill drops and the insertion's signal
+ * falls back to its underline, which the base rule above never removed. */
+mark :is(code, del, ins) { background: none; }
 
 /* ---------------------------------------------------------------- furniture */
 
