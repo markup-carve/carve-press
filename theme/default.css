@@ -1186,10 +1186,16 @@ label:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; bord
  * only works where the host adds one. `spoiler-revealed` is what all three
  * engines emit in static render for content meant to be read, and is never
  * blurred.
+ *
+ * The radius is `em`, not `rem`: a spoiler in a caption or a table cell has to
+ * blur in proportion to the text it hides, or it smears at small sizes and
+ * stays readable at large ones. 0.25em is 4px at the 16px body, measured as the
+ * point where stroke contrast falls to a few percent while the word keeps its
+ * outline (carve-css#28).
  */
 span.spoiler:not(.spoiler-revealed),
 div.spoiler:not(.spoiler-revealed) > :not(.admonition-title) {
-  filter: blur(0.3rem);
+  filter: blur(0.25em);
 }
 span.spoiler:not(.spoiler-revealed):is(:hover, :focus-within),
 div.spoiler:not(.spoiler-revealed):is(:hover, :focus-within) > :not(.admonition-title) {
