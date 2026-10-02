@@ -89,4 +89,18 @@ describe('tab set styling', () => {
       expect(text.split(block).length - 1).toBe(3)
     }
   })
+
+  // The computed-style and contrast reading lives in theme-revision-client.test.ts,
+  // which needs Chrome. This half holds the token coverage, which is the way the
+  // highlight fix nearly shipped half done: a pair defined in one palette block
+  // leaves the other two on the user agent.
+  it('defines the insertion and deletion pair in all three palette blocks', async () => {
+    const text = await css()
+
+    for (const token of ['--insert:', '--insert-ink:', '--delete:', '--delete-ink:']) {
+      expect(text.split(token).length - 1, `${token} is missing from a palette block`).toBe(3)
+    }
+    expect(text).toMatch(/^ins \{\n  background: var\(--insert\);\n  color: var\(--insert-ink\);/m)
+    expect(text).toMatch(/^del \{\n  background: var\(--delete\);\n  color: var\(--delete-ink\);/m)
+  })
 })
