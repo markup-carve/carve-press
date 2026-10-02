@@ -203,7 +203,9 @@ describe('revision marks against engine-rendered output', () => {
       // And from each other, which a shared wash would satisfy none of the above for.
       expect(reading.ins.background).not.toBe(reading.del.background)
       expect(reading.ins.color).not.toBe(reading.del.color)
-    })
+      // Launching Chrome against a cold profile costs more than vitest's 5s
+      // default, which the sibling browser tests in this repo already raise.
+    }, 90000)
 
     it(`drops a nested revision's fill inside a highlight in ${palette.name}`, async () => {
       const bin = chromeBin()
@@ -222,6 +224,6 @@ describe('revision marks against engine-rendered output', () => {
         expect(reading[kind].decoration, `${kind} lost its only remaining signal`).not.toBe('none')
       }
       expect(reading.markIns.decoration).not.toBe(reading.markDel.decoration)
-    })
+    }, 90000)
   }
 })
