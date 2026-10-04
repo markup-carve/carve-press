@@ -4,6 +4,8 @@ name: Engine drift
 # pull request. This workflow watches what no pull request can settle: carve
 # `main` moving ahead of the pinned engine, and unpinned dependencies moving
 # under the suite. It runs on a schedule and files its verdict as one issue.
+# A drift verdict files that issue and the run stays green; a check that could
+# not measure (crash, fetch failure, failing suite, failed filing) stays red.
 
 # The revision distance engine-pins.yml reports can never fail, and that was the
 # half missing. Every scheduled run was green while the pin drifted 333 commits and
@@ -12,7 +14,7 @@ name: Engine drift
 # what the carve-php satellites report, because only a release can close their
 # gap. It is the wrong instrument here: the remedy is one line of package.json
 # in this repository. So the `corpus` job below measures what the pinned engine
-# DOES, in documents, and fails.
+# DOES, in documents, and files the count as a ticket.
 
 on:
   schedule:
@@ -43,6 +45,8 @@ jobs:
     name: The pinned engine still renders carve main's corpus
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      verdict: ${{ steps.measure.outputs.verdict }}
     steps:
       - uses: actions/checkout@v5
 
@@ -101,6 +105,7 @@ jobs:
           npm run build
 
       - name: Render every corpus document through the pinned engine
+        id: measure
         run: |
           set -euo pipefail
           out="$(node tools/corpus-through-engine.mjs \
@@ -112,6 +117,11 @@ jobs:
           wrong="$(field wrong)"
           reference_wrong="$(field reference_wrong)"
           attributable="$(field attributable)"
+          for n in "$documents" "$wrong" "$reference_wrong" "$attributable"; do
+            case "$n" in
+              ''|*[!0-9]*) echo "::error::corpus-through-engine.mjs did not report every count; the measurement is broken, not drift."; exit 1 ;;
+            esac
+          done
 
           echo "the pinned engine renders ${wrong} of ${documents} carve main documents differently"
           echo "carve-js main renders ${reference_wrong} of them differently"
@@ -122,9 +132,11 @@ jobs:
           fi
 
           if [ "${attributable}" -gt "${DRIFT_MAX_DOCUMENTS}" ]; then
-            echo "::error::${attributable} of ${documents} corpus documents render differently through the pinned engine but correctly through carve-js main, over the tolerance of ${DRIFT_MAX_DOCUMENTS}. Bump the '@markup-carve/carve' revision in package.json and refresh the lockfile."
-            exit 1
+            echo "::warning::${attributable} of ${documents} corpus documents render differently through the pinned engine but correctly through carve-js main, over the tolerance of ${DRIFT_MAX_DOCUMENTS}. Bump the '@markup-carve/carve' revision in package.json and refresh the lockfile."
+            echo "verdict=drift" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          echo "verdict=clean" >> "$GITHUB_OUTPUT"
           if [ "${attributable}" -gt 0 ]; then
             echo "::warning::${attributable} of ${documents} corpus documents would be fixed by bumping the engine pin (tolerance ${DRIFT_MAX_DOCUMENTS})"
           fi
@@ -153,8 +165,9 @@ jobs:
       - run: npm test
 
   # A scheduled run reports into a page nobody opens, so the verdict becomes one
-  # tracking issue: opened by the first red run, edited by later ones, closed by
-  # the first green one. Scoped to the default branch.
+  # tracking issue: opened by the first run with drift or a red job, edited by
+  # later ones, closed by the first clean one. Scoped to the default branch.
+  # The suite stays a red job: a failing test is not a drift measurement.
   report:
     name: File the verdict where someone reads it
     needs: [corpus, suite]
@@ -168,6 +181,7 @@ jobs:
           REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CORPUS: ${{ needs.corpus.result }}
+          VERDICT: ${{ needs.corpus.outputs.verdict }}
           SUITE: ${{ needs.suite.result }}
           HEAD_SHA: ${{ github.sha }}
           REF_NAME: ${{ github.ref_name }}
@@ -181,7 +195,7 @@ jobs:
             exit 0
           fi
 
-          TITLE="Engine drift: the scheduled corpus or suite run is red on $DEFAULT_BRANCH"
+          TITLE="Engine drift: the pinned engine trails carve main, or a scheduled job is red on $DEFAULT_BRANCH"
           MARKER="<!-- engine-drift-verdict ref=$REF_NAME -->"
 
           # Listed rather than searched: the search index lags a fresh issue.
@@ -190,8 +204,8 @@ jobs:
                 '.[] | select(.pull_request == null) | select((.body // "") | contains($m)) | .number')"
           issue="${open_issues%%$'\n'*}"
 
-          if [ "$CORPUS" = "success" ] && [ "$SUITE" = "success" ]; then
-            echo "corpus and suite are green on $HEAD_SHA."
+          if [ "$CORPUS" = "success" ] && [ "$VERDICT" = "clean" ] && [ "$SUITE" = "success" ]; then
+            echo "corpus is within tolerance and suite is green on $HEAD_SHA."
             if [ -n "$issue" ]; then
               gh issue comment "$issue" --repo "$REPO" --body \
                 "Green again: run $RUN_URL on \`$HEAD_SHA\`. Closing. The next red run opens a fresh ticket rather than reopening this one."
@@ -204,23 +218,24 @@ jobs:
           {
             echo "$MARKER"
             echo
-            echo "The scheduled engine drift run is red on \`$DEFAULT_BRANCH\`."
+            echo "The scheduled engine drift run found drift or a red job on \`$DEFAULT_BRANCH\`."
             echo
             echo "| job | result |"
             echo "| --- | --- |"
-            echo "| The pinned engine still renders carve main's corpus | \`$CORPUS\` |"
+            echo "| The pinned engine still renders carve main's corpus | \`$CORPUS\`, verdict \`${VERDICT:-none}\` |"
             echo "| suite | \`$SUITE\` |"
             echo
             echo "Run: $RUN_URL, commit \`$HEAD_SHA\`, trigger \`$EVENT_NAME\`."
             echo
-            echo "A red corpus job means carve-js main renders documents correctly that the"
+            echo "Verdict \`drift\` means carve-js main renders documents correctly that the"
             echo "pinned engine does not: bump \`@markup-carve/carve\` in package.json and"
-            echo "refresh the lockfile. A red suite with a green pull request CI means an"
-            echo "unpinned dependency moved underneath."
+            echo "refresh the lockfile. That run stays green; this ticket is the signal."
+            echo "A red corpus job means the measurement itself broke. A red suite with a"
+            echo "green pull request CI means an unpinned dependency moved underneath."
             echo
             echo "This ticket is filed and maintained by the workflow. It is EDITED by each"
-            echo "later red run and CLOSED by the first green one. Closing it by hand does"
-            echo "not silence it: the next red run files a new one."
+            echo "later run with drift or a red job and CLOSED by the first clean one. Closing"
+            echo "it by hand does not silence it: the next such run files a new one."
           } > "$RUNNER_TEMP/engine-drift-verdict.md"
 
           if [ -n "$issue" ]; then
