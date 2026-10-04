@@ -1,0 +1,116 @@
+name: Engine pins
+
+# Both org dependencies are pinned to an EXACT PUBLISHED VERSION. A pin makes
+# drift deliberate, but nothing notices when a pin has fallen behind - and a
+# push-only CI reports the state of the day someone last touched the repo.
+#
+# They used to be git revisions, and the revision was the thing this job read.
+# That cost every consumer of the published package a git clone at install time
+# (carve-press#35), because npm re-resolves a published package's specs from its
+# own manifest and never sees the lockfile committed here. An EXACT version is
+# what settles it: it installs from the registry with an integrity hash, and it
+# still names one commit, so nothing below has to give up measuring.
+#
+# A RANGE would give that up, which is why PR #25 was right to fail. `^0.1.5`
+# names no commit, so the checks under it - is this a real commit, is it on
+# main, how far behind is it - stop having a subject. This job therefore rejects
+# a range as firmly as it rejects a git spec.
+#
+# That is not hypothetical across the org. carve-hexapdf pinned nothing, was not
+# pushed for five days while two AST renames landed upstream, and its badge
+# stayed green on a stale run while a fresh install rendered bold text unstyled
+# and dropped every footnote marker (carve-hexapdf#10). A site generator has the
+# same exposure: the engine decides what every page renders as.
+#
+# The `drift` job reports revision distance rather than gating on it, and that
+# is deliberate: a distance is a proxy, 300 commits can change nothing and one
+# can change a construct. It DOES fail when a pin is not a 40-hex revision, or
+# is not a version whose tag is a real commit on that repository's main. carve-js
+# has rewritten history before - three sibling repos pinned revisions a fresh
+# clone cannot check out (carve#499) - so an unreachable pin is a real failure
+# mode, not a hypothetical.
+
+# On pull requests because every assertion here is decided by the diff:
+# PR #25 swapped both pins for ranges and nothing on the PR noticed.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dep: "@markup-carve/carve"
+            repo: markup-carve/carve-js
+            path: carve-js
+          - dep: "@markup-carve/carve-grammars"
+            repo: markup-carve/carve-grammars
+            path: carve-grammars
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check out ${{ matrix.repo }}
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ matrix.repo }}
+          path: ${{ matrix.path }}
+          fetch-depth: 0
+
+      - name: Compare the pinned version against ${{ matrix.path }} main
+        env:
+          DEP: ${{ matrix.dep }}
+          DIR: ${{ matrix.path }}
+        run: |
+          set -euo pipefail
+          spec="$(node -p "const p=require('./package.json'); p.devDependencies?.['${DEP}'] ?? p.dependencies?.['${DEP}']")"
+          rev=""
+          # An unreleased engine may be pinned in devDependencies. Runtime and
+          # peer dependencies remain registry-only, while this exact commit
+          # gives the drift check a subject before the next engine release.
+          if printf '%s' "${spec}" | grep -qE '^github:[^#]+#[0-9a-f]{40}$'; then
+            rev="${spec##*#}"
+            if ! git -C "${DIR}" rev-parse -q --verify "${rev}^{commit}" >/dev/null 2>&1; then
+              echo "::error::${DEP} pins ${rev}, which is not a commit in ${DIR}"
+              exit 1
+            fi
+          elif ! printf '%s' "${spec}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::${DEP} is \"${spec}\" - it must be an exact published version or a development-only GitHub commit pin"
+            exit 1
+          fi
+          # The version names a commit through its release tag. The two repos
+          # spell the tag differently - carve-js `0.1.5`, carve-grammars
+          # `v0.1.5` - so both spellings are tried rather than hard-coded.
+          if [ -z "${rev}" ]; then
+            for tag in "${spec}" "v${spec}"; do
+              if git -C "${DIR}" rev-parse -q --verify "refs/tags/${tag}^{commit}" >/dev/null 2>&1; then
+                rev="$(git -C "${DIR}" rev-parse "refs/tags/${tag}^{commit}")"
+                echo "${DEP} ${spec} resolves through tag ${tag}"
+                break
+              fi
+            done
+            if [ -z "${rev}" ]; then
+              echo "::error::${DEP} pins ${spec}, and neither ${spec} nor v${spec} is a tag in ${DIR} - the version is not one this repository has released"
+              exit 1
+            fi
+          fi
+          if ! git -C "${DIR}" merge-base --is-ancestor "${rev}" origin/main; then
+            echo "::error::${DIR} ${rev} is not on main, so the pin came from an unmerged or rewritten branch"
+            exit 1
+          fi
+          behind="$(git -C "${DIR}" rev-list --count "${rev}..origin/main")"
+          echo "pinned ${DEP}: ${spec} = ${rev} ($(git -C "${DIR}" log -1 --format=%s "${rev}"))"
+          echo "${DIR} main is ${behind} commit(s) ahead"
+          if [ "${behind}" -gt 0 ]; then
+            echo "::warning::${DEP} is ${behind} ${DIR} commit(s) behind main"
+          fi
