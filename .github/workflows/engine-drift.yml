@@ -243,6 +243,7 @@ jobs:
             echo "Updated #$issue."
           else
             url="$(gh issue create --repo "$REPO" --title "$TITLE" \
-              --body-file "$RUNNER_TEMP/engine-drift-verdict.md")"
+              --body-file "$RUNNER_TEMP/engine-drift-verdict.md" \
+              --label chore --label area:tooling)"
             echo "Filed $url."
           fi
