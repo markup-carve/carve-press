@@ -1,37 +1,12 @@
 name: Engine drift
 
-# Both org dependencies are pinned to an EXACT PUBLISHED VERSION. A pin makes
-# drift deliberate, but nothing notices when a pin has fallen behind - and a
-# push-only CI reports the state of the day someone last touched the repo.
-#
-# They used to be git revisions, and the revision was the thing this job read.
-# That cost every consumer of the published package a git clone at install time
-# (carve-press#35), because npm re-resolves a published package's specs from its
-# own manifest and never sees the lockfile committed here. An EXACT version is
-# what settles it: it installs from the registry with an integrity hash, and it
-# still names one commit, so nothing below has to give up measuring.
-#
-# A RANGE would give that up, which is why PR #25 was right to fail. `^0.1.5`
-# names no commit, so the checks under it - is this a real commit, is it on
-# main, how far behind is it - stop having a subject. This job therefore rejects
-# a range as firmly as it rejects a git spec.
-#
-# That is not hypothetical across the org. carve-hexapdf pinned nothing, was not
-# pushed for five days while two AST renames landed upstream, and its badge
-# stayed green on a stale run while a fresh install rendered bold text unstyled
-# and dropped every footnote marker (carve-hexapdf#10). A site generator has the
-# same exposure: the engine decides what every page renders as.
-#
-# The `drift` job reports revision distance rather than gating on it, and that
-# is deliberate: a distance is a proxy, 300 commits can change nothing and one
-# can change a construct. It DOES fail when a pin is not a 40-hex revision, or
-# is not a version whose tag is a real commit on that repository's main. carve-js
-# has rewritten history before - three sibling repos pinned revisions a fresh
-# clone cannot check out (carve#499) - so an unreachable pin is a real failure
-# mode, not a hypothetical.
-#
-# What a distance could never do is fail, and that is the half this workflow was
-# missing. Every scheduled run was green while the pin drifted 333 commits and
+# The org dependency pins themselves are asserted by engine-pins.yml, on every
+# pull request. This workflow watches what no pull request can settle: carve
+# `main` moving ahead of the pinned engine, and unpinned dependencies moving
+# under the suite. It runs on a schedule and files its verdict as one issue.
+
+# The revision distance engine-pins.yml reports can never fail, and that was the
+# half missing. Every scheduled run was green while the pin drifted 333 commits and
 # 256 of 1131 corpus documents rendered wrongly (carve-press#19). A warning is
 # the right instrument when the remedy is upstream and unavailable here - it is
 # what the carve-php satellites report, because only a release can close their
@@ -40,26 +15,14 @@ name: Engine drift
 # DOES, in documents, and fails.
 
 on:
-  # THE `drift` JOB RUNS ON PULL REQUESTS, the other two do not, and the split is
-  # the point of this trigger list.
-  #
-  # `drift` asserts things about THIS repository's package.json and nothing else:
-  # that each org dependency names an exact published version, that the version's
-  # tag is a real commit, and that it is on main. Every one of those is decided by the diff in
-  # front of it, so a pull request can always clear them, and a pull request is
-  # the only moment at which clearing them is cheap.
-  #
-  # Running on schedule alone left them unasserted exactly when they were broken.
-  # PR #25 replaced both pins with the registry RANGES "^0.1.4", every
-  # required check stayed green because none of them reads the pins, and the
-  # assertion that exists to catch precisely that did not run until the next
-  # morning - by which time it read as one more red scheduled job beside a corpus
-  # failure, rather than as a review comment on the change that caused it.
-  pull_request:
   schedule:
     # 05:00 UTC daily, after the upstream repos have had a night to settle.
     - cron: "0 5 * * *"
   workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
 
 env:
   # How many corpus documents the pinned engine may render differently from
@@ -76,86 +39,10 @@ env:
 # Each job declares timeout-minutes so a hung step fails fast
 # instead of inheriting the 360-minute GitHub default.
 jobs:
-  drift:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - dep: "@markup-carve/carve"
-            repo: markup-carve/carve-js
-            path: carve-js
-          - dep: "@markup-carve/carve-grammars"
-            repo: markup-carve/carve-grammars
-            path: carve-grammars
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Check out ${{ matrix.repo }}
-        uses: actions/checkout@v5
-        with:
-          repository: ${{ matrix.repo }}
-          path: ${{ matrix.path }}
-          fetch-depth: 0
-
-      - name: Compare the pinned version against ${{ matrix.path }} main
-        env:
-          DEP: ${{ matrix.dep }}
-          DIR: ${{ matrix.path }}
-        run: |
-          set -euo pipefail
-          spec="$(node -p "const p=require('./package.json'); p.devDependencies?.['${DEP}'] ?? p.dependencies?.['${DEP}']")"
-          rev=""
-          # An unreleased engine may be pinned in devDependencies. Runtime and
-          # peer dependencies remain registry-only, while this exact commit
-          # gives the drift check a subject before the next engine release.
-          if printf '%s' "${spec}" | grep -qE '^github:[^#]+#[0-9a-f]{40}$'; then
-            rev="${spec##*#}"
-            if ! git -C "${DIR}" rev-parse -q --verify "${rev}^{commit}" >/dev/null 2>&1; then
-              echo "::error::${DEP} pins ${rev}, which is not a commit in ${DIR}"
-              exit 1
-            fi
-          elif ! printf '%s' "${spec}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "::error::${DEP} is \"${spec}\" - it must be an exact published version or a development-only GitHub commit pin"
-            exit 1
-          fi
-          # The version names a commit through its release tag. The two repos
-          # spell the tag differently - carve-js `0.1.5`, carve-grammars
-          # `v0.1.5` - so both spellings are tried rather than hard-coded.
-          if [ -z "${rev}" ]; then
-            for tag in "${spec}" "v${spec}"; do
-              if git -C "${DIR}" rev-parse -q --verify "refs/tags/${tag}^{commit}" >/dev/null 2>&1; then
-                rev="$(git -C "${DIR}" rev-parse "refs/tags/${tag}^{commit}")"
-                echo "${DEP} ${spec} resolves through tag ${tag}"
-                break
-              fi
-            done
-            if [ -z "${rev}" ]; then
-              echo "::error::${DEP} pins ${spec}, and neither ${spec} nor v${spec} is a tag in ${DIR} - the version is not one this repository has released"
-              exit 1
-            fi
-          fi
-          if ! git -C "${DIR}" merge-base --is-ancestor "${rev}" origin/main; then
-            echo "::error::${DIR} ${rev} is not on main, so the pin came from an unmerged or rewritten branch"
-            exit 1
-          fi
-          behind="$(git -C "${DIR}" rev-list --count "${rev}..origin/main")"
-          echo "pinned ${DEP}: ${spec} = ${rev} ($(git -C "${DIR}" log -1 --format=%s "${rev}"))"
-          echo "${DIR} main is ${behind} commit(s) ahead"
-          if [ "${behind}" -gt 0 ]; then
-            echo "::warning::${DEP} is ${behind} ${DIR} commit(s) behind main"
-          fi
-
   corpus:
     name: The pinned engine still renders carve main's corpus
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # NOT on pull requests, and the comment on the corpus checkout below says
-    # why at length: this job can breach because markup-carve/carve moved
-    # overnight, which is a state no branch here caused and some branches here
-    # cannot clear. `drift` above has no such exposure and does run on them.
-    if: github.event_name != 'pull_request'
     steps:
       - uses: actions/checkout@v5
 
@@ -248,11 +135,8 @@ jobs:
   suite:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # ci.yml already runs the suite on every pull request against the installed
-    # tree. What this copy adds is a run on a day nobody pushed, so that an
-    # unpinned dependency changing underneath is noticed; on a pull request it
-    # would only be the same suite twice.
-    if: github.event_name != 'pull_request'
+    # ci.yml's `test` runs this suite on every pull request; this copy adds a
+    # run on a day nobody pushed.
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -267,3 +151,83 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+
+  # A scheduled run reports into a page nobody opens, so the verdict becomes one
+  # tracking issue: opened by the first red run, edited by later ones, closed by
+  # the first green one. Scoped to the default branch.
+  report:
+    name: File the verdict where someone reads it
+    needs: [corpus, suite]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: File the verdict where someone reads it
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CORPUS: ${{ needs.corpus.result }}
+          SUITE: ${{ needs.suite.result }}
+          HEAD_SHA: ${{ github.sha }}
+          REF_NAME: ${{ github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+
+          if [ "$REF_NAME" != "$DEFAULT_BRANCH" ]; then
+            echo "Engine drift tickets are scoped to $DEFAULT_BRANCH; $REF_NAME keeps its Actions verdict only."
+            exit 0
+          fi
+
+          TITLE="Engine drift: the scheduled corpus or suite run is red on $DEFAULT_BRANCH"
+          MARKER="<!-- engine-drift-verdict ref=$REF_NAME -->"
+
+          # Listed rather than searched: the search index lags a fresh issue.
+          open_issues="$(gh api "repos/$REPO/issues?state=open&per_page=100" --paginate \
+            | jq -r --arg m "$MARKER" \
+                '.[] | select(.pull_request == null) | select((.body // "") | contains($m)) | .number')"
+          issue="${open_issues%%$'\n'*}"
+
+          if [ "$CORPUS" = "success" ] && [ "$SUITE" = "success" ]; then
+            echo "corpus and suite are green on $HEAD_SHA."
+            if [ -n "$issue" ]; then
+              gh issue comment "$issue" --repo "$REPO" --body \
+                "Green again: run $RUN_URL on \`$HEAD_SHA\`. Closing. The next red run opens a fresh ticket rather than reopening this one."
+              gh issue close "$issue" --repo "$REPO"
+              echo "Closed #$issue."
+            fi
+            exit 0
+          fi
+
+          {
+            echo "$MARKER"
+            echo
+            echo "The scheduled engine drift run is red on \`$DEFAULT_BRANCH\`."
+            echo
+            echo "| job | result |"
+            echo "| --- | --- |"
+            echo "| The pinned engine still renders carve main's corpus | \`$CORPUS\` |"
+            echo "| suite | \`$SUITE\` |"
+            echo
+            echo "Run: $RUN_URL, commit \`$HEAD_SHA\`, trigger \`$EVENT_NAME\`."
+            echo
+            echo "A red corpus job means carve-js main renders documents correctly that the"
+            echo "pinned engine does not: bump \`@markup-carve/carve\` in package.json and"
+            echo "refresh the lockfile. A red suite with a green pull request CI means an"
+            echo "unpinned dependency moved underneath."
+            echo
+            echo "This ticket is filed and maintained by the workflow. It is EDITED by each"
+            echo "later red run and CLOSED by the first green one. Closing it by hand does"
+            echo "not silence it: the next red run files a new one."
+          } > "$RUNNER_TEMP/engine-drift-verdict.md"
+
+          if [ -n "$issue" ]; then
+            gh issue edit "$issue" --repo "$REPO" --body-file "$RUNNER_TEMP/engine-drift-verdict.md"
+            echo "Updated #$issue."
+          else
+            url="$(gh issue create --repo "$REPO" --title "$TITLE" \
+              --body-file "$RUNNER_TEMP/engine-drift-verdict.md")"
+            echo "Filed $url."
+          fi
