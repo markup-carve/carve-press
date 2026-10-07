@@ -142,6 +142,8 @@ Nested content.
 
 This paragraph links to </#Inline-Delimiters> and uses the implicit reference [Inline Delimiters][].
 
+A cross-reference matches its target id exactly, including case, from engine 0.1.10 on. `</#inline-delimiters>` against a heading whose id is `Inline-Delimiters` used to resolve and now renders as literal text, and `validateCrossrefs` fails the build on it rather than publishing a dead reference.
+
 ## Details And Tabs
 
 ::: details "Native disclosure"
