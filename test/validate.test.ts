@@ -142,6 +142,26 @@ describe('validateCrossrefs', () => {
     )
   })
 
+  // Engine 0.1.10 made every name lookup case-exact (carve-js#2520). A
+  // cross-reference that differs from its heading id only in case used to
+  // resolve, so a docs build that relied on it now fails here rather than
+  // shipping literal text.
+  it('rejects a crossref that differs from the heading id only in case', () => {
+    expect(() => validateCrossrefs([src('# Install\n\nSee </#install>.\n')])).toThrow(
+      /broken-crossref/,
+    )
+  })
+
+  // Engine 0.1.10 extended unresolved-reference-link to reference IMAGES
+  // (carve-js#2533). Both the labeled and the collapsed form render as literal
+  // text, which is the degradation this validator exists to fail on.
+  it('rejects a reference image with no matching definition', () => {
+    expect(() => validateCrossrefs([src('![alt][Label]\n')])).toThrow(
+      /unresolved-reference-link/,
+    )
+    expect(() => validateCrossrefs([src('![alt][]\n')])).toThrow(/unresolved-reference-link/)
+  })
+
   it('reports the location in the original file, not the body', () => {
     const page = {
       relPath: 'a.crv',

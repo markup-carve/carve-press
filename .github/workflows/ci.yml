@@ -84,28 +84,24 @@ jobs:
       # superseded freeze is still deterministic, it just measures against a
       # corpus nobody else is using.
       #
-      # aa3678a, 2134 documents. THE FREEZE IS THE SPEC COMMIT THE PINNED ENGINE
-      # PINS - carve-js a0cb0ad (0.1.9)'s own `spec` submodule names it - and that
-      # is a rule rather than this bump's convenience. It makes this job ask what
-      # carve-go and carve-py ask of their artifacts: is the engine as
+      # c61b0d5, 2225 documents. THE FREEZE IS THE SPEC COMMIT THE PINNED ENGINE
+      # PINS - carve-js 40888dc (0.1.10)'s own `spec` submodule names it - and
+      # that is a rule rather than this bump's convenience. It makes this job ask
+      # what carve-go and carve-py ask of their artifacts: is the engine as
       # conformant as the spec it was written against. Any other choice holds it
       # to a corpus written for a different engine.
       #
-      # The previous ref was a9a2fa7 at 1680 documents, the spec carve-js 0.1.6
-      # pinned - which means it did NOT move when the pin went to 0.1.7, so it
-      # outlived its engine by two releases. Holding the 0.1.9 engine to it
-      # reported 12 documents "rendering differently now that rendered correctly
-      # at the freeze" and not one was a regression: each of the 12 has a
-      # different expected HTML in carve main than a9a2fa7 recorded, so they are
-      # rulings the spec changed and the engine implemented while the old corpus
-      # kept the pre-ruling reading. That is what a freeze left behind its engine
-      # measures, and it is why this ref moves with the pin rather than outliving
-      # it - twelve names is what one missed move costs.
+      # The ref moves with the pin in the same change, because a freeze left
+      # behind its engine reports rulings as regressions. The previous ref,
+      # aa3678a at 2134 documents, is the spec carve-js 0.1.9 pinned; holding the
+      # 0.1.10 engine to it names 12 documents, and every one is a ruling the
+      # spec changed and the engine implemented: three of the sources were
+      # rewritten to exact case and 255's expected HTML changed outright.
       - name: Check out the corpus at the spec freeze
         uses: actions/checkout@v5
         with:
           repository: markup-carve/carve
-          ref: aa3678a2adb2a500fb5118919edce2a1a466c590
+          ref: c61b0d5f904f976ad096ca784f605fdb3e839f0b
           path: carve-freeze
 
       - uses: actions/setup-node@v5
