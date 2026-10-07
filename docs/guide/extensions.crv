@@ -18,6 +18,10 @@ CarvePress has two extension layers: Carve engine extensions that render markup,
 
 CarvePress always wraps the preset with Shiki, table scrolling, compare, playground, code groups, heading permalinks, and image defaults.
 
+::: warning "Glossary ids changed with engine 0.1.10"
+A glossary term keeps its case in its id, so `:: HTTP` renders `id="gloss-HTTP"` where engine 0.1.9 rendered `id="gloss-http"`. Two terms differing only in case used to collide and the second got no id at all; each now takes its own. Any `#gloss-...` deep link into a glossary on the `full` preset has to be respelled to match the term.
+:::
+
 ## Site Extension Events
 
 | Event | Payload | Use |
