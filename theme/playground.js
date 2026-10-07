@@ -168,6 +168,11 @@ export const PLAYGROUND_EXTENSION_EXCLUSIONS = {
   readAnnotationRanges: 'annotation-range utility, not an extension factory',
   toAnnotationRanges: 'annotation-range utility, not an extension factory',
   renderCarveWithConversionReport: 'renderer entry point, not an extension factory',
+  FOLDED_NODE_TYPES: 'constant, not an extension factory',
+  PreservationError: 'error class, not an extension factory',
+  assessTablePreservation: 'table-preservation utility, not an extension factory',
+  carveToPreservationReport: 'preservation-report entry point, not an extension factory',
+  migrateCaseOnlyReferences: 'migration utility, not an extension factory',
 }
 
 export function classifyEngineExport(name, value) {
