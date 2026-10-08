@@ -132,6 +132,45 @@ describe('buildSite', () => {
     await expect(stat(resolve(noPlayground.outDir, 'assets/carve/index.js'))).rejects.toThrow()
   })
 
+  it('copies only the engine runtime, not its maps or declarations', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-engine-runtime-'))
+    const srcDir = resolve(root, 'docs')
+    await mkdir(srcDir)
+    await writeFile(
+      resolve(srcDir, 'index.crv'),
+      ['---', 'title: Play', '---', '', '# Play', '', '::: playground', '```carve', '*bold*', '```', ':::'].join(
+        '\n',
+      ),
+    )
+
+    const { outDir } = await build({ srcDir, themeConfig: { sidebar: {} } }, root)
+    const engineDir = resolve(outDir, 'assets/carve')
+
+    const copied: string[] = []
+    const walk = async (dir: string): Promise<void> => {
+      for (const entry of await readdir(dir, { withFileTypes: true })) {
+        if (entry.isDirectory()) await walk(resolve(dir, entry.name))
+        else copied.push(entry.name)
+      }
+    }
+    await walk(engineDir)
+
+    // The runtime is there, so a filter that copied nothing cannot pass this.
+    expect(copied).toContain('index.js')
+    expect(copied.filter((name) => name.endsWith('.js')).length).toBeGreaterThan(50)
+
+    // What a browser never asks for: a declaration has no runtime meaning and a
+    // map is 7.1 MB of devtools payload on this engine (#70).
+    expect(copied.filter((name) => name.endsWith('.map'))).toEqual([])
+    expect(copied.filter((name) => name.endsWith('.d.ts'))).toEqual([])
+
+    // Dropping the map without its comment leaves a 404 for anyone with
+    // devtools open, so the comment goes with it.
+    const index = await readFile(resolve(engineDir, 'index.js'), 'utf8')
+    expect(index).not.toMatch(/sourceMappingURL/)
+    expect(index.length).toBeGreaterThan(0)
+  })
+
   it('copies configured playground runtime assets beside the playground client', async () => {
     const root = await mkdtemp(resolve(tmpdir(), 'cp-playground-assets-'))
     const srcDir = resolve(root, 'docs')

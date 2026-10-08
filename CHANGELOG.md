@@ -11,6 +11,7 @@
 ### Improvements
 
 - The spoiler blur scales with the text it hides (#60).
+- A built site carries the engine's runtime only. Its source maps and type declarations were copied into `assets/carve/` as well, which no browser requests: this repository's own site went from 14 MB to 5.1 MB, and `assets/carve/` from 518 files to 130 (#70).
 - The engine moves to carve 0.1.10, which compares names case exactly: a cross-reference whose target differs only in case no longer resolves. Lint your content before deploying (#66, #68).
 
 ## [0.1.3] - 2026-09-21
