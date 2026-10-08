@@ -258,6 +258,7 @@ jobs:
     # that needs an OIDC token. `id-token` is never granted implicitly, not even
     # when the repository default is read-write; omitting this block does not
     # weaken provenance, it makes the publish FAIL.
+      - release-checks
     permissions:
       # `write`, not `read`, and the gate below is the whole reason: a DRAFT
       # release is invisible to a caller without push access, so under
@@ -350,6 +351,8 @@ jobs:
           # Read it back: exit status does not tell you whether the tag survived.
           gh api "repos/$GITHUB_REPOSITORY/releases/$id" \
             --jq '"draft=\(.draft) tag=\(.tag_name)"'
+    if: ${{ !cancelled() && !failure() && needs['release-checks'].result == 'success' && (needs.tag.result == 'success'
+      || (github.event_name == 'workflow_dispatch' && inputs.version == '')) }}
   tag:
     name: Create the tag
     runs-on: ubuntu-latest
