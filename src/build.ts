@@ -102,6 +102,50 @@ async function directoryExists(path: string): Promise<boolean> {
   }
 }
 
+/**
+ * The engine's `dist/` publishes a `.js.map` and a `.d.ts` beside every module.
+ * A declaration has no runtime meaning and a map is fetched only by devtools, so
+ * copying them put 7,595,001 bytes into the deploy that no reader requests - 54
+ * percent of this repository's own site, against 4,165,434 bytes of JavaScript
+ * that the playground's `import('./carve/index.js')` actually walks (#70).
+ *
+ * A denylist rather than a `.js` allowlist: the point is to drop compile-time
+ * and debugger artifacts, and an engine release that starts shipping a `.wasm`
+ * or a `.json` beside its modules should keep working without an edit here.
+ */
+function isEngineRuntimeFile(name: string): boolean {
+  return !name.endsWith('.map') && !name.endsWith('.d.ts')
+}
+
+/**
+ * Skipping the maps leaves the `sourceMappingURL` comment pointing at a file
+ * that is no longer there, which is a 404 for every reader who has devtools
+ * open. Dropping the comment with the map is what makes the omission invisible
+ * rather than merely smaller.
+ */
+function withoutSourceMappingComment(source: string): string {
+  return source.replace(/\n?\/\/# sourceMappingURL=.*\n?$/, '\n')
+}
+
+async function copyEngineRuntime(src: string, dest: string): Promise<void> {
+  const entries = await readdir(src, { withFileTypes: true })
+  await mkdir(dest, { recursive: true })
+  for (const entry of entries) {
+    const srcPath = resolve(src, entry.name)
+    const destPath = resolve(dest, entry.name)
+    if (entry.isDirectory()) {
+      await copyEngineRuntime(srcPath, destPath)
+    } else if (entry.isFile() && isEngineRuntimeFile(entry.name)) {
+      await mkdir(dirname(destPath), { recursive: true })
+      if (entry.name.endsWith('.js')) {
+        await writeFile(destPath, withoutSourceMappingComment(await readFile(srcPath, 'utf8')))
+      } else {
+        await copyFile(srcPath, destPath)
+      }
+    }
+  }
+}
+
 async function copyDirectoryContents(src: string, dest: string): Promise<void> {
   const entries = await readdir(src, { withFileTypes: true })
   await mkdir(dest, { recursive: true })
@@ -542,7 +586,7 @@ async function writePlaygroundAssets(
   hash: boolean,
 ): Promise<void> {
   await emitAsset(outDir, 'playground.js', await readFile(defaultPlaygroundScriptPath), manifest, hash)
-  await copyDirectoryContents(carveEngineDistPath, resolve(outDir, 'assets/carve'))
+  await copyEngineRuntime(carveEngineDistPath, resolve(outDir, 'assets/carve'))
   await copyConfiguredPlaygroundAssets(outDir, playground)
 }
 
