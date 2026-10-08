@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.4] - 2026-10-08
+
+### Fixes
+
+- A spoiler and display math reached the page unstyled, and a tab set rendered as raw radio buttons (#59, #54).
+- The base prefix applies to links in every host, not only in prose (#52).
+- An insertion and a deletion take paired palette colors in all three blocks (#57).
+
+### Improvements
+
+- The spoiler blur scales with the text it hides (#60).
+- The engine moves to carve 0.1.10, which compares names case exactly: a cross-reference whose target differs only in case no longer resolves. Lint your content before deploying (#66, #68).
+
 ## [0.1.3] - 2026-09-21
 
 ### Added
