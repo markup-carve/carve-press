@@ -234,7 +234,7 @@ const declared = declaredCorpusSize(corpusDir)
 if (all.length !== declared) {
   process.stderr.write(
     `::error::${all.length} corpus pairs found in ${corpusDir}, but the spec's example pages declare ${declared}. ` +
-      'Every ::: compare block in resources/examples/{core,extensions,edge-cases}.md becomes one corpus pair, so a ' +
+      'Every carve fence in a ::: compare block in resources/examples/{core,extensions,edge-cases}.md becomes one corpus pair, so a ' +
       'difference means the corpus checked out here is not the one those pages describe - a truncated or stale ' +
       'checkout, or a corpus that needs regenerating. It does not mean this run was clean.\n',
   )
