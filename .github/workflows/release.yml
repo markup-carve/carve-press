@@ -14,9 +14,6 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - "v[0-9]+.[0-9]+.[0-9]+"
   # A rehearsal: everything runs and the publish becomes --dry-run. The first
   # run of a release workflow should not be the moment a tag makes it
   # irreversible, because npm refuses to replace a published version.
