@@ -28,6 +28,7 @@
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { resolve, join, dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { declaredPairs } from './example-pair-census.mjs'
 
 const argv = process.argv.slice(2)
 const positional = []
@@ -61,8 +62,9 @@ if (enginePath === undefined || corpusDir === undefined) {
  *
  * So the reference is the corpus's SOURCE: tests/corpus is generated from the
  * `::: compare` blocks in resources/examples/{core,extensions,edge-cases}.md,
- * one block per pair, and the generator refuses to write a corpus where the two
- * disagree. Both live in the same checkout, so this costs no second clone.
+ * one pair per `carve` fence in a block, and the generator refuses to write a
+ * corpus where the two disagree. Both live in the same checkout, so this costs
+ * no second clone.
  */
 function declaredCorpusSize(dir) {
   const examplesDir = resolve(dir, '..', '..', 'resources', 'examples')
@@ -78,22 +80,7 @@ function declaredCorpusSize(dir) {
       )
       process.exit(1)
     }
-    // Mirrors the generator's state machine rather than grepping: a
-    // `::: compare` line inside an already-open block is content, not a second
-    // pair, and a block closes on a bare marker line.
-    let marker = null
-    for (const rawLine of readFileSync(path, 'utf8').split('\n')) {
-      const line = rawLine.trim()
-      if (marker !== null) {
-        if (line === marker) marker = null
-        continue
-      }
-      const m = /^(:{3,})\s+compare(\s+\S.*)?$/.exec(line)
-      if (m !== null) {
-        declared++
-        marker = m[1]
-      }
-    }
+    declared += declaredPairs(readFileSync(path, 'utf8'))
   }
   if (declared === 0) {
     process.stderr.write(
