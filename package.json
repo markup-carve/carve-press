@@ -1,6 +1,6 @@
 {
   "name": "@markup-carve/carve-press",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/markup-carve/carve-press.git"
@@ -60,7 +60,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@markup-carve/carve": "0.1.10",
+    "@markup-carve/carve": "0.1.11",
     "@markup-carve/carve-grammars": "0.1.11",
     "@shikijs/transformers": "^1.29.0",
     "minisearch": "^7.2.0",
