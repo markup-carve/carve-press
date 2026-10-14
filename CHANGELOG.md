@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.5] - 2026-10-14
+
+### Changed
+
+- Renders with `@markup-carve/carve` 0.1.11, so pages follow that engine's readings: table continuation lines, span markers that cannot span, and smart quotes after a dash or a line break (#78).
+
 ## [0.1.4] - 2026-10-08
 
 ### Fixes
