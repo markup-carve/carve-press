@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- `carve-press check` runs every build check (render, lint, links, nav, route manifest) without writing a build, and exits non-zero on any error.
+- `carve-press fmt` formats `.crv` sources with the engine's canonical writer. `--check` lists unformatted files and exits 1; `--align-tables` pads table columns to a shared width.
+
 ### Changed
 
 - Renders with `@markup-carve/carve` 0.1.13 and highlights with `@markup-carve/carve-grammars` 0.1.17. Includes can select a named region with `{{ file.crv@region:name }}`, and an include whose bytes are not UTF-8 fails the build.

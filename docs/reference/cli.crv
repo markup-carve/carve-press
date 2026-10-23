@@ -13,6 +13,8 @@ Run CarvePress with `carve-press <command> [options]`. If the first argument is 
 | Command | Description |
 | --- | --- |
 | `build` | Build the site. |
+| `check` | Run every build check without writing a build. |
+| `fmt [paths...]` | Format `.crv` sources in place, `srcDir` by default. |
 | `routes` | Print discovered routes and source files. |
 | `dev` | Build, serve, watch, and live reload. |
 | `serve` | Serve the existing `outDir`. |
@@ -30,13 +32,34 @@ Run CarvePress with `carve-press <command> [options]`. If the first argument is 
 | `--open` | `dev` | off | Open the dev server URL in a browser. |
 | `--force` | `init` | off | Allow scaffold files to be overwritten. |
 | `--title <title>` | `new` | title-cased file name | Page title for a new page. |
+| `--check` | `fmt` | off | List files that would change and exit 1 instead of writing them. |
+| `--align-tables` | `fmt` | off | Pad table columns to a shared display width. |
 | `--help` | all commands | off | Print help. |
 | `--version` | all commands | off | Print the package version. |
+
+## Checking a Site
+
+`check` renders every page, lints it and its includes, and validates links, nav, sidebars, prev/next overrides and the route manifest, exactly as `build` does. The output goes to a temporary directory that is removed afterwards, so `outDir` and `routes.json` are left untouched. Any failure exits with a non-zero status, which makes it a pull-request gate:
+
+```bash "CI step"
+npx carve-press check
+```
+
+## Formatting Sources
+
+`fmt` rewrites `.crv` files with the Carve engine's canonical writer. With no paths it formats every `.crv` under `srcDir`, including snippets that `srcExclude` keeps out of routing; hidden directories and `node_modules` are skipped. Pass files or directories to format only those.
+
+`--check` writes nothing: it prints each file that is not canonical and exits 1 if there is any. `--align-tables` pads every table column to a common width, measured by display width. It is opt-in, so use the same flag in `--check` and in the formatting run, or the two disagree.
+
+A file the writer cannot format is reported with the reason and the command exits 2.
 
 ## Examples
 
 ```bash "common commands"
 carve-press build
+carve-press check
+carve-press fmt --check --align-tables
+carve-press fmt docs/guide --align-tables
 carve-press routes --root .
 carve-press dev --host 0.0.0.0 --port 5173
 carve-press serve --port 4173

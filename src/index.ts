@@ -1,5 +1,7 @@
 export { defineConfig, resolveConfig } from './config.js'
 export { buildSite, loadConfig } from './build.js'
+export { checkSite } from './check.js'
+export { formatSources } from './fmt.js'
 export { resolveSidebar, flattenSidebar, resolvePrevNext } from './nav.js'
 export { BuildEventBus } from './events.js'
 export {
@@ -58,6 +60,8 @@ export type {
   ShikiLanguage,
 } from './config.js'
 export type { BuildResult } from './build.js'
+export type { CheckResult } from './check.js'
+export type { FormatOptions, FormatResult } from './fmt.js'
 export type { BuildEvents } from './events.js'
 export type { FlatLink } from './nav.js'
 export type { Layout, LayoutContext } from './layout/doc.js'
