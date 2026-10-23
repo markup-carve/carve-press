@@ -2,6 +2,10 @@
 
 ## [0.1.6] - 2026-10-23
 
+### Breaking
+
+- A site that built on 0.1.5 can fail to build now: build-time lint also checks included files, reporting at their own lines, and the engine's new rules, such as `consumed-key-near-miss` and `continuation-marker-refused`, fail the build like every other lint finding. Run `carve-press check` before deploying (#80).
+
 ### Fixes
 
 - An image in a list item, table cell or figure gets the same `loading`, `decoding`, `width` and `height` defaults as one in a paragraph; only top-level paragraphs had them (#82).
@@ -17,7 +21,6 @@
 ### Changed
 
 - Renders with `@markup-carve/carve` 0.1.13 and highlights with `@markup-carve/carve-grammars` 0.1.17. Includes can select a named region with `{{ file.crv@region:name }}`, and an include whose bytes are not UTF-8 fails the build (#80, #79).
-- Build-time lint also checks included files and reports at their own lines. The engine's new rules, such as `consumed-key-near-miss` and `continuation-marker-refused`, fail the build like every other lint finding. Run `carve-press check` before deploying (#80).
 
 ## [0.1.5] - 2026-10-14
 
