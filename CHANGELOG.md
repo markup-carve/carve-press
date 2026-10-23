@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.7] - 2026-10-23
+
+### Fixes
+
+- `csv` and `tsv` fences, including those inside a `carve` fence, highlight with the Carve grammars from `@markup-carve/carve-grammars`, so separators and quoted fields get their own colors (#88).
+
 ## [0.1.6] - 2026-10-23
 
 ### Breaking
