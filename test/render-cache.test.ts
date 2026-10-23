@@ -174,7 +174,8 @@ describe('PersistentRenderCache', () => {
   })
 })
 
-describe('carve-press build cache', () => {
+// Each case spawns several full CLI builds.
+describe('carve-press build cache', { timeout: 30_000 }, () => {
   const run = (root: string, ...args: string[]) =>
     execFileAsync(process.execPath, [cli, 'build', '--root', root, ...args]).then((out) => out.stdout)
 
