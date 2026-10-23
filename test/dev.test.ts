@@ -99,6 +99,25 @@ describe('createDevRebuilder', () => {
     )
   })
 
+  it('re-renders a page when an image it sizes from publicDir changes', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'cp-dev-image-'))
+    await mkdir(resolve(root, 'docs'), { recursive: true })
+    await mkdir(resolve(root, 'public'), { recursive: true })
+    await writeFile(
+      resolve(root, 'carve-press.config.js'),
+      config("{ title: 'Docs', routeManifest: false, dev: { incremental: true } }"),
+    )
+    const svg = (width: number) => `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="10"></svg>`
+    await writeFile(resolve(root, 'docs/index.crv'), page('Home', '# Home\n\n![logo](/logo.svg)'))
+    await writeFile(resolve(root, 'public/logo.svg'), svg(20))
+    const rebuilder = createDevRebuilder(root)
+    await rebuilder.rebuild()
+
+    await writeFile(resolve(root, 'public/logo.svg'), svg(40))
+    await expect(rebuilder.rebuild()).resolves.toMatchObject({ ok: true, renderStats: { rendered: 1, reused: 0 } })
+    await expect(readFile(resolve(root, 'dist/index.html'), 'utf8')).resolves.toContain('width="40"')
+  })
+
   it('drops the incremental cache when config, theme CSS, or extra CSS changes', async () => {
     const root = await mkdtemp(resolve(tmpdir(), 'cp-dev-global-'))
     await mkdir(resolve(root, 'docs'))

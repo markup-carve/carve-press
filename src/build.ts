@@ -35,6 +35,7 @@ import {
 import { BuildEventBus } from './events.js'
 import type { RedirectEntry } from './events.js'
 import { BuildError, SourceError } from './errors.js'
+import { renderCacheBlocker, type RenderCache, type RenderStats } from './render-cache.js'
 
 const require = createRequire(import.meta.url)
 const execFileAsync = promisify(execFile)
@@ -56,17 +57,11 @@ export interface BuildResult {
   outDir: string
   routes: string[]
   renderStats: RenderStats
+  /** Why the render cache passed in was not used, when it was not. */
+  renderCacheBlocked?: string
 }
 
-export interface RenderStats {
-  rendered: number
-  reused: number
-}
-
-export interface RenderCache {
-  stats: RenderStats
-  render(page: Page, ctx: RenderContext, render: () => RenderedPage): RenderedPage
-}
+export type { RenderCache, RenderStats } from './render-cache.js'
 
 async function configExists(path: string): Promise<boolean> {
   try {
@@ -745,6 +740,10 @@ export async function buildSite(opts: {
   for (const extension of config.extensions) extension.setup(bus)
 
   await bus.emit('buildStarted', { config })
+  const renderCacheBlocked = opts.renderCache?.requiresTrackedExtensions
+    ? renderCacheBlocker(config, bus)
+    : undefined
+  const renderCache = renderCacheBlocked === undefined ? opts.renderCache : undefined
 
   const srcDir = resolve(opts.root, config.srcDir)
   const outDir = resolve(opts.root, config.outDir)
@@ -816,7 +815,7 @@ export async function buildSite(opts: {
       profileBaseHost: host,
     }
     const result =
-      opts.renderCache?.render(page, renderContext, () => renderPage(page, renderContext)) ??
+      renderCache?.render(page, renderContext, () => renderPage(page, renderContext)) ??
       renderPage(page, renderContext)
     const after = await bus.emit('pageRendered', { rendered: result, html: result.html })
     rendered.push({ ...result, html: after.html })
@@ -960,11 +959,12 @@ export async function buildSite(opts: {
   if (opts.writeManifest !== false) {
     await writeRouteManifest(opts.root, config.routeManifest, routes)
   }
-  const renderStats = opts.renderCache?.stats ?? { rendered: rendered.length, reused: 0 }
+  const renderStats = renderCache?.stats ?? { rendered: rendered.length, reused: 0 }
   return {
     rendered,
     outDir,
     routes: [...routes],
     renderStats: { ...renderStats },
+    ...(renderCacheBlocked === undefined ? {} : { renderCacheBlocked }),
   }
 }

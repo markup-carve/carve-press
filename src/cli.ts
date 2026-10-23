@@ -9,6 +9,7 @@ import { resolveConfig } from './config.js'
 import { discoverPages } from './content/discover.js'
 import { startDevServer, formatCliError } from './dev.js'
 import { formatSources } from './fmt.js'
+import { globalFingerprint, PersistentRenderCache } from './render-cache.js'
 import { formatImportReport, importSite, type ImportFormat } from './import.js'
 import { initSite, newPage } from './scaffold.js'
 import { startStaticServer } from './server.js'
@@ -23,7 +24,7 @@ function usage(): string {
   return `usage: carve-press <command> [options]
 
 Commands:
-  build                         Build the site
+  build [--no-cache]            Build the site, reusing unchanged page renders
   check                         Validate and lint without writing a build
   fmt [paths...]                Format .crv sources (default: srcDir)
   import <source>               Convert Markdown or HTML pages to .crv
@@ -41,6 +42,7 @@ Options:
   --open                        Open the dev server in a browser
   --force                       Allow init to overwrite scaffold files
   --title <title>               Page title for new
+  --no-cache                    build: render every page, ignore the cache
   --check                       fmt: list unformatted files, exit 1 if any
   --align-tables                fmt: pad table columns to a shared width
   --out <dir>                   import: target directory (default: srcDir)
@@ -80,12 +82,32 @@ function positionalArgs(argv: string[]): string[] {
   return positional
 }
 
-async function commandBuild(root: string): Promise<void> {
-  const config = await loadConfig(root)
+/** Lives with other tool caches, so `npm ci` and a fresh clone both start cold. */
+const BUILD_CACHE_FILE = 'node_modules/.cache/carve-press/render-cache.json'
+
+async function commandBuild(root: string, argv: string[]): Promise<void> {
+  const userConfig = await loadConfig(root)
   const started = Date.now()
-  const result = await buildSite({ root, config })
+  const renderCache = hasFlag(argv, '--no-cache')
+    ? undefined
+    : await PersistentRenderCache.load({
+        file: resolve(root, BUILD_CACHE_FILE),
+        root,
+        global: globalFingerprint(root, resolveConfig(userConfig, root)),
+      })
+  const result = await buildSite({ root, config: userConfig, ...(renderCache ? { renderCache } : {}) })
+  if (result.renderCacheBlocked !== undefined) {
+    console.log(`carve-press: build cache off: ${result.renderCacheBlocked}`)
+  } else if (renderCache !== undefined) {
+    const saveError = await renderCache.save()
+    if (saveError !== undefined) console.warn(`carve-press: could not write the build cache: ${saveError.message}`)
+  }
+  const work =
+    renderCache === undefined || result.renderCacheBlocked !== undefined
+      ? ''
+      : ` (${result.renderStats.rendered} rendered, ${result.renderStats.reused} from cache)`
   console.log(
-    `carve-press: built ${result.routes.length} page(s) into ${result.outDir} in ${
+    `carve-press: built ${result.routes.length} page(s)${work} into ${result.outDir} in ${
       Date.now() - started
     }ms`,
   )
@@ -237,7 +259,7 @@ async function main(): Promise<void> {
     return
   }
 
-  if (command === 'build') return commandBuild(root)
+  if (command === 'build') return commandBuild(root, argv)
   if (command === 'check') return commandCheck(root)
   if (command === 'fmt') return commandFmt(root, argv)
   if (command === 'import') return commandImport(root, argv)

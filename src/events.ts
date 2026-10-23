@@ -45,6 +45,10 @@ export class BuildEventBus {
     this.handlers.set(event, list)
   }
 
+  has(event: keyof BuildEvents): boolean {
+    return (this.handlers.get(event)?.length ?? 0) > 0
+  }
+
   async emit<K extends keyof BuildEvents>(
     event: K,
     payload: BuildEvents[K],
