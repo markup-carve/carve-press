@@ -141,6 +141,13 @@ describe('PersistentRenderCache', () => {
     expect(await renderCache.save()).toBeInstanceOf(Error)
   })
 
+  it('changes the global fingerprint when a custom Shiki grammar object changes', () => {
+    const grammar = (match: string) =>
+      ({ name: 'mylang', scopeName: 'source.mylang', patterns: [{ match, name: 'keyword' }], repository: {} }) as never
+    const withLang = (match: string) => resolveConfig({ ...config, shiki: { langs: [grammar(match)] } }, '/site')
+    expect(globalFingerprint('/site', withLang('foo'))).not.toBe(globalFingerprint('/site', withLang('bar')))
+  })
+
   it('starts cold from a corrupt cache file instead of failing', async () => {
     const root = await site()
     await mkdir(resolve(root, 'cache'), { recursive: true })
