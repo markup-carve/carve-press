@@ -12,7 +12,7 @@
 - `carve-press check` runs every build check (render, lint, links, nav, route manifest) without writing a build, and exits non-zero on any error.
 - `carve-press fmt` formats `.crv` sources with the engine's canonical writer. `--check` lists unformatted files and exits 1; `--align-tables` pads table columns to a shared width.
 - `carve-press import` converts a Markdown or HTML site into `.crv` pages, copies the other files into `publicDir`, and reports every finding that lost or degraded content; `--report` writes the full report as JSON.
-- `carve-press build` reuses the render of every page whose source, includes, sized images and site configuration are unchanged since the last build. Layout, navigation, feeds and validation still run over all pages. `--no-cache` renders everything.
+- `carve-press build` reuses the render of every page whose source, includes, sized images and site configuration are unchanged since the last build. Layout, navigation, feeds and validation still run over all pages. A site whose config adds render extensions renders every page, and `--no-cache` does the same for any site.
 
 ### Changed
 

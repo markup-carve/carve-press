@@ -47,7 +47,7 @@ export default defineConfig({
 
 `carve-press build` keeps the same kind of cache between runs, in `node_modules/.cache/carve-press/render-cache.json`. Only the per-page render is reused: layouts, navigation, sidebars, search, feeds, the sitemap and every validation still run over all pages, so a change on one page that affects another, such as a renamed heading another page links to, is still caught. The whole cache is dropped when the config file, any config value, the source of a configured extension, the theme CSS, the code of CarvePress or the engine, or the installed versions of the grammars or Shiki change.
 
-One dependency is not tracked: code a configured extension imports from another file. After changing such a helper, or whenever a build looks stale, run `carve-press build --no-cache`, which renders every page and neither reads nor writes the cache. Deleting the cache file has the same effect for the next build.
+A render extension from the config can import code from another file, and no fingerprint sees that file. So when `carve.extensions` adds an extension, or a site extension hooks `rendererCreated`, `build` says `build cache off` and renders every page. Whenever a build looks stale, run `carve-press build --no-cache`, which renders every page and neither reads nor writes the cache; deleting the cache file has the same effect for the next build. A cache that cannot be written, for example without a writable `node_modules`, prints a warning and does not fail the build.
 
 ## Theme
 

@@ -5,6 +5,7 @@ import { createRequire } from 'node:module'
 import { dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { CarvePressConfig } from './config.js'
+import { BuildEventBus } from './events.js'
 import type { Page } from './content/discover.js'
 import type { RenderContext, RenderedPage } from './render/page.js'
 
@@ -149,6 +150,23 @@ export function globalFingerprint(root: string, config: CarvePressConfig): strin
   })
 }
 
+/**
+ * Why the build cache cannot be trusted for this config, if it cannot. Render
+ * extensions from config may import code from other files, which no
+ * fingerprint here sees, so a site that adds any renders every page.
+ */
+export function buildCacheBlocker(config: CarvePressConfig): string | undefined {
+  if (config.carve.extensions.length > 0) return 'carve.extensions adds render extensions'
+  for (const extension of config.extensions) {
+    const bus = new BuildEventBus()
+    extension.setup(bus)
+    if (bus.has('rendererCreated')) {
+      return `site extension "${extension.name ?? 'anonymous'}" changes the render stack`
+    }
+  }
+  return undefined
+}
+
 export function pageSourceHash(page: Page): string {
   return sha256(page.rawSource ?? stableJson({ frontmatter: page.frontmatter, source: page.source }))
 }
@@ -257,10 +275,19 @@ export class PersistentRenderCache implements RenderCache {
     return rendered
   }
 
-  /** Writes only the pages of this build, so deleted pages drop out. */
-  async save(): Promise<void> {
+  /**
+   * Writes only the pages of this build, so deleted pages drop out. Returns
+   * the error instead of throwing: a cache that cannot be written is a miss
+   * next time, not a failed build.
+   */
+  async save(): Promise<Error | undefined> {
     const stored: StoredCache = { format: FORMAT, global: this.global, entries: this.next }
-    await mkdir(dirname(this.file), { recursive: true })
-    await writeFile(this.file, JSON.stringify(stored), 'utf8')
+    try {
+      await mkdir(dirname(this.file), { recursive: true })
+      await writeFile(this.file, JSON.stringify(stored), 'utf8')
+      return undefined
+    } catch (error) {
+      return error instanceof Error ? error : new Error(String(error))
+    }
   }
 }

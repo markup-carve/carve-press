@@ -6,7 +6,8 @@ import { promisify } from 'node:util'
 import { describe, expect, it } from 'vitest'
 import { buildSite } from '../src/build.js'
 import { resolveConfig, type UserConfig } from '../src/config.js'
-import { globalFingerprint, PersistentRenderCache } from '../src/render-cache.js'
+import { buildCacheBlocker, globalFingerprint, PersistentRenderCache } from '../src/render-cache.js'
+import { sitemap } from '../src/extensions/sitemap.js'
 
 const execFileAsync = promisify(execFile)
 const cli = resolve(import.meta.dirname, '../dist/cli.js')
@@ -89,6 +90,34 @@ describe('PersistentRenderCache', () => {
     expect(globalFingerprint(root, ext('return d'))).not.toBe(globalFingerprint(root, ext('return d /* v2 */')))
   })
 
+  it('is blocked by render extensions whose imported code it cannot see', () => {
+    const root = '/site'
+    expect(buildCacheBlocker(resolveConfig(config, root))).toBeUndefined()
+    expect(
+      buildCacheBlocker(resolveConfig({ ...config, extensions: [sitemap({ hostname: 'https://x.test' })] }, root)),
+    ).toBeUndefined()
+    expect(
+      buildCacheBlocker(resolveConfig({ ...config, carve: { extensions: [{ name: 'x' }] } }, root)),
+    ).toMatch(/carve\.extensions/)
+    const stackChanger = {
+      name: 'stack',
+      setup(bus: { on: (event: string, fn: () => void) => void }) {
+        bus.on('rendererCreated', () => {})
+      },
+    }
+    expect(buildCacheBlocker(resolveConfig({ ...config, extensions: [stackChanger as never] }, root))).toMatch(
+      /"stack" changes the render stack/,
+    )
+  })
+
+  it('reports a cache it cannot write instead of throwing', async () => {
+    const root = await site()
+    await writeFile(resolve(root, 'blocker'), 'a file, not a directory')
+    const renderCache = await PersistentRenderCache.load({ file: resolve(root, 'blocker/cache.json'), root, global: 'g' })
+    await buildSite({ root, config, renderCache })
+    expect(await renderCache.save()).toBeInstanceOf(Error)
+  })
+
   it('starts cold from a corrupt cache file instead of failing', async () => {
     const root = await site()
     await mkdir(resolve(root, 'cache'), { recursive: true })
@@ -133,5 +162,16 @@ describe('carve-press build cache', () => {
     expect(await run(root)).toContain('(3 rendered, 0 from cache)')
     expect(await run(root)).toContain('(0 rendered, 3 from cache)')
     expect(await run(root, '--no-cache')).not.toContain('from cache')
+  })
+
+  it('renders everything and says why when config adds render extensions', async () => {
+    const root = await site()
+    await writeFile(
+      resolve(root, 'carve-press.config.js'),
+      `export default { ...${JSON.stringify(config)}, carve: { extensions: [{ name: 'mine' }] } }\n`,
+    )
+    const out = await run(root)
+    expect(out).toContain('build cache off: carve.extensions adds render extensions')
+    expect(out).not.toContain('from cache')
   })
 })
