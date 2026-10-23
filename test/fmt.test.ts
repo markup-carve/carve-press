@@ -52,6 +52,14 @@ describe('formatSources', () => {
     expect(await readFile(resolve(root, 'docs/tables.crv'), 'utf8')).toBe(MESSY)
   })
 
+  it('refuses to rewrite a file that is not .crv', async () => {
+    const root = await site()
+    await expect(formatSources({ root, paths: ['carve-press.config.js'] })).rejects.toThrow(
+      /not a \.crv file/,
+    )
+    expect(await readFile(resolve(root, 'carve-press.config.js'), 'utf8')).toContain('export default')
+  })
+
   it('fails on a path that does not exist', async () => {
     const root = await site()
     await expect(formatSources({ root, paths: ['docs/missing.crv'] })).rejects.toThrow(/no such file/)

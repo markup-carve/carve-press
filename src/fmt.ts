@@ -47,7 +47,8 @@ async function targets(root: string, paths: string[]): Promise<string[]> {
       throw new BuildError(`fmt: no such file or directory: ${path}`)
     }
     if (info.isDirectory()) await collect(full, found)
-    else found.push(full)
+    else if (full.endsWith('.crv')) found.push(full)
+    else throw new BuildError(`fmt: not a .crv file: ${path}`)
   }
   return [...new Set(found)].sort()
 }
