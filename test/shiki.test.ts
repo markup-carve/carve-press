@@ -377,3 +377,32 @@ describe('Shiki highlighter cache', () => {
     }
   })
 })
+
+// Pins the grammar carve-press ships to Shiki at the Carve 0.1.11 continuation
+// rule (carve-grammars 0.1.18). TextMate cannot see the next line, so it scopes
+// only a `+` on a list marker line and leaves every follower-dependent `+` as
+// text; carve-grammars 0.1.17 scoped the refused `  +` below as a marker.
+describe('pinned carve grammar', () => {
+  it('scopes a marker-line + and leaves a refused + as text', async () => {
+    const { createHighlighter } = await import('shiki')
+    const grammar = JSON.parse(
+      readFileSync(
+        resolve(import.meta.dirname, '../node_modules/@markup-carve/carve-grammars/textmate/carve.tmLanguage.json'),
+        'utf8',
+      ),
+    ) as LanguageRegistration
+    const highlighter = await createHighlighter({ langs: [grammar], themes: ['github-light'] })
+    const plusScopes = (source: string) =>
+      highlighter
+        .codeToTokens(source, { lang: grammar.name, theme: 'github-light', includeExplanation: true })
+        .tokens.flat()
+        .flatMap((token) => token.explanation ?? [])
+        .filter((part) => part.content.trim() === '+')
+        .flatMap((part) => part.scopes.map((scope) => scope.scopeName))
+    const marker = 'punctuation.definition.list.continuation.carve'
+
+    expect(plusScopes('- +\n  > quote\n')).toContain(marker)
+    expect(plusScopes('- item\n  +\n  > quote\n')).not.toContain(marker)
+    highlighter.dispose()
+  })
+})
