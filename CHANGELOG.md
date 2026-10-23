@@ -1,23 +1,23 @@
 # Changelog
 
-## [Unreleased]
+## [0.1.6] - 2026-10-23
 
 ### Fixes
 
-- An image in a list item, table cell or figure gets the same `loading`, `decoding`, `width` and `height` defaults as one in a paragraph; only top-level paragraphs had them.
-- With `dev.incremental`, replacing an image in `publicDir` with one of a different size now re-renders the pages that show it; they kept the old `width` and `height`.
+- An image in a list item, table cell or figure gets the same `loading`, `decoding`, `width` and `height` defaults as one in a paragraph; only top-level paragraphs had them (#82).
+- With `dev.incremental`, replacing an image in `publicDir` with one of a different size now re-renders the pages that show it; they kept the old `width` and `height` (#84).
 
 ### Added
 
-- `carve-press check` runs every build check (render, lint, links, nav, route manifest) without writing a build, and exits non-zero on any error.
-- `carve-press fmt` formats `.crv` sources with the engine's canonical writer. `--check` lists unformatted files and exits 1; `--align-tables` pads table columns to a shared width.
-- `carve-press import` converts a Markdown or HTML site into `.crv` pages, copies the other files into `publicDir`, and reports every finding that lost or degraded content; `--report` writes the full report as JSON.
-- `carve-press build` reuses the render of every page whose source, includes, sized images and site configuration are unchanged since the last build. Layout, navigation, feeds and validation still run over all pages. A site whose config adds render extensions renders every page, and `--no-cache` does the same for any site.
+- `carve-press check` runs every build check (render, lint, links, nav, route manifest) without writing a build, and exits non-zero on any error (#81).
+- `carve-press fmt` formats `.crv` sources with the engine's canonical writer. `--check` lists unformatted files and exits 1; `--align-tables` pads table columns to a shared width (#81).
+- `carve-press import` converts a Markdown or HTML site into `.crv` pages, copies the other files into `publicDir`, and reports every finding that lost or degraded content; `--report` writes the full report as JSON (#83).
+- `carve-press build` reuses the render of every page whose source, includes, sized images and site configuration are unchanged since the last build. Layout, navigation, feeds and validation still run over all pages. A site whose config adds render extensions renders every page, and `--no-cache` does the same for any site (#84).
 
 ### Changed
 
-- Renders with `@markup-carve/carve` 0.1.13 and highlights with `@markup-carve/carve-grammars` 0.1.17. Includes can select a named region with `{{ file.crv@region:name }}`, and an include whose bytes are not UTF-8 fails the build.
-- Build-time lint also checks included files and reports at their own lines. The engine's new rules, such as `consumed-key-near-miss` and `continuation-marker-refused`, fail the build like every other lint finding.
+- Renders with `@markup-carve/carve` 0.1.13 and highlights with `@markup-carve/carve-grammars` 0.1.17. Includes can select a named region with `{{ file.crv@region:name }}`, and an include whose bytes are not UTF-8 fails the build (#80, #79).
+- Build-time lint also checks included files and reports at their own lines. The engine's new rules, such as `consumed-key-near-miss` and `continuation-marker-refused`, fail the build like every other lint finding. Run `carve-press check` before deploying (#80).
 
 ## [0.1.5] - 2026-10-14
 
