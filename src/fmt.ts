@@ -68,8 +68,15 @@ export async function formatSources(opts: FormatOptions): Promise<FormatResult> 
   for (const file of await targets(opts.root, paths)) {
     const rel = relative(opts.root, file).split(sep).join('/')
     result.files.push(rel)
-    const source = await readFile(file, 'utf8')
+    let source: string
     let formatted: string
+    try {
+      // Strict: a lenient decode would write U+FFFD over the bad bytes.
+      source = new TextDecoder('utf-8', { fatal: true }).decode(await readFile(file))
+    } catch {
+      result.errors.push(`${rel}: not valid UTF-8`)
+      continue
+    }
     try {
       formatted = carveToCarve(source, { alignTables: opts.alignTables === true })
     } catch (error) {

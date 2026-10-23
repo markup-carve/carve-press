@@ -60,6 +60,15 @@ describe('formatSources', () => {
     expect(await readFile(resolve(root, 'carve-press.config.js'), 'utf8')).toContain('export default')
   })
 
+  it('reports a file that is not UTF-8 and leaves its bytes alone', async () => {
+    const root = await site()
+    const bytes = Buffer.from([0x23, 0x20, 0x54, 0x0a, 0x0a, 0x63, 0x61, 0x66, 0xe9, 0x0a, 0x0a, 0x0a])
+    await writeFile(resolve(root, 'docs/latin1.crv'), bytes)
+    const result = await formatSources({ root, paths: ['docs/latin1.crv'] })
+    expect(result.errors).toEqual(['docs/latin1.crv: not valid UTF-8'])
+    expect(await readFile(resolve(root, 'docs/latin1.crv'))).toEqual(bytes)
+  })
+
   it('fails on a path that does not exist', async () => {
     const root = await site()
     await expect(formatSources({ root, paths: ['docs/missing.crv'] })).rejects.toThrow(/no such file/)
