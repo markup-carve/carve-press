@@ -3,9 +3,11 @@ import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { buildSite, loadConfig } from './build.js'
+import { checkSite } from './check.js'
 import { resolveConfig } from './config.js'
 import { discoverPages } from './content/discover.js'
 import { startDevServer, formatCliError } from './dev.js'
+import { formatSources } from './fmt.js'
 import { initSite, newPage } from './scaffold.js'
 import { startStaticServer } from './server.js'
 
@@ -20,6 +22,8 @@ function usage(): string {
 
 Commands:
   build                         Build the site
+  check                         Validate and lint without writing a build
+  fmt [paths...]                Format .crv sources (default: srcDir)
   routes                        Print discovered routes
   dev [--open]                  Build, serve, watch, and live reload
   serve                         Serve the existing outDir
@@ -34,6 +38,8 @@ Options:
   --open                        Open the dev server in a browser
   --force                       Allow init to overwrite scaffold files
   --title <title>               Page title for new
+  --check                       fmt: list unformatted files, exit 1 if any
+  --align-tables                fmt: pad table columns to a shared width
   --help                        Print this help
   --version                     Print the package version`
 }
@@ -76,6 +82,32 @@ async function commandBuild(root: string): Promise<void> {
       Date.now() - started
     }ms`,
   )
+}
+
+async function commandCheck(root: string): Promise<void> {
+  const config = await loadConfig(root)
+  const started = Date.now()
+  const result = await checkSite({ root, config })
+  console.log(
+    `carve-press: checked ${result.routes.length} page(s) in ${Date.now() - started}ms, no problems found`,
+  )
+}
+
+async function commandFmt(root: string, argv: string[]): Promise<void> {
+  const check = hasFlag(argv, '--check')
+  const result = await formatSources({
+    root,
+    paths: positionalArgs(argv),
+    check,
+    alignTables: hasFlag(argv, '--align-tables'),
+  })
+  for (const file of result.changed) console.log(check ? file : `formatted ${file}`)
+  for (const error of result.errors) console.error(`carve-press: fmt: ${error}`)
+  if (check && result.changed.length > 0) {
+    console.error(`carve-press: ${result.changed.length} of ${result.files.length} file(s) need formatting`)
+    process.exitCode = 1
+  }
+  if (result.errors.length > 0) process.exitCode = 2
 }
 
 async function commandRoutes(root: string): Promise<void> {
@@ -166,6 +198,8 @@ async function main(): Promise<void> {
   }
 
   if (command === 'build') return commandBuild(root)
+  if (command === 'check') return commandCheck(root)
+  if (command === 'fmt') return commandFmt(root, argv)
   if (command === 'routes') return commandRoutes(root)
   if (command === 'serve') return commandServe(root, argv)
   if (command === 'dev') return commandDev(root, argv)
