@@ -92,8 +92,17 @@ describe('PersistentRenderCache', () => {
   it('starts cold from a corrupt cache file instead of failing', async () => {
     const root = await site()
     await mkdir(resolve(root, 'cache'), { recursive: true })
-    await writeFile(resolve(root, 'cache/render-cache.json'), '{not json')
-    expect((await build(root)).renderStats).toEqual({ rendered: 3, reused: 0 })
+    const file = resolve(root, 'cache/render-cache.json')
+    const global = globalFingerprint(root, resolveConfig(config, root))
+    for (const body of [
+      '{not json',
+      'null',
+      JSON.stringify({ format: 1, global }),
+      JSON.stringify({ format: 1, global, entries: { 'docs/index.crv': { route: '/' } } }),
+    ]) {
+      await writeFile(file, body)
+      expect((await build(root)).renderStats).toEqual({ rendered: 3, reused: 0 })
+    }
   })
 
   it('drops a deleted page from the saved cache', async () => {

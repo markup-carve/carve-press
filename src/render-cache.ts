@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { dirname, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { CarvePressConfig } from './config.js'
 import type { Page } from './content/discover.js'
 import type { RenderContext, RenderedPage } from './render/page.js'
@@ -91,6 +92,41 @@ function packageVersion(packageName: string): string {
   }
 }
 
+function treeHash(dir: string): string {
+  const hash = createHash('sha256')
+  const visit = (current: string): void => {
+    let entries
+    try {
+      entries = readdirSync(current, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      const path = resolve(current, entry.name)
+      if (entry.isDirectory()) visit(path)
+      else if (entry.name.endsWith('.js')) hash.update(entry.name).update(readFileSync(path))
+    }
+  }
+  visit(dir)
+  return hash.digest('hex')
+}
+
+let codeHash: string | undefined
+
+/**
+ * The code that renders: CarvePress itself and the engine, by content. A
+ * version alone misses a rebuilt checkout or a linked engine.
+ */
+function rendererCodeHash(): string {
+  if (codeHash !== undefined) return codeHash
+  const engine = findPackageJson('@markup-carve/carve')
+  codeHash = sha256(
+    treeHash(dirname(fileURLToPath(import.meta.url))) +
+      (engine === undefined ? 'missing' : treeHash(resolve(dirname(engine), 'dist'))),
+  )
+  return codeHash
+}
+
 const CONFIG_NAMES = ['carve-press.config.ts', 'carve-press.config.js', 'carve-press.config.mjs']
 
 /** Everything outside the page that a render reads, folded into one key. */
@@ -109,6 +145,7 @@ export function globalFingerprint(root: string, config: CarvePressConfig): strin
       shiki: packageVersion('shiki'),
       carvePress: packageVersion('@markup-carve/carve-press'),
     },
+    code: rendererCodeHash(),
   })
 }
 
@@ -143,6 +180,21 @@ interface StoredCache {
 
 const FORMAT = 1
 
+function isEntry(value: unknown): value is StoredEntry {
+  const entry = value as Partial<StoredEntry> | null
+  return (
+    typeof entry === 'object' &&
+    entry !== null &&
+    typeof entry.route === 'string' &&
+    typeof entry.sourceHash === 'string' &&
+    typeof entry.dependencies === 'object' &&
+    entry.dependencies !== null &&
+    typeof entry.rendered === 'object' &&
+    entry.rendered !== null &&
+    typeof entry.rendered.html === 'string'
+  )
+}
+
 /**
  * Page renders kept between `build` runs. Only the render is cached: layout,
  * nav, sidebars, search, feeds and every validation still run over all pages
@@ -162,8 +214,17 @@ export class PersistentRenderCache implements RenderCache {
   static async load(opts: { file: string; root: string; global: string }): Promise<PersistentRenderCache> {
     let previous: Record<string, StoredEntry> = {}
     try {
-      const stored = JSON.parse(await readFile(opts.file, 'utf8')) as StoredCache
-      if (stored.format === FORMAT && stored.global === opts.global) previous = stored.entries
+      const stored = JSON.parse(await readFile(opts.file, 'utf8')) as Partial<StoredCache> | null
+      if (
+        stored?.format === FORMAT &&
+        stored.global === opts.global &&
+        typeof stored.entries === 'object' &&
+        stored.entries !== null &&
+        !Array.isArray(stored.entries) &&
+        Object.values(stored.entries).every(isEntry)
+      ) {
+        previous = stored.entries
+      }
     } catch {
       // Missing or unreadable: start empty. A cache is never a reason to fail.
     }
@@ -173,7 +234,7 @@ export class PersistentRenderCache implements RenderCache {
   render(page: Page, _ctx: RenderContext, render: () => RenderedPage): RenderedPage {
     const key = relative(this.root, page.srcPath)
     const sourceHash = pageSourceHash(page)
-    const entry = this.previous[key]
+    const entry = Object.hasOwn(this.previous, key) ? this.previous[key] : undefined
     if (
       entry !== undefined &&
       entry.route === page.route &&
