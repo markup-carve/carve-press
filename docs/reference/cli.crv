@@ -15,6 +15,7 @@ Run CarvePress with `carve-press <command> [options]`. If the first argument is 
 | `build` | Build the site. |
 | `check` | Run every build check without writing a build. |
 | `fmt [paths...]` | Format `.crv` sources in place, `srcDir` by default. |
+| `import <source>` | Convert Markdown or HTML pages into `.crv` pages. |
 | `routes` | Print discovered routes and source files. |
 | `dev` | Build, serve, watch, and live reload. |
 | `serve` | Serve the existing `outDir`. |
@@ -30,10 +31,13 @@ Run CarvePress with `carve-press <command> [options]`. If the first argument is 
 | `--port <n>` | `dev`, `serve` | `5173` for dev, `4173` for serve | Server port from `0` through `65535`; invalid values fall back. |
 | `--host <host>` | `dev`, `serve` | `127.0.0.1` | Server host. |
 | `--open` | `dev` | off | Open the dev server URL in a browser. |
-| `--force` | `init` | off | Allow scaffold files to be overwritten. |
+| `--force` | `init`, `import` | off | Allow existing files to be overwritten. |
 | `--title <title>` | `new` | title-cased file name | Page title for a new page. |
 | `--check` | `fmt` | off | List files that would change and exit 1 instead of writing them. |
 | `--align-tables` | `fmt` | off | Pad table columns to a shared display width. |
+| `--out <dir>` | `import` | `srcDir`, or `docs` without a config | Directory the pages are written to. |
+| `--from <format>` | `import` | by file extension | Convert only `markdown` or `html`. Required for a single file whose extension is neither. |
+| `--report <file>` | `import` | off | Write the full report, every finding included, as JSON. |
 | `--help` | all commands | off | Print help. |
 | `--version` | all commands | off | Print the package version. |
 
@@ -53,6 +57,20 @@ npx carve-press check
 
 A file the writer cannot format is reported with the reason and the command exits 2.
 
+## Importing a Site
+
+`import` moves an existing Markdown or HTML site to Carve. Point it at a file or a directory:
+
+```bash "migrate a VitePress docs folder"
+carve-press import old-docs --report import-report.json
+```
+
+Each `.md`, `.markdown`, `.html` or `.htm` file becomes a `.crv` page at the same relative path under `--out`, which defaults to the configured `srcDir`. Other files, such as images next to the pages, are copied alongside so relative references keep working. Hidden directories (`.vitepress`, `.git`) and `node_modules` are skipped, and an existing file in the target is never overwritten unless `--force` is given.
+
+Markdown goes through the engine's Markdown importer, which keeps YAML frontmatter. For HTML, the first `<main>`, else `<article>`, else `<body>` is taken as the page content, so site navigation and footers stay behind; a page without an H1 gets its `<title>` as the frontmatter title.
+
+The terminal report lists every finding that lost or degraded content, with its file and line: elements the HTML importer dropped, Markdown constructs it could only approximate, and links that still name a source file such as `../index.md`. CarvePress routes have no extension, so those links need pointing at the route. The `--report` file carries every finding, informational ones too. After an import, run `carve-press check` to see what the build would still reject.
+
 ## Examples
 
 ```bash "common commands"
@@ -60,6 +78,7 @@ carve-press build
 carve-press check
 carve-press fmt --check --align-tables
 carve-press fmt docs/guide --align-tables
+carve-press import old-docs --out docs --report import-report.json
 carve-press routes --root .
 carve-press dev --host 0.0.0.0 --port 5173
 carve-press serve --port 4173
