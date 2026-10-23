@@ -26,6 +26,8 @@ export interface ImportOptions {
   from?: ImportFormat
   /** Overwrite files that already exist in `out`. */
   force?: boolean
+  /** Directories never read, relative to `root`: the build's `outDir`. */
+  exclude?: string[]
 }
 
 export interface ImportDiagnostic {
@@ -68,11 +70,13 @@ function slash(path: string): string {
   return path.split(sep).join('/')
 }
 
-async function walk(dir: string, out: string[]): Promise<void> {
+async function walk(dir: string, out: string[], exclude: Set<string>): Promise<void> {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     if (entry.name.startsWith('.') || entry.name === 'node_modules') continue
     const full = resolve(dir, entry.name)
-    if (entry.isDirectory()) await walk(full, out)
+    if (entry.isDirectory()) {
+      if (!exclude.has(full)) await walk(full, out, exclude)
+    }
     else if (entry.isFile()) out.push(full)
   }
 }
@@ -263,7 +267,9 @@ export async function importSite(opts: ImportOptions): Promise<ImportReport> {
   }
   const isDirectory = info.isDirectory()
   const files: string[] = []
-  if (isDirectory) await walk(sourcePath, files)
+  if (isDirectory) {
+    await walk(sourcePath, files, new Set((opts.exclude ?? []).map((dir) => resolve(opts.root, dir))))
+  }
   else files.push(sourcePath)
   files.sort()
 

@@ -138,6 +138,7 @@ async function commandImport(root: string, argv: string[]): Promise<void> {
     source,
     out,
     publicDir: config?.publicDir ?? 'public',
+    exclude: [config?.outDir ?? 'dist'],
     from: from as ImportFormat | undefined,
     force: hasFlag(argv, '--force'),
   })

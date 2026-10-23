@@ -131,6 +131,16 @@ describe('importSite', () => {
     ])
   })
 
+  it('never reads an excluded build output directory', async () => {
+    const root = await legacy()
+    await mkdir(resolve(root, 'old/dist'), { recursive: true })
+    await writeFile(resolve(root, 'old/dist/page.html'), '<p>built</p>')
+    await writeFile(resolve(root, 'old/dist/app.js'), 'built()')
+    const report = await importSite({ root, source: 'old', out: 'docs', exclude: ['old/dist'] })
+    expect(report.pages.map((p) => p.source)).not.toContain('old/dist/page.html')
+    expect(report.assets).toEqual(['public/guide/img/logo.png'])
+  })
+
   it('imports a docs folder in place', async () => {
     const root = await legacy()
     const report = await importSite({ root, source: 'old', out: 'old' })
