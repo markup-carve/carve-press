@@ -6,7 +6,7 @@ import { promisify } from 'node:util'
 import { describe, expect, it } from 'vitest'
 import { buildSite } from '../src/build.js'
 import { resolveConfig, type UserConfig } from '../src/config.js'
-import { buildCacheBlocker, globalFingerprint, PersistentRenderCache } from '../src/render-cache.js'
+import { globalFingerprint, PersistentRenderCache } from '../src/render-cache.js'
 import { sitemap } from '../src/extensions/sitemap.js'
 
 const execFileAsync = promisify(execFile)
@@ -90,24 +90,47 @@ describe('PersistentRenderCache', () => {
     expect(globalFingerprint(root, ext('return d'))).not.toBe(globalFingerprint(root, ext('return d /* v2 */')))
   })
 
-  it('is blocked by render extensions whose imported code it cannot see', () => {
-    const root = '/site'
-    expect(buildCacheBlocker(resolveConfig(config, root))).toBeUndefined()
-    expect(
-      buildCacheBlocker(resolveConfig({ ...config, extensions: [sitemap({ hostname: 'https://x.test' })] }, root)),
-    ).toBeUndefined()
-    expect(
-      buildCacheBlocker(resolveConfig({ ...config, carve: { extensions: [{ name: 'x' }] } }, root)),
-    ).toMatch(/carve\.extensions/)
+  it('is bypassed for render extensions whose imported code it cannot see', async () => {
+    const root = await site()
+    const cached = async (over: Partial<UserConfig>) => {
+      const renderCache = await PersistentRenderCache.load({ file: resolve(root, 'c.json'), root, global: 'g' })
+      return buildSite({ root, config: { ...config, ...over }, renderCache })
+    }
+    expect((await cached({ extensions: [sitemap({ hostname: 'https://x.test' })] })).renderCacheBlocked).toBeUndefined()
+    expect((await cached({ carve: { extensions: [{ name: 'x' }] } })).renderCacheBlocked).toMatch(/carve\.extensions/)
+    let setups = 0
     const stackChanger = {
       name: 'stack',
       setup(bus: { on: (event: string, fn: () => void) => void }) {
+        setups += 1
         bus.on('rendererCreated', () => {})
       },
     }
-    expect(buildCacheBlocker(resolveConfig({ ...config, extensions: [stackChanger as never] }, root))).toMatch(
-      /"stack" changes the render stack/,
-    )
+    const blocked = await cached({ extensions: [stackChanger as never] })
+    expect(blocked.renderCacheBlocked).toMatch(/changes the render stack/)
+    expect(blocked.renderStats).toEqual({ rendered: 3, reused: 0 })
+    expect(setups).toBe(1)
+  })
+
+  it('re-renders a page a contentDiscovered hook changed', async () => {
+    const root = await site()
+    const rewrite = (text: string) => ({
+      name: 'rewrite',
+      setup(bus: { on: (event: string, fn: (p: { pages: { source: string }[] }) => void) => void }) {
+        bus.on('contentDiscovered', ({ pages }) => {
+          for (const page of pages) page.source = page.source.replace('# Other', `# Other\n\n${text}`)
+        })
+      },
+    })
+    const run = async (text: string) => {
+      const renderCache = await PersistentRenderCache.load({ file: resolve(root, 'c.json'), root, global: 'g' })
+      const result = await buildSite({ root, config: { ...config, extensions: [rewrite(text) as never] }, renderCache })
+      await renderCache.save()
+      return result
+    }
+    await run('First.')
+    expect((await run('Second.')).renderStats).toEqual({ rendered: 1, reused: 2 })
+    expect(await page(root, 'other/index.html')).toContain('Second.')
   })
 
   it('reports a cache it cannot write instead of throwing', async () => {

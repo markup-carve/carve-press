@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 import { dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { CarvePressConfig } from './config.js'
-import { BuildEventBus } from './events.js'
+import type { BuildEventBus } from './events.js'
 import type { Page } from './content/discover.js'
 import type { RenderContext, RenderedPage } from './render/page.js'
 
@@ -20,6 +20,8 @@ export interface RenderStats {
 
 export interface RenderCache {
   stats: RenderStats
+  /** Refuse to serve when config adds render code no fingerprint can see. */
+  requiresTrackedExtensions?: boolean
   render(page: Page, ctx: RenderContext, render: () => RenderedPage): RenderedPage
 }
 
@@ -151,24 +153,26 @@ export function globalFingerprint(root: string, config: CarvePressConfig): strin
 }
 
 /**
- * Why the build cache cannot be trusted for this config, if it cannot. Render
- * extensions from config may import code from other files, which no
- * fingerprint here sees, so a site that adds any renders every page.
+ * Why a cache that requires tracked extensions cannot serve this build, if it
+ * cannot. Render extensions from config may import code from other files,
+ * which no fingerprint here sees. `bus` is the build's own, already set up.
  */
-export function buildCacheBlocker(config: CarvePressConfig): string | undefined {
+export function renderCacheBlocker(config: CarvePressConfig, bus: BuildEventBus): string | undefined {
   if (config.carve.extensions.length > 0) return 'carve.extensions adds render extensions'
-  for (const extension of config.extensions) {
-    const bus = new BuildEventBus()
-    extension.setup(bus)
-    if (bus.has('rendererCreated')) {
-      return `site extension "${extension.name ?? 'anonymous'}" changes the render stack`
-    }
-  }
+  if (bus.has('rendererCreated')) return 'a site extension changes the render stack'
   return undefined
 }
 
+/** The page as rendered, after any `contentDiscovered` hook changed it. */
 export function pageSourceHash(page: Page): string {
-  return sha256(page.rawSource ?? stableJson({ frontmatter: page.frontmatter, source: page.source }))
+  return sha256(
+    stableJson({
+      raw: page.rawSource,
+      frontmatter: page.frontmatter,
+      source: page.source,
+      bodyStartLine: page.bodyStartLine,
+    }),
+  )
 }
 
 /** Included files and probed images: the files a render read besides the page. */
@@ -220,6 +224,7 @@ function isEntry(value: unknown): value is StoredEntry {
  */
 export class PersistentRenderCache implements RenderCache {
   readonly stats: RenderStats = { rendered: 0, reused: 0 }
+  readonly requiresTrackedExtensions = true
   private readonly next: Record<string, StoredEntry> = {}
 
   private constructor(
