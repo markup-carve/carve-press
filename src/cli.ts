@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
+import { writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { buildSite, loadConfig } from './build.js'
 import { checkSite } from './check.js'
@@ -8,6 +9,7 @@ import { resolveConfig } from './config.js'
 import { discoverPages } from './content/discover.js'
 import { startDevServer, formatCliError } from './dev.js'
 import { formatSources } from './fmt.js'
+import { formatImportReport, importSite, type ImportFormat } from './import.js'
 import { initSite, newPage } from './scaffold.js'
 import { startStaticServer } from './server.js'
 
@@ -24,6 +26,7 @@ Commands:
   build                         Build the site
   check                         Validate and lint without writing a build
   fmt [paths...]                Format .crv sources (default: srcDir)
+  import <source>               Convert Markdown or HTML pages to .crv
   routes                        Print discovered routes
   dev [--open]                  Build, serve, watch, and live reload
   serve                         Serve the existing outDir
@@ -40,6 +43,10 @@ Options:
   --title <title>               Page title for new
   --check                       fmt: list unformatted files, exit 1 if any
   --align-tables                fmt: pad table columns to a shared width
+  --out <dir>                   import: target directory (default: srcDir)
+  --from <markdown|html>        import: only convert this format
+  --report <file>               import: write the full report as JSON
+  --force                       import: overwrite existing files
   --help                        Print this help
   --version                     Print the package version`
 }
@@ -61,7 +68,7 @@ function portValue(argv: string[], fallback: number): number {
 
 function positionalArgs(argv: string[]): string[] {
   const positional: string[] = []
-  const valueFlags = new Set(['--root', '--port', '--host', '--title'])
+  const valueFlags = new Set(['--root', '--port', '--host', '--title', '--out', '--from', '--report'])
   for (let i = 1; i < argv.length; i += 1) {
     const arg = argv[i]!
     if (valueFlags.has(arg)) {
@@ -108,6 +115,39 @@ async function commandFmt(root: string, argv: string[]): Promise<void> {
     process.exitCode = 1
   }
   if (result.errors.length > 0) process.exitCode = 2
+}
+
+async function commandImport(root: string, argv: string[]): Promise<void> {
+  const source = positionalArgs(argv)[0]
+  const from = argv.includes('--from') ? argValue(argv, '--from', '') : undefined
+  if (source === undefined || (from !== undefined && from !== 'markdown' && from !== 'html')) {
+    console.error('carve-press: import requires a source path, and --from takes markdown or html')
+    console.error(usage())
+    process.exitCode = 1
+    return
+  }
+  // No config yet is the normal state before a migration; a broken one is not.
+  const userConfig = await loadConfig(root).catch((error: unknown) => {
+    if (error instanceof Error && error.message.startsWith('no carve-press.config')) return undefined
+    throw error
+  })
+  const config = userConfig === undefined ? undefined : resolveConfig(userConfig, root)
+  const out = argv.includes('--out') ? argValue(argv, '--out', '') : (config?.srcDir ?? 'docs')
+  const report = await importSite({
+    root,
+    source,
+    out,
+    publicDir: config?.publicDir ?? 'public',
+    exclude: [config?.outDir ?? 'dist'],
+    from: from as ImportFormat | undefined,
+    force: hasFlag(argv, '--force'),
+  })
+  for (const line of formatImportReport(report)) console.log(line)
+  if (argv.includes('--report')) {
+    const reportPath = resolve(root, argValue(argv, '--report', 'carve-import-report.json'))
+    await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8')
+    console.log(`carve-press: wrote the import report to ${reportPath}`)
+  }
 }
 
 async function commandRoutes(root: string): Promise<void> {
@@ -200,6 +240,7 @@ async function main(): Promise<void> {
   if (command === 'build') return commandBuild(root)
   if (command === 'check') return commandCheck(root)
   if (command === 'fmt') return commandFmt(root, argv)
+  if (command === 'import') return commandImport(root, argv)
   if (command === 'routes') return commandRoutes(root)
   if (command === 'serve') return commandServe(root, argv)
   if (command === 'dev') return commandDev(root, argv)
