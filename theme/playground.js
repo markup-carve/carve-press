@@ -173,6 +173,8 @@ export const PLAYGROUND_EXTENSION_EXCLUSIONS = {
   assessTablePreservation: 'table-preservation utility, not an extension factory',
   carveToPreservationReport: 'preservation-report entry point, not an extension factory',
   migrateCaseOnlyReferences: 'migration utility, not an extension factory',
+  lintIncludes: 'lint utility, not an extension factory',
+  selectIncludeRegion: 'include region lookup, not an extension factory',
 }
 
 export function classifyEngineExport(name, value) {

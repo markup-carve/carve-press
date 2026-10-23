@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Renders with `@markup-carve/carve` 0.1.13 and highlights with `@markup-carve/carve-grammars` 0.1.17. Includes can select a named region with `{{ file.crv@region:name }}`, and an include whose bytes are not UTF-8 fails the build.
+- Build-time lint also checks included files and reports at their own lines. The engine's new rules, such as `consumed-key-near-miss` and `continuation-marker-refused`, fail the build like every other lint finding.
+
 ## [0.1.5] - 2026-10-14
 
 ### Changed

@@ -1,3 +1,6 @@
+import { mkdtemp, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { validateCrossrefs, validateLinks, validateNav } from '../src/validate.js'
 import type { Page } from '../src/content/discover.js'
@@ -160,6 +163,30 @@ describe('validateCrossrefs', () => {
       /unresolved-reference-link/,
     )
     expect(() => validateCrossrefs([src('![alt][]\n')])).toThrow(/unresolved-reference-link/)
+  })
+
+  // Engine 0.1.13 rules: each would ship a construct that reads differently
+  // from what the author wrote, so each fails the build.
+  it.each([
+    ['consumed-key-near-miss', '{lose}\n- a\n- b\n'],
+    ['continuation-marker-refused', 'q\n+\n- s\n'],
+  ])('rejects %s', (rule, source) => {
+    expect(() => validateCrossrefs([src(source)])).toThrow(new RegExp(rule))
+  })
+
+  it('lints included files at their own coordinates', async () => {
+    const dir = await mkdtemp(resolve(tmpdir(), 'cp-lint-include-'))
+    await writeFile(resolve(dir, 'part.crv'), 'Intro.\n\n{lose}\n- a\n')
+    const page = {
+      relPath: 'index.crv',
+      srcPath: resolve(dir, 'index.crv'),
+      source: '# T\n\n{{ part.crv }}\n',
+      bodyStartLine: 1,
+    } as unknown as Page
+    expect(() => validateCrossrefs([page])).not.toThrow()
+    expect(() => validateCrossrefs([page], dir)).toThrow(
+      /part\.crv:4:1 consumed-key-near-miss .*\(included from index\.crv\)/,
+    )
   })
 
   it('reports the location in the original file, not the body', () => {

@@ -53,6 +53,22 @@ and `@shift:1` or `@shift:auto` to adjust included heading levels. Nested paths
 resolve from the file containing each directive and remain contained to the
 project root.
 
+To include a named part of a file, mark it with region comments and select it
+with `@region:name`. A region the file does not hold fails the build.
+
+```carve "shared.crv"
+%% #region usage
+Run `npx carve-press build`.
+%% #endregion usage
+```
+
+```carve "include one region"
+{{ ./shared.crv@region:usage }}
+```
+
+Build-time lint covers included files as well as the page, and reports a
+finding at the included file's own line.
+
 The former `%% @include:` spelling is no longer expanded. Replace it with the
 standard directive before upgrading.
 
