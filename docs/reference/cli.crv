@@ -65,11 +65,11 @@ A file the writer cannot format is reported with the reason and the command exit
 carve-press import old-docs --report import-report.json
 ```
 
-Each `.md`, `.markdown`, `.html` or `.htm` file becomes a `.crv` page at the same relative path under `--out`, which defaults to the configured `srcDir`. Other files, such as images next to the pages, are copied alongside so relative references keep working. Hidden directories (`.vitepress`, `.git`) and `node_modules` are skipped, and an existing file in the target is never overwritten unless `--force` is given.
+Each `.md`, `.markdown`, `.html` or `.htm` file becomes a `.crv` page at the same relative path under `--out`, which defaults to the configured `srcDir`. Other files, such as images next to the pages, are copied into the configured `publicDir` (`public` without a config) at the same relative path, because the build publishes that directory. Hidden directories (`.vitepress`, `.git`) and `node_modules` are skipped, and an existing file in the target is never overwritten unless `--force` is given.
 
 Markdown goes through the engine's Markdown importer, which keeps YAML frontmatter. For HTML, the first `<main>`, else `<article>`, else `<body>` is taken as the page content, so site navigation and footers stay behind; a page without an H1 gets its `<title>` as the frontmatter title.
 
-The terminal report lists every finding that lost or degraded content, with its file and line: elements the HTML importer dropped, Markdown constructs it could only approximate, and links that still name a source file such as `../index.md`. CarvePress routes have no extension, so those links need pointing at the route. The `--report` file carries every finding, informational ones too. After an import, run `carve-press check` to see what the build would still reject.
+The terminal report lists every finding that lost or degraded content, with its file and line: elements the HTML importer dropped, Markdown constructs it could only approximate, links that still name a source file such as `../index.md`, and relative images. CarvePress routes have no extension, so those links need pointing at the route, and each relative-image finding names the root-relative path to write instead. The `--report` file carries every finding, informational ones too. After an import, run `carve-press check` to see what the build would still reject.
 
 ## Examples
 

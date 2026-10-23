@@ -37,6 +37,12 @@ describe('htmlContent', () => {
     })
   })
 
+  it('stops at the closing tag that matches the first main', () => {
+    expect(
+      htmlContent('<body><main><div><main>inner</main></div><p>a</p></main><nav>n</nav><main>b</main></body>').body,
+    ).toBe('<div><main>inner</main></div><p>a</p>')
+  })
+
   it('falls back to body, then to the whole input', () => {
     expect(htmlContent('<body><p>x</p></body>').body).toBe('<p>x</p>')
     expect(htmlContent('<p>x</p>').body).toBe('<p>x</p>')
@@ -69,7 +75,7 @@ describe('importSite', () => {
       ['old/guide/start.md', 'docs/guide/start.crv', 'markdown'],
       ['old/index.md', 'docs/index.crv', 'markdown'],
     ])
-    expect(report.assets).toEqual(['docs/guide/img/logo.png'])
+    expect(report.assets).toEqual(['public/guide/img/logo.png'])
 
     const about = await readFile(resolve(root, 'docs/about.crv'), 'utf8')
     expect(about).toBe('---yaml\ntitle: About & Us\n---\n\nWe *make* things.\n')
@@ -77,23 +83,34 @@ describe('importSite', () => {
     expect(await readFile(resolve(root, 'docs/index.crv'), 'utf8')).toContain('title: Home')
 
     const start = report.pages.find((p) => p.source === 'old/guide/start.md')!
-    expect(start.diagnostics.map((d) => d.code)).toContain('link-to-source-file')
+    expect(start.diagnostics.map((d) => d.code)).toEqual(
+      expect.arrayContaining(['link-to-source-file', 'relative-image']),
+    )
     const lines = formatImportReport(report)
     expect(lines).toContain(
       'docs/guide/start.crv:3 link-to-source-file (degraded) - link ../index.md names a source file; CarvePress routes have no extension, so point it at the route',
+    )
+    expect(lines).toContain(
+      'docs/guide/start.crv:5 relative-image (degraded) - image ./img/logo.png is relative; CarvePress publishes images from publicDir by root path, so write /guide/img/logo.png',
     )
     expect(lines.at(-1)).toMatch(/imported 3 page\(s\), copied 1 file\(s\), skipped 0/)
 
     // The one link CarvePress would reject is the source-file link it already flagged.
     await writeFile(
       resolve(root, 'docs/guide/start.crv'),
-      (await readFile(resolve(root, 'docs/guide/start.crv'), 'utf8')).replace('../index.md', '/'),
+      (await readFile(resolve(root, 'docs/guide/start.crv'), 'utf8'))
+        .replace('../index.md', '/')
+        .replace('./img/logo.png', '/guide/img/logo.png'),
     )
     const built = await buildSite({
       root,
       config: { title: 'Migrated', srcDir: 'docs', outDir: 'dist', routeManifest: false },
     })
     expect(built.routes.sort()).toEqual(['/', '/about', '/guide/start'])
+    expect(await readFile(resolve(root, 'dist/guide/img/logo.png'), 'utf8')).toBe('PNG')
+    expect(await readFile(resolve(root, 'dist/guide/start/index.html'), 'utf8')).toContain(
+      'src="/guide/img/logo.png"',
+    )
   })
 
   it('never overwrites without force', async () => {
@@ -130,6 +147,13 @@ describe('importSite', () => {
     await expect(importSite({ root, source: 'page.txt', out: 'docs' })).rejects.toThrow(/--from/)
     const report = await importSite({ root, source: 'page.txt', out: 'docs', from: 'markdown' })
     expect(report.pages[0]!.output).toBe('docs/page.crv')
+  })
+
+  it('refuses a single file whose extension contradicts from', async () => {
+    const root = await legacy()
+    await expect(
+      importSite({ root, source: 'old/index.md', out: 'docs', from: 'html' }),
+    ).rejects.toThrow(/is markdown, not html/)
   })
 })
 

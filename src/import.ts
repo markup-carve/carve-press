@@ -1,5 +1,5 @@
 import { copyFile, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
-import { basename, dirname, extname, relative, resolve, sep } from 'node:path'
+import { basename, dirname, extname, posix, relative, resolve, sep } from 'node:path'
 import {
   migrateHtml,
   migrateMarkdown,
@@ -17,6 +17,11 @@ export interface ImportOptions {
   source: string
   /** Directory the `.crv` pages are written to, relative to `root`. */
   out: string
+  /**
+   * Where other files under a source directory go, relative to `root`. The
+   * build publishes `publicDir`, not `srcDir`, so assets land there.
+   */
+  publicDir?: string
   /** Convert only this format. Without it the file extension decides. */
   from?: ImportFormat
   /** Overwrite files that already exist in `out`. */
@@ -44,7 +49,7 @@ export interface ImportedPage {
 
 export interface ImportReport {
   pages: ImportedPage[]
-  /** Other files under a source directory, copied next to the pages. */
+  /** Other files under a source directory, copied into `publicDir`. */
   assets: string[]
   /** Files left alone, with the reason. */
   skipped: Array<{ path: string; reason: string }>
@@ -93,26 +98,39 @@ function decodeEntities(text: string): string {
  * `<main>`, else `<article>`, else `<body>` is taken as the page body, and
  * `<title>` is kept for a page that ends up without an H1.
  */
-export function htmlContent(html: string): { body: string; title?: string } {
-  const title = /<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1]
-  for (const tag of ['main', 'article', 'body']) {
-    const open = new RegExp(`<${tag}\\b[^>]*>`, 'i').exec(html)
-    const close = html.toLowerCase().lastIndexOf(`</${tag}>`)
-    if (open !== null && close > open.index) {
-      return {
-        body: html.slice(open.index + open[0].length, close),
-        title: title === undefined ? undefined : decodeEntities(title).replace(/\s+/g, ' ').trim(),
-      }
-    }
+function elementInner(html: string, tag: string): string | undefined {
+  const open = new RegExp(`<${tag}\\b[^>]*>`, 'i').exec(html)
+  if (open === null) return undefined
+  const tags = new RegExp(`<(/?)${tag}\\b[^>]*>`, 'gi')
+  tags.lastIndex = open.index + open[0].length
+  let depth = 1
+  for (let match = tags.exec(html); match !== null; match = tags.exec(html)) {
+    depth += match[1] === '/' ? -1 : 1
+    if (depth === 0) return html.slice(open.index + open[0].length, match.index)
   }
-  return { body: html, title: title === undefined ? undefined : decodeEntities(title).trim() }
+  return undefined
+}
+
+export function htmlContent(html: string): { body: string; title?: string } {
+  const raw = /<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1]
+  const title = raw === undefined ? undefined : decodeEntities(raw).replace(/\s+/g, ' ').trim()
+  for (const tag of ['main', 'article', 'body']) {
+    const body = elementInner(html, tag)
+    if (body !== undefined) return { body, title }
+  }
+  return { body: html, title }
 }
 
 interface AnyNode {
   type?: string
   level?: number
   href?: string
+  src?: string
   pos?: { startLine?: number }
+}
+
+function isLocal(target: string): boolean {
+  return !/^[a-z][a-z0-9+.-]*:/i.test(target) && !target.startsWith('//') && !target.startsWith('#')
 }
 
 function nodes(value: unknown, visit: (node: AnyNode) => void): void {
@@ -128,15 +146,29 @@ function nodes(value: unknown, visit: (node: AnyNode) => void): void {
   }
 }
 
-/** Findings CarvePress adds on top of the engine's own report. */
-function siteDiagnostics(carve: string): { diagnostics: ImportDiagnostic[]; hasH1: boolean } {
+/**
+ * Findings CarvePress adds on top of the engine's own report. `dir` is the
+ * page's directory as a URL path, for spelling a relative image root-relative.
+ */
+function siteDiagnostics(carve: string, dir: string): { diagnostics: ImportDiagnostic[]; hasH1: boolean } {
   const diagnostics: ImportDiagnostic[] = []
   let hasH1 = false
   nodes(parse(carve), (node) => {
     if (node.type === 'heading' && node.level === 1) hasH1 = true
+    if (node.type === 'image' && node.src !== undefined && isLocal(node.src) && !node.src.startsWith('/')) {
+      const absolute = posix.normalize(posix.join(dir, node.src.split(/[?#]/)[0]!))
+      diagnostics.push({
+        code: 'relative-image',
+        severity: 'warning',
+        fidelity: 'degraded',
+        message: `image ${node.src} is relative; CarvePress publishes images from publicDir by root path, so write ${absolute}`,
+        line: node.pos?.startLine,
+        inOutput: true,
+      })
+    }
     if (node.type !== 'link' || node.href === undefined) return
     const href = node.href
-    if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith('//') || href.startsWith('#')) return
+    if (!isLocal(href)) return
     if (!LINKED_SOURCE.test(href)) return
     diagnostics.push({
       code: 'link-to-source-file',
@@ -164,6 +196,7 @@ function fromEngine(diagnostic: MigrationDiagnostic): ImportDiagnostic {
 export function convertPage(
   text: string,
   format: ImportFormat,
+  dir = '/',
 ): { carve: string; diagnostics: ImportDiagnostic[] } {
   let carve: string
   let diagnostics: ImportDiagnostic[]
@@ -179,7 +212,7 @@ export function convertPage(
     diagnostics = result.report.diagnostics.map(fromEngine)
     title = content.title
   }
-  const site = siteDiagnostics(carve)
+  const site = siteDiagnostics(carve, dir)
   if (!site.hasH1 && title !== undefined && title !== '' && !carve.startsWith('---')) {
     carve = `---yaml\n${stringify({ title }).trimEnd()}\n---\n\n${carve}`
     diagnostics.push({
@@ -189,7 +222,7 @@ export function convertPage(
       message: 'the page has no H1, so its <title> became the frontmatter title',
     })
   }
-  return { carve, diagnostics: [...diagnostics, ...siteDiagnostics(carve).diagnostics] }
+  return { carve, diagnostics: [...diagnostics, ...siteDiagnostics(carve, dir).diagnostics] }
 }
 
 /**
@@ -199,6 +232,7 @@ export function convertPage(
 export async function importSite(opts: ImportOptions): Promise<ImportReport> {
   const sourcePath = resolve(opts.root, opts.source)
   const outDir = resolve(opts.root, opts.out)
+  const publicDir = resolve(opts.root, opts.publicDir ?? 'public')
   let info
   try {
     info = await stat(sourcePath)
@@ -215,11 +249,14 @@ export async function importSite(opts: ImportOptions): Promise<ImportReport> {
   for (const file of files) {
     const rel = slash(relative(opts.root, file))
     const inner = isDirectory ? relative(sourcePath, file) : basename(file)
-    if (resolve(file).startsWith(outDir + sep)) {
-      report.skipped.push({ path: rel, reason: 'inside the output directory' })
+    if (resolve(file).startsWith(outDir + sep) || resolve(file).startsWith(publicDir + sep)) {
+      report.skipped.push({ path: rel, reason: 'inside the output or public directory' })
       continue
     }
     const detected = FORMAT_BY_EXTENSION[extname(file).toLowerCase()]
+    if (!isDirectory && detected !== undefined && opts.from !== undefined && detected !== opts.from) {
+      throw new BuildError(`import: ${opts.source} is ${detected}, not ${opts.from}`)
+    }
     const format = isDirectory ? detected : (opts.from ?? detected)
 
     if (format === undefined || (opts.from !== undefined && format !== opts.from)) {
@@ -230,7 +267,7 @@ export async function importSite(opts: ImportOptions): Promise<ImportReport> {
         report.skipped.push({ path: rel, reason: `not ${opts.from}` })
         continue
       }
-      const target = resolve(outDir, inner)
+      const target = resolve(publicDir, inner)
       if (!opts.force && (await exists(target))) {
         report.skipped.push({ path: rel, reason: `${slash(relative(opts.root, target))} exists` })
         continue
@@ -254,7 +291,8 @@ export async function importSite(opts: ImportOptions): Promise<ImportReport> {
       report.skipped.push({ path: rel, reason: 'not valid UTF-8; re-encode it and import again' })
       continue
     }
-    const { carve, diagnostics } = convertPage(text, format)
+    const pageDir = posix.join('/', slash(dirname(inner)))
+    const { carve, diagnostics } = convertPage(text, format, pageDir)
     await mkdir(dirname(target), { recursive: true })
     await writeFile(target, carve, 'utf8')
     report.pages.push({ source: rel, output, format, diagnostics })

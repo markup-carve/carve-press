@@ -126,19 +126,18 @@ async function commandImport(root: string, argv: string[]): Promise<void> {
     process.exitCode = 1
     return
   }
-  let out = argv.includes('--out') ? argValue(argv, '--out', '') : undefined
-  if (out === undefined) {
-    // No config yet is the normal state before a migration; a broken one is not.
-    const config = await loadConfig(root).catch((error: unknown) => {
-      if (error instanceof Error && error.message.startsWith('no carve-press.config')) return undefined
-      throw error
-    })
-    out = config === undefined ? 'docs' : resolveConfig(config, root).srcDir
-  }
+  // No config yet is the normal state before a migration; a broken one is not.
+  const userConfig = await loadConfig(root).catch((error: unknown) => {
+    if (error instanceof Error && error.message.startsWith('no carve-press.config')) return undefined
+    throw error
+  })
+  const config = userConfig === undefined ? undefined : resolveConfig(userConfig, root)
+  const out = argv.includes('--out') ? argValue(argv, '--out', '') : (config?.srcDir ?? 'docs')
   const report = await importSite({
     root,
     source,
     out,
+    publicDir: config?.publicDir ?? 'public',
     from: from as ImportFormat | undefined,
     force: hasFlag(argv, '--force'),
   })
