@@ -28,9 +28,21 @@ export type ShikiHighlightCallback = (
 ) => string
 
 const require = createRequire(import.meta.url)
-const carveGrammar = JSON.parse(
-  readFileSync(require.resolve('@markup-carve/carve-grammars/textmate/carve.tmLanguage.json'), 'utf8'),
-) as LanguageRegistration
+function grammarsTextMate(file: string): LanguageRegistration {
+  return JSON.parse(
+    readFileSync(require.resolve(`@markup-carve/carve-grammars/textmate/${file}`), 'utf8'),
+  ) as LanguageRegistration
+}
+const carveGrammar = grammarsTextMate('carve.tmLanguage.json')
+/**
+ * Carve's own csv/tsv grammars scope the separator and quoted fields, which
+ * Shiki's bundled csv/tsv do not. The Carve grammar embeds them by scope name
+ * (`text.csv.carve`), so they load with it and also answer top-level fences.
+ */
+const delimitedGrammars: Record<string, LanguageRegistration> = {
+  csv: { ...grammarsTextMate('csv.tmLanguage.json'), name: 'csv' },
+  tsv: { ...grammarsTextMate('tsv.tmLanguage.json'), name: 'tsv' },
+}
 const SPECIAL_LANGS = new Set(['ansi', 'text', 'plaintext', 'txt'])
 /** Fence languages that mean "no highlighting", so rendering plain is correct. */
 const PLAIN_TEXT_LANGS = new Set(['text', 'plaintext', 'txt'])
@@ -118,14 +130,24 @@ function languageRegistrations(langs: ShikiLanguage[]): (string | LanguageRegist
   for (const lang of langs) {
     merged.set(shikiLanguageName(lang), lang)
   }
+  const delimited = new Set<string>()
   for (const lang of merged.values()) {
     if (typeof lang !== 'string') {
       registrations.push(lang)
     } else if (lang === 'carve' || lang === 'crv') {
       registrations.push(carveGrammar)
+      delimited.add('csv').add('tsv')
+    } else if (lang in delimitedGrammars) {
+      delimited.add(lang)
     } else if (isKnownShikiLanguage(lang)) {
       registrations.push(lang)
     }
+  }
+  for (const name of delimited) {
+    // A registration object the user supplied under this name wins.
+    if (typeof merged.get(name) === 'object') continue
+    const grammar = delimitedGrammars[name]
+    if (grammar !== undefined) registrations.push(grammar)
   }
   return registrations
 }
