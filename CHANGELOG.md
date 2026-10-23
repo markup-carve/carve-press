@@ -5,6 +5,7 @@
 ### Fixes
 
 - An image in a list item, table cell or figure gets the same `loading`, `decoding`, `width` and `height` defaults as one in a paragraph; only top-level paragraphs had them.
+- With `dev.incremental`, replacing an image in `publicDir` with one of a different size now re-renders the pages that show it; they kept the old `width` and `height`.
 
 ### Added
 
@@ -12,10 +13,6 @@
 - `carve-press fmt` formats `.crv` sources with the engine's canonical writer. `--check` lists unformatted files and exits 1; `--align-tables` pads table columns to a shared width.
 - `carve-press import` converts a Markdown or HTML site into `.crv` pages, copies the other files into `publicDir`, and reports every finding that lost or degraded content; `--report` writes the full report as JSON.
 - `carve-press build` reuses the render of every page whose source, includes, sized images and site configuration are unchanged since the last build. Layout, navigation, feeds and validation still run over all pages. `--no-cache` renders everything.
-
-### Fixes
-
-- With `dev.incremental`, replacing an image in `publicDir` with one of a different size now re-renders the pages that show it; they kept the old `width` and `height`.
 
 ### Changed
 
