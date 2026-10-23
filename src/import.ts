@@ -98,27 +98,35 @@ function decodeEntities(text: string): string {
  * `<main>`, else `<article>`, else `<body>` is taken as the page body, and
  * `<title>` is kept for a page that ends up without an H1.
  */
-function elementInner(html: string, tag: string): string | undefined {
+function elementInner(html: string, tag: string): { inner: string; start: number } | undefined {
   const open = new RegExp(`<${tag}\\b[^>]*>`, 'i').exec(html)
   if (open === null) return undefined
+  const start = open.index + open[0].length
   const tags = new RegExp(`<(/?)${tag}\\b[^>]*>`, 'gi')
-  tags.lastIndex = open.index + open[0].length
+  tags.lastIndex = start
   let depth = 1
   for (let match = tags.exec(html); match !== null; match = tags.exec(html)) {
     depth += match[1] === '/' ? -1 : 1
-    if (depth === 0) return html.slice(open.index + open[0].length, match.index)
+    if (depth === 0) return { inner: html.slice(start, match.index), start }
   }
   return undefined
 }
 
-export function htmlContent(html: string): { body: string; title?: string } {
+/**
+ * `bodyLine` is the 1-based source line the extracted body starts on, so a
+ * finding's line can be moved back to the original file.
+ */
+export function htmlContent(html: string): { body: string; bodyLine: number; title?: string } {
   const raw = /<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1]
   const title = raw === undefined ? undefined : decodeEntities(raw).replace(/\s+/g, ' ').trim()
   for (const tag of ['main', 'article', 'body']) {
-    const body = elementInner(html, tag)
-    if (body !== undefined) return { body, title }
+    const found = elementInner(html, tag)
+    if (found !== undefined) {
+      const bodyLine = html.slice(0, found.start).split('\n').length
+      return { body: found.inner, bodyLine, title }
+    }
   }
-  return { body: html, title }
+  return { body: html, bodyLine: 1, title }
 }
 
 interface AnyNode {
@@ -209,7 +217,9 @@ export function convertPage(
     const content = htmlContent(text)
     const result = migrateHtml(content.body)
     carve = result.value
-    diagnostics = result.report.diagnostics.map(fromEngine)
+    diagnostics = result.report.diagnostics.map(fromEngine).map((d) =>
+      d.line === undefined ? d : { ...d, line: d.line + content.bodyLine - 1 },
+    )
     title = content.title
   }
   const site = siteDiagnostics(carve, dir)
@@ -251,10 +261,6 @@ export async function importSite(opts: ImportOptions): Promise<ImportReport> {
     const inner = isDirectory ? relative(sourcePath, file) : basename(file)
     // The list is collected before anything is written, so importing `docs`
     // into `docs` in place cannot pick up its own output.
-    if (resolve(file).startsWith(publicDir + sep)) {
-      report.skipped.push({ path: rel, reason: 'already in the public directory' })
-      continue
-    }
     if (file.endsWith('.crv')) {
       report.skipped.push({ path: rel, reason: 'already Carve' })
       continue
@@ -271,6 +277,10 @@ export async function importSite(opts: ImportOptions): Promise<ImportReport> {
       }
       if (detected !== undefined) {
         report.skipped.push({ path: rel, reason: `not ${opts.from}` })
+        continue
+      }
+      if (resolve(file).startsWith(publicDir + sep)) {
+        report.skipped.push({ path: rel, reason: 'already in the public directory' })
         continue
       }
       const target = resolve(publicDir, inner)

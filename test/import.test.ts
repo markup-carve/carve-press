@@ -33,8 +33,10 @@ describe('htmlContent', () => {
   it('takes main over body and decodes the title', () => {
     expect(htmlContent('<title>A &amp; B</title><body><nav>n</nav><main><p>x</p></main></body>')).toEqual({
       body: '<p>x</p>',
+      bodyLine: 1,
       title: 'A & B',
     })
+    expect(htmlContent('<head>\n</head>\n<body>\n<main>\n<p>x</p></main>').bodyLine).toBe(4)
   })
 
   it('stops at the closing tag that matches the first main', () => {
@@ -111,6 +113,15 @@ describe('importSite', () => {
     expect(await readFile(resolve(root, 'dist/guide/start/index.html'), 'utf8')).toContain(
       'src="/guide/img/logo.png"',
     )
+  })
+
+  it('imports pages that live under publicDir, and copies no asset onto itself', async () => {
+    const root = await legacy()
+    const report = await importSite({ root, source: 'old', out: 'docs', publicDir: 'old/guide' })
+    expect(report.pages.map((p) => p.output)).toContain('docs/guide/start.crv')
+    expect(report.skipped).toEqual([
+      { path: 'old/guide/img/logo.png', reason: 'already in the public directory' },
+    ])
   })
 
   it('imports a docs folder in place', async () => {
