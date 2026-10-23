@@ -90,7 +90,22 @@ function svg(buffer: Buffer): ImageSize | undefined {
   return undefined
 }
 
+let reads: Set<string> | undefined
+
+/** Runs a render and returns the image files it probed, for cache keys. */
+export function trackImageReads<T>(fn: () => T): { value: T; paths: string[] } {
+  const outer = reads
+  const current = new Set<string>()
+  reads = current
+  try {
+    return { value: fn(), paths: [...current] }
+  } finally {
+    reads = outer
+  }
+}
+
 function probe(path: string): ImageSize | undefined {
+  reads?.add(path)
   try {
     const buffer = readFileSync(path)
     return png(buffer) ?? jpeg(buffer) ?? gif(buffer) ?? webp(buffer) ?? svg(buffer)

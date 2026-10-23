@@ -1,18 +1,21 @@
-import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, type FSWatcher, promises as fs, watch } from 'node:fs'
-import { createRequire } from 'node:module'
+import { type FSWatcher, promises as fs, watch } from 'node:fs'
 import { basename, dirname, resolve } from 'node:path'
 import type { ServerResponse } from 'node:http'
-import { buildSite, loadConfig, type RenderCache, type RenderStats } from './build.js'
+import { buildSite, loadConfig } from './build.js'
+import {
+  dependenciesUnchanged,
+  dependencyHashes,
+  globalFingerprint,
+  pageSourceHash,
+  type RenderCache,
+  type RenderStats,
+} from './render-cache.js'
 import { resolveConfig, type CarvePressConfig } from './config.js'
 import type { Page } from './content/discover.js'
 import { BuildError, SourceError } from './errors.js'
 import type { RenderContext, RenderedPage } from './render/page.js'
 import { startStaticServer, type RunningServer } from './server.js'
 
-const require = createRequire(import.meta.url)
-const defaultThemePath = require.resolve('../theme/default.css')
-const packageJsonPath = require.resolve('../package.json')
 
 export interface DevRebuildResult {
   ok: boolean
@@ -31,97 +34,10 @@ export function formatCliError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function sha256(text: string): string {
-  return createHash('sha256').update(text).digest('hex')
-}
-
-function fileHash(path: string): string {
-  return sha256(readFileSync(path, 'utf8'))
-}
-
-function fileHashOrMissing(path: string): string {
-  try {
-    return fileHash(path)
-  } catch {
-    return 'missing'
-  }
-}
-
-function stableJson(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value)
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
-  const entries = Object.entries(value as Record<string, unknown>)
-    .filter(([, item]) => typeof item !== 'function' && item !== undefined)
-    .sort(([a], [b]) => a.localeCompare(b))
-  return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`).join(',')}}`
-}
-
-function namedCount(values: { name?: string }[]): { count: number; names: string[] } {
-  return {
-    count: values.length,
-    names: values.map((value, index) => value.name ?? `extension-${index}`).sort(),
-  }
-}
-
-function serializableConfig(config: CarvePressConfig): unknown {
-  return {
-    ...config,
-    carve: {
-      ...config.carve,
-      profile: config.carve.profile === undefined ? undefined : config.carve.profile.constructor.name,
-      extensions: namedCount(config.carve.extensions),
-    },
-    extensions: namedCount(config.extensions),
-    layouts: Object.keys(config.layouts).sort(),
-  }
-}
-
-function findPackageJson(packageName: string): string | undefined {
-  let dir = dirname(packageJsonPath)
-  while (true) {
-    const candidate = resolve(dir, 'node_modules', ...packageName.split('/'), 'package.json')
-    if (existsSync(candidate)) return candidate
-    const parent = dirname(dir)
-    if (parent === dir) return undefined
-    dir = parent
-  }
-}
-
-function packageVersion(packageName: string): string {
-  const path = packageName === '@markup-carve/carve-press' ? packageJsonPath : findPackageJson(packageName)
-  if (path === undefined) return 'unknown'
-  try {
-    const parsed = JSON.parse(readFileSync(path, 'utf8')) as { version?: unknown }
-    return typeof parsed.version === 'string' ? parsed.version : 'unknown'
-  } catch {
-    return 'unknown'
-  }
-}
-
-function globalFingerprint(root: string, config: CarvePressConfig): string {
-  const themePaths = [
-    config.theme.css === undefined ? defaultThemePath : resolve(root, config.theme.css),
-    ...(config.theme.extraCss ?? []).map((path) => resolve(root, path)),
-  ]
-  return stableJson({
-    config: serializableConfig(config),
-    theme: themePaths.map((path) => ({ path, hash: fileHashOrMissing(path) })),
-    versions: {
-      engine: packageVersion('@markup-carve/carve'),
-      carvePress: packageVersion('@markup-carve/carve-press'),
-    },
-  })
-}
-
-function pageSourceHash(page: Page): string {
-  const rawSource = (page as Page & { rawSource?: string }).rawSource
-  return sha256(rawSource ?? stableJson({ frontmatter: page.frontmatter, source: page.source }))
-}
-
 interface CacheEntry {
   global: string
   sourceHash: string
-  includeHashes: Record<string, string>
+  dependencies: Record<string, string>
   rendered: RenderedPage
 }
 
@@ -148,7 +64,7 @@ class DevRenderCache implements RenderCache {
       entry !== undefined &&
       entry.global === this.global &&
       entry.sourceHash === sourceHash &&
-      Object.entries(entry.includeHashes).every(([path, hash]) => fileHashOrMissing(path) === hash)
+      dependenciesUnchanged(entry.dependencies)
     ) {
       this.stats.reused += 1
       return { ...entry.rendered, page }
@@ -159,9 +75,7 @@ class DevRenderCache implements RenderCache {
     this.entries.set(key, {
       global: this.global,
       sourceHash,
-      includeHashes: Object.fromEntries(
-        rendered.includeFiles.map((file) => [file.path, fileHashOrMissing(file.path)]),
-      ),
+      dependencies: dependencyHashes(rendered),
       rendered,
     })
     return rendered

@@ -43,7 +43,11 @@ export default defineConfig({
 | `locales` | `Record<string, LocaleConfig>` | `{}` | `{ '/de/': { lang: 'de-DE', label: 'Deutsch' } }` |
 | `dev.incremental` | `boolean` | `false` | `true` |
 
-`dev.incremental` is only used by `carve-press dev`. When enabled, the dev server can reuse a page render if that page's source, included files, config fingerprint, theme CSS, and installed engine versions are unchanged. Static `carve-press build` always renders every page so a stale cache can never reach published output.
+`dev.incremental` is only used by `carve-press dev`. When enabled, the dev server can reuse a page render if that page's source, included files, the images it sizes from `publicDir`, the config fingerprint, theme CSS, and installed engine versions are unchanged.
+
+`carve-press build` keeps the same kind of cache between runs, in `node_modules/.cache/carve-press/render-cache.json`. Only the per-page render is reused: layouts, navigation, sidebars, search, feeds, the sitemap and every validation still run over all pages, so a change on one page that affects another, such as a renamed heading another page links to, is still caught. The whole cache is dropped when the config file, any config value, the source of a configured extension, the theme CSS, or the installed versions of CarvePress, the engine, the grammars or Shiki change.
+
+One dependency is not tracked: code a configured extension imports from another file. After changing such a helper, or whenever a build looks stale, run `carve-press build --no-cache`, which renders every page and neither reads nor writes the cache. Deleting the cache file has the same effect for the next build.
 
 ## Theme
 

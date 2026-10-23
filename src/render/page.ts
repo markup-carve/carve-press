@@ -17,6 +17,7 @@ import { fileSystemResolver } from '@markup-carve/carve/node'
 import type { Page } from '../content/discover.js'
 import { outlineFromAst, type OutlineEntry } from '../outline.js'
 import { SourceError } from '../errors.js'
+import { trackImageReads } from './images.js'
 
 interface IncludeFile {
   path: string
@@ -42,6 +43,8 @@ export interface RenderedPage {
   outline: OutlineEntry[]
   searchDoc: SearchDoc
   includeFiles: IncludeFile[]
+  /** Image files probed for dimensions; a change to one changes the HTML. */
+  assetFiles?: string[]
 }
 
 export interface RenderContext {
@@ -282,6 +285,11 @@ function rewriteContentUrls(node: AnyNode, base: string): void {
 }
 
 export function renderPage(page: Page, ctx: RenderContext): RenderedPage {
+  const { value, paths } = trackImageReads(() => renderUntracked(page, ctx))
+  return paths.length === 0 ? value : { ...value, assetFiles: paths }
+}
+
+function renderUntracked(page: Page, ctx: RenderContext): RenderedPage {
   const legacyInclude = /(^|\n)([ \t]*)%%[ \t]*@include:/.exec(page.source)
   if (legacyInclude !== null) {
     const directiveOffset = legacyInclude.index + legacyInclude[1]!.length

@@ -24,7 +24,7 @@ Add pages under `docs/` using Carve syntax, then configure navigation and sideba
 
 | Command | Description |
 | --- | --- |
-| `carve-press build` | Build the static site. |
+| `carve-press build [--no-cache]` | Build the static site. Renders of unchanged pages are reused from `node_modules/.cache/carve-press`; `--no-cache` renders every page. |
 | `carve-press check` | Run every build check (render, lint, links, nav, route manifest) without writing a build; exits non-zero on any error. |
 | `carve-press fmt [paths...] [--check] [--align-tables]` | Format `.crv` sources with the engine's canonical writer, every file under `srcDir` by default. `--check` lists files that would change and exits 1; `--align-tables` pads table columns to a shared width. |
 | `carve-press import <source> [--out <dir>] [--from markdown\|html] [--report <file>] [--force]` | Convert a Markdown or HTML site into `.crv` pages under `srcDir`, copy the other files into `publicDir`, and report what the conversion lost. |
@@ -37,7 +37,7 @@ Add pages under `docs/` using Carve syntax, then configure navigation and sideba
 | `carve-press --help` | Print CLI help. |
 | `carve-press --version` | Print the package version. |
 
-Common flags: `--root <dir>`, `--port <n>`, `--host <host>`, `--open`, `--force`, `--title <title>`, `--check`, `--align-tables`, `--out <dir>`, `--from <format>`, and `--report <file>`.
+Common flags: `--root <dir>`, `--port <n>`, `--host <host>`, `--open`, `--force`, `--title <title>`, `--no-cache`, `--check`, `--align-tables`, `--out <dir>`, `--from <format>`, and `--report <file>`.
 
 ## Features
 

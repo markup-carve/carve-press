@@ -35,6 +35,7 @@ import {
 import { BuildEventBus } from './events.js'
 import type { RedirectEntry } from './events.js'
 import { BuildError, SourceError } from './errors.js'
+import type { RenderCache, RenderStats } from './render-cache.js'
 
 const require = createRequire(import.meta.url)
 const execFileAsync = promisify(execFile)
@@ -58,15 +59,7 @@ export interface BuildResult {
   renderStats: RenderStats
 }
 
-export interface RenderStats {
-  rendered: number
-  reused: number
-}
-
-export interface RenderCache {
-  stats: RenderStats
-  render(page: Page, ctx: RenderContext, render: () => RenderedPage): RenderedPage
-}
+export type { RenderCache, RenderStats } from './render-cache.js'
 
 async function configExists(path: string): Promise<boolean> {
   try {

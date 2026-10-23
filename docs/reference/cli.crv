@@ -12,7 +12,7 @@ Run CarvePress with `carve-press <command> [options]`. If the first argument is 
 
 | Command | Description |
 | --- | --- |
-| `build` | Build the site. |
+| `build` | Build the site, reusing the renders of unchanged pages. |
 | `check` | Run every build check without writing a build. |
 | `fmt [paths...]` | Format `.crv` sources in place, `srcDir` by default. |
 | `import <source>` | Convert Markdown or HTML pages into `.crv` pages. |
@@ -33,6 +33,7 @@ Run CarvePress with `carve-press <command> [options]`. If the first argument is 
 | `--open` | `dev` | off | Open the dev server URL in a browser. |
 | `--force` | `init`, `import` | off | Allow existing files to be overwritten. |
 | `--title <title>` | `new` | title-cased file name | Page title for a new page. |
+| `--no-cache` | `build` | off | Render every page; neither read nor write the build cache. |
 | `--check` | `fmt` | off | List files that would change and exit 1 instead of writing them. |
 | `--align-tables` | `fmt` | off | Pad table columns to a shared display width. |
 | `--out <dir>` | `import` | `srcDir`, or `docs` without a config | Directory the pages are written to. |
@@ -40,6 +41,10 @@ Run CarvePress with `carve-press <command> [options]`. If the first argument is 
 | `--report <file>` | `import` | off | Write the full report, every finding included, as JSON. |
 | `--help` | all commands | off | Print help. |
 | `--version` | all commands | off | Print the package version. |
+
+## Build Cache
+
+`build` stores each page's render in `node_modules/.cache/carve-press/render-cache.json` and reuses it while the page, its includes, the images it sizes and the site configuration are unchanged. The build prints how many pages it rendered and how many came from the cache. See [Configuration](/guide/configuration) for what invalidates it. `--no-cache` renders everything.
 
 ## Checking a Site
 
@@ -75,6 +80,7 @@ The terminal report lists every finding that lost or degraded content, with its 
 
 ```bash "common commands"
 carve-press build
+carve-press build --no-cache
 carve-press check
 carve-press fmt --check --align-tables
 carve-press fmt docs/guide --align-tables
