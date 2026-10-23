@@ -45,6 +45,13 @@ describe('htmlContent', () => {
     ).toBe('<div><main>inner</main></div><p>a</p>')
   })
 
+  it('ignores a main spelled inside a comment or a script', () => {
+    const html =
+      '<head><script>const t = "<main>fake</main>"</script></head><body><!-- <main> -->' +
+      '<main><p>real</p><script>"</main>"</script><p>more</p></main></body>'
+    expect(htmlContent(html).body).toBe('<p>real</p><script>"</main>"</script><p>more</p>')
+  })
+
   it('falls back to body, then to the whole input', () => {
     expect(htmlContent('<body><p>x</p></body>').body).toBe('<p>x</p>')
     expect(htmlContent('<p>x</p>').body).toBe('<p>x</p>')

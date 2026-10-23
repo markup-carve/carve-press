@@ -98,14 +98,26 @@ function decodeEntities(text: string): string {
  * `<main>`, else `<article>`, else `<body>` is taken as the page body, and
  * `<title>` is kept for a page that ends up without an H1.
  */
+/**
+ * Blanks comments and raw-text elements, keeping every offset, so a `<main>`
+ * spelled inside a script or a comment cannot be taken for the element.
+ */
+function maskRawText(html: string): string {
+  const blank = (text: string) => text.replace(/[^\n]/g, ' ')
+  return html
+    .replace(/<!--[\s\S]*?(?:-->|$)/g, blank)
+    .replace(/<(script|style|template|textarea|title)\b[^>]*>[\s\S]*?(?:<\/\1\s*>|$)/gi, blank)
+}
+
 function elementInner(html: string, tag: string): { inner: string; start: number } | undefined {
-  const open = new RegExp(`<${tag}\\b[^>]*>`, 'i').exec(html)
+  const masked = maskRawText(html)
+  const open = new RegExp(`<${tag}\\b[^>]*>`, 'i').exec(masked)
   if (open === null) return undefined
   const start = open.index + open[0].length
   const tags = new RegExp(`<(/?)${tag}\\b[^>]*>`, 'gi')
   tags.lastIndex = start
   let depth = 1
-  for (let match = tags.exec(html); match !== null; match = tags.exec(html)) {
+  for (let match = tags.exec(masked); match !== null; match = tags.exec(masked)) {
     depth += match[1] === '/' ? -1 : 1
     if (depth === 0) return { inner: html.slice(start, match.index), start }
   }
