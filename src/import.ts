@@ -249,8 +249,14 @@ export async function importSite(opts: ImportOptions): Promise<ImportReport> {
   for (const file of files) {
     const rel = slash(relative(opts.root, file))
     const inner = isDirectory ? relative(sourcePath, file) : basename(file)
-    if (resolve(file).startsWith(outDir + sep) || resolve(file).startsWith(publicDir + sep)) {
-      report.skipped.push({ path: rel, reason: 'inside the output or public directory' })
+    // The list is collected before anything is written, so importing `docs`
+    // into `docs` in place cannot pick up its own output.
+    if (resolve(file).startsWith(publicDir + sep)) {
+      report.skipped.push({ path: rel, reason: 'already in the public directory' })
+      continue
+    }
+    if (file.endsWith('.crv')) {
+      report.skipped.push({ path: rel, reason: 'already Carve' })
       continue
     }
     const detected = FORMAT_BY_EXTENSION[extname(file).toLowerCase()]

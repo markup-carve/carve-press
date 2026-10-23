@@ -113,6 +113,16 @@ describe('importSite', () => {
     )
   })
 
+  it('imports a docs folder in place', async () => {
+    const root = await legacy()
+    const report = await importSite({ root, source: 'old', out: 'old' })
+    expect(report.pages.map((p) => p.output)).toEqual(['old/about.crv', 'old/guide/start.crv', 'old/index.crv'])
+    expect(await readFile(resolve(root, 'old/index.crv'), 'utf8')).toContain('# Home')
+    const again = await importSite({ root, source: 'old', out: 'old' })
+    expect(again.pages).toEqual([])
+    expect(again.skipped.map((s) => s.reason)).toContain('already Carve')
+  })
+
   it('never overwrites without force', async () => {
     const root = await legacy()
     await mkdir(resolve(root, 'docs'), { recursive: true })
