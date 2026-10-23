@@ -868,7 +868,7 @@ export async function buildSite(opts: {
   for (const prefix of Object.keys(expandedConfig.locales)) {
     validateNav(activeLocale(expandedConfig, prefix).themeConfig, routes)
   }
-  validateCrossrefs(pages)
+  validateCrossrefs(pages, opts.root)
   validateLinks(rendered, routes, config.ignoreDeadLinks, config.base)
   validateLinks([notFoundRendered], routes, config.ignoreDeadLinks, config.base)
   validatePageNavOverrides(

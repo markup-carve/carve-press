@@ -132,6 +132,56 @@ describe('renderPage', () => {
     ])
   })
 
+  it('selects a named region with @region (engine 0.1.12)', async () => {
+    const dir = await mkdtemp(resolve(tmpdir(), 'cp-page-region-'))
+    await writeFile(
+      resolve(dir, 'shared.crv'),
+      'Before.\n\n%% #region usage\nRegion text.\n%% #endregion usage\n\nAfter.\n',
+    )
+    const p: Page = {
+      ...page('# T\n\n{{ shared.crv@region:usage }}\n'),
+      srcPath: resolve(dir, 'start.crv'),
+    }
+
+    const rendered = renderPage(p, { ...ctx, includeRoots: [dir] })
+    expect(rendered.html).toContain('Region text.')
+    expect(rendered.html).not.toContain('Before.')
+    expect(rendered.html).not.toContain('After.')
+    expect(rendered.includeFiles.map((file) => file.path)).toEqual([resolve(dir, 'shared.crv')])
+  })
+
+  it('fails the page on a region the include does not hold', async () => {
+    const dir = await mkdtemp(resolve(tmpdir(), 'cp-page-region-missing-'))
+    await writeFile(resolve(dir, 'shared.crv'), 'No regions here.\n')
+    const p: Page = {
+      ...page('# T\n\n{{ shared.crv@region:usage }}\n'),
+      srcPath: resolve(dir, 'start.crv'),
+    }
+
+    try {
+      renderPage(p, { ...ctx, includeRoots: [dir] })
+      expect.unreachable('should reject a missing region')
+    } catch (error) {
+      expect((error as SourceError).format()).toMatch(/start\.crv:6:1 include-region-invalid/)
+    }
+  })
+
+  it('refuses an include whose bytes are not UTF-8 (engine 0.1.12)', async () => {
+    const dir = await mkdtemp(resolve(tmpdir(), 'cp-page-latin1-'))
+    await writeFile(resolve(dir, 'latin1.crv'), Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x0a]))
+    const p: Page = {
+      ...page('# T\n\n{{ latin1.crv }}\n'),
+      srcPath: resolve(dir, 'start.crv'),
+    }
+
+    expect(() => renderPage(p, { ...ctx, includeRoots: [dir] })).toThrow(/include-/)
+  })
+
+  it('renders an empty link destination as a link (engine 0.1.12)', () => {
+    const r = renderPage(page('# T\n\n[text]()\n'), ctx)
+    expect(r.html).toContain('<a href="">text</a>')
+  })
+
   it('fails a standard include warning at the original line without leaking the root', async () => {
     const dir = await mkdtemp(resolve(tmpdir(), 'cp-page-warning-'))
     await writeFile(resolve(dir, 'start.crv'), '# T\n')

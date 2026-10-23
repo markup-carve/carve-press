@@ -1,4 +1,6 @@
+import { isAbsolute, relative } from 'node:path'
 import { lintCarve } from '@markup-carve/carve'
+import { fileSystemResolver } from '@markup-carve/carve/node'
 import type { NavItem, SidebarConfigGroup, SidebarItem, ThemeConfig } from './config.js'
 import type { Page } from './content/discover.js'
 import { BuildError } from './errors.js'
@@ -159,17 +161,35 @@ export function validateNav(theme: ThemeConfig, routes: Set<string>): void {
  * Every lint warning names a construct that renders as something other than
  * what it says - a crossref that becomes literal text, an unresolved
  * reference. Those are exactly the silent degradations a docs build must not
- * ship, so a warning is fatal here.
+ * ship, so a warning is fatal here. With an include root, included files are
+ * linted too, at their own coordinates.
  */
-export function validateCrossrefs(pages: Page[]): void {
+export function lintFailures(pages: Page[], includeRoot?: string): string[] {
   const bad: string[] = []
   for (const page of pages) {
-    for (const warning of lintCarve(page.source)) {
+    const includes =
+      includeRoot === undefined
+        ? undefined
+        : { resolve: fileSystemResolver(includeRoot), sourcePath: page.srcPath }
+    for (const warning of lintCarve(page.source, { includes })) {
+      if (warning.file !== undefined) {
+        const rel = includeRoot === undefined ? warning.file : relative(includeRoot, warning.file)
+        const file = rel.startsWith('..') || isAbsolute(rel) ? '[outside-root]' : rel
+        bad.push(
+          `${file}:${warning.line}:${warning.column} ${warning.rule} - ${warning.message} (included from ${page.relPath})`,
+        )
+        continue
+      }
       // lintCarve lines are body-relative; shift them back to the source file.
       const line = warning.line + page.bodyStartLine - 1
       bad.push(`${page.relPath}:${line}:${warning.column} ${warning.rule} - ${warning.message}`)
     }
   }
+  return bad
+}
+
+export function validateCrossrefs(pages: Page[], includeRoot?: string): void {
+  const bad = lintFailures(pages, includeRoot)
   if (bad.length > 0) {
     throw new ValidationError(`${bad.length} lint failure(s)`, bad)
   }
