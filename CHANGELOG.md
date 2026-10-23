@@ -10,6 +10,7 @@
 
 - An image in a list item, table cell or figure gets the same `loading`, `decoding`, `width` and `height` defaults as one in a paragraph; only top-level paragraphs had them (#82).
 - With `dev.incremental`, replacing an image in `publicDir` with one of a different size now re-renders the pages that show it; they kept the old `width` and `height` (#84).
+- `carve` fences highlight with `@markup-carve/carve-grammars` 0.1.18, which follows the Carve 0.1.11 continuation rules: a `+` the engine refuses, and `>+` or `>> +`, read as text rather than as a continuation marker, and definition lists are scoped only where the engine opens them (#87).
 
 ### Added
 
@@ -20,7 +21,7 @@
 
 ### Changed
 
-- Renders with `@markup-carve/carve` 0.1.13 and highlights with `@markup-carve/carve-grammars` 0.1.17. Includes can select a named region with `{{ file.crv@region:name }}`, and an include whose bytes are not UTF-8 fails the build (#80, #79).
+- Renders with `@markup-carve/carve` 0.1.13. Includes can select a named region with `{{ file.crv@region:name }}`, and an include whose bytes are not UTF-8 fails the build (#80, #79).
 
 ## [0.1.5] - 2026-10-14
 
