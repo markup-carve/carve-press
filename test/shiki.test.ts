@@ -406,3 +406,38 @@ describe('pinned carve grammar', () => {
     highlighter.dispose()
   })
 })
+
+describe('csv and tsv fences', () => {
+  const colorOf = (html: string, text: string): string | undefined =>
+    new RegExp(`<span style="color:(#[0-9A-Fa-f]{6})[^"]*">${text}</span>`).exec(html)?.[1]
+
+  it('scopes the separator apart from the fields with the default languages', async () => {
+    const config = resolveConfig({ title: 'Carve' })
+    const extensions = await buildExtensionStack(config, config.shiki)
+    const html = carveToHtml('```csv\nname,qty\napple,2\n```\n', { extensions })
+    const separator = colorOf(html, ',')
+    const field = colorOf(html, 'apple')
+    expect(separator).toBeDefined()
+    expect(field).toBeDefined()
+    expect(separator).not.toBe(field)
+  })
+
+  it('highlights a tsv fence', async () => {
+    const tsvExt = await createShikiExtension({
+      langs: ['tsv'],
+      themes: { light: 'github-light', dark: 'github-dark' },
+    })
+    const html = carveToHtml('```tsv\nname\tqty\napple\t2\n```\n', { extensions: [tsvExt] })
+    expect(colorOf(html, '\t')).not.toBe(colorOf(html, 'apple'))
+  })
+
+  it('resolves a csv fence embedded in a carve fence', async () => {
+    const carveExt = await createShikiExtension({
+      langs: ['carve'],
+      themes: { light: 'github-light', dark: 'github-dark' },
+    })
+    const html = carveToHtml('````carve\n```csv\nname,qty\napple,2\n```\n````\n', { extensions: [carveExt] })
+    expect(colorOf(html, ',')).toBeDefined()
+    expect(colorOf(html, ',')).not.toBe(colorOf(html, 'apple'))
+  })
+})

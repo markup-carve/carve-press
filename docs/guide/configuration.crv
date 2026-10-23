@@ -76,7 +76,7 @@ Generated sidebar groups use `generate: '/prefix/'`; hand-written groups use `it
 | `carve.extensions` | `CarveExtension[]` | `[]` | `[myExtension()]` |
 | `carve.profile` | `'full' | 'article' | 'comment' | 'minimal' | Profile` | `undefined` | `'full'` |
 | `carve.preset` | `'minimal' | 'docs' | 'full'` | `'docs'` | `'full'` |
-| `shiki.langs` | `(string | LanguageRegistration)[]` | built-in list plus Carve grammar | `['tsx']` |
+| `shiki.langs` | `(string | LanguageRegistration)[]` | built-in list plus the Carve grammar and its `csv`/`tsv` grammars | `['tsx']` |
 | `shiki.themes.light` | `string` | `'github-light'` | `'github-light'` |
 | `shiki.themes.dark` | `string` | `'github-dark'` | `'github-dark'` |
 | `shiki.lineNumbers` | `boolean | number` | `false` | `true` |
