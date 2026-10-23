@@ -369,6 +369,26 @@ describe('P2 site features', () => {
     expect(html).toContain('height="2"')
   })
 
+  it('adds image defaults to images in list items, table cells and figures', async () => {
+    const { root } = await site({
+      'index.crv':
+        '---\ntitle: Home\n---\n# Home\n\n- ![Item](/logo.png)\n\n| ![Cell](/logo.png) |\n\n![Figure](/logo.png)\n^ A caption\n',
+    })
+    await mkdir(resolve(root, 'public'))
+    await writeFile(
+      resolve(root, 'public/logo.png'),
+      Buffer.from('89504e470d0a1a0a0000000d4948445200000003000000020806000000', 'hex'),
+    )
+    const outDir = await build(root)
+    const html = await readFile(resolve(outDir, 'index.html'), 'utf8')
+    const images = html.match(/<img [^>]*>/g) ?? []
+    expect(images).toHaveLength(3)
+    for (const image of images) {
+      expect(image).toContain('loading="lazy"')
+      expect(image).toContain('width="3"')
+    }
+  })
+
   it('never probes outside the public directory', async () => {
     const { root } = await site({
       'index.crv': '---\ntitle: Home\n---\n# Home\n\n![Escape](/../outside.png)\n![Relative](sibling.png)\n',

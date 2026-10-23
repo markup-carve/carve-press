@@ -131,7 +131,28 @@ function visit(node: ImageNode, opts: { root: string; publicDir: string }): void
       setDefault(node, 'height', String(size.height))
     }
   }
-  for (const child of node.children ?? []) visit(child, opts)
+  for (const child of nestedNodes(node)) visit(child, opts)
+}
+
+/** Every nested node, whatever key holds it: list items, table cells, captions. */
+function nestedNodes(node: ImageNode): ImageNode[] {
+  const out: ImageNode[] = []
+  const collect = (value: unknown): void => {
+    if (value === null || typeof value !== 'object') return
+    if (Array.isArray(value)) {
+      for (const entry of value) collect(entry)
+      return
+    }
+    if (typeof (value as ImageNode).type === 'string') {
+      out.push(value as ImageNode)
+      return
+    }
+    for (const entry of Object.values(value)) collect(entry)
+  }
+  for (const [key, value] of Object.entries(node)) {
+    if (key !== 'pos' && key !== 'attrs') collect(value)
+  }
+  return out
 }
 
 export function imageDefaultsExtension(opts: { root: string; publicDir: string }): CarveExtension {

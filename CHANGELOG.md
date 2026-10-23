@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixes
+
+- An image in a list item, table cell or figure gets the same `loading`, `decoding`, `width` and `height` defaults as one in a paragraph; only top-level paragraphs had them.
+
 ### Added
 
 - `carve-press check` runs every build check (render, lint, links, nav, route manifest) without writing a build, and exits non-zero on any error.
