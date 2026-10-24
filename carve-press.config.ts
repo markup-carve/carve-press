@@ -97,7 +97,7 @@ export default defineConfig({
   },
   substitutions: {
     minnode: '20',
-    enginever: { value: '0.1.13', format: 'code' },
+    enginever: { value: '0.1.14', format: 'code' },
   },
   redirects: {
     '/old-guide/': '/guide/getting-started',
