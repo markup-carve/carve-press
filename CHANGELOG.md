@@ -2,9 +2,13 @@
 
 ## [0.1.7] - 2026-10-23
 
+CSV and TSV fences now use Carve's field and separator colors, including inside Carve fences.
+
 ### Fixes
 
-- `csv` and `tsv` fences, including those inside a `carve` fence, highlight with the Carve grammars from `@markup-carve/carve-grammars`, so separators and quoted fields get their own colors (#88).
+- `csv` and `tsv` fences show separate colors for fields and separators, including when nested in a `carve` fence; the published grammar update keeps those scopes current (#88, #90).
+
+**Full Changelog**: https://github.com/markup-carve/carve-press/compare/v0.1.6...v0.1.7
 
 ## [0.1.6] - 2026-10-23
 
