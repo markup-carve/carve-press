@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.8] - 2026-10-26
+
+Sites render the spec 0.1.13 task states, and Carve code fences use the current grammar colors.
+
+### Fixes
+
+- Progress `[/]`, blocked `[!]`, and open alias `[_]` task items render with their state (#96).
+
+### Improvements
+
+- Code fences distinguish table alignment, span, and continuation markers (#98).
+
+**Full Changelog**: https://github.com/markup-carve/carve-press/compare/v0.1.7...v0.1.8
+
 ## [0.1.7] - 2026-10-23
 
 CSV and TSV fences now use Carve's field and separator colors, including inside Carve fences.
