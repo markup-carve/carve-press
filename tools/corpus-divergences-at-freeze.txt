@@ -1,7 +1,7 @@
 # Documents the installed engine renders differently from the pinned spec corpus.
 #
-#   corpus  markup-carve/carve 3aca482d, 3056 documents
-#   engine  @markup-carve/carve 0.1.14, installed from package-lock.json
+#   corpus  markup-carve/carve 236ec12b, 3064 documents
+#   engine  @markup-carve/carve 0.1.15, installed from package-lock.json
 #
 # The CI corpus gate compares names, so a new divergence fails even if another
 # document starts rendering correctly. The explicit (none) marker records the
@@ -10,5 +10,5 @@
 # Measured with:
 # node tools/corpus-through-engine.mjs node_modules/@markup-carve/carve/dist/index.js carve-freeze/tests/corpus --baseline=tools/corpus-divergences-at-freeze.txt
 #
-# Result: 3056 documents, 0 divergent, 0 threw.
+# Result: 3064 documents, 0 divergent, 0 threw.
 (none)
