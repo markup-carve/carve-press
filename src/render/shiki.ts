@@ -10,9 +10,30 @@ import {
   transformerNotationWordHighlight,
 } from '@shikijs/transformers'
 import { diffCodeTransformer } from '@markup-carve/carve-grammars/shiki/diff'
+import { carveLightTheme, carveDarkTheme, extendTheme } from '@markup-carve/carve-grammars/shiki/themes'
 import type { Attrs, BlockExtensionRenderContext, CarveExtension } from '@markup-carve/carve'
 import type { ShikiLanguage } from '../config.js'
 import { fenceContent } from './fence.js'
+import { syntaxPalette } from './syntax-palette.js'
+
+function paletteRules(colors: typeof syntaxPalette.light | typeof syntaxPalette.dark) {
+  const rule = (scope: string | string[], foreground: string, bold = false) => ({
+    scope,
+    settings: { foreground, ...(bold ? { fontStyle: 'bold' } : {}) },
+  })
+  return [
+    rule('fenced_code.block.language', colors.language, true),
+    rule(['punctuation.definition.fenced', 'punctuation.definition.raw'], colors.muted),
+    rule(['punctuation.definition.list.unnumbered', 'punctuation.definition.list.numbered', 'punctuation.definition.list'], colors.list, true),
+    rule(['punctuation.definition.list.definition', 'entity.name.tag.definition.term', 'punctuation.definition.list.continuation'], colors.definition, true),
+    rule('punctuation.definition.checkbox', colors.muted),
+    rule(['constant.language.checkbox', 'constant.language.checkbox.done'], colors.task, true),
+    rule(['entity.name.abbreviation', 'constant.other.raw.format'], colors.language, true),
+  ]
+}
+
+const sharedLightTheme = extendTheme(carveLightTheme, paletteRules(syntaxPalette.light))
+const sharedDarkTheme = extendTheme(carveDarkTheme, paletteRules(syntaxPalette.dark))
 
 export interface ShikiOptions {
   langs: ShikiLanguage[]
@@ -100,7 +121,10 @@ function getCachedHighlighter(opts: ShikiOptions): Promise<Highlighter> {
 
   const highlighter = createHighlighter({
     langs: languageRegistrations(opts.langs),
-    themes: [opts.themes.light, opts.themes.dark],
+    themes: [
+      opts.themes.light === 'github-light' ? sharedLightTheme : opts.themes.light,
+      opts.themes.dark === 'github-dark' ? sharedDarkTheme : opts.themes.dark,
+    ],
   }).catch((error: unknown) => {
     highlighterCache.delete(key)
     throw error

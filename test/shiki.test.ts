@@ -35,6 +35,16 @@ describe('createShikiExtension', () => {
     expect(html).not.toMatch(/^<pre><code class="language-carve">/)
   })
 
+  it('uses the shared Carve marker colors in both themes', async () => {
+    const carveExt = await createShikiExtension({
+      langs: ['carve'],
+      themes: { light: 'github-light', dark: 'github-dark' },
+    })
+    const html = carveToHtml('```carve\n:: term\n: description\n- [x] done\n```\n', { extensions: [carveExt] })
+    expect(html).toMatch(/color:#735c0f/i)
+    expect(html).toMatch(/--shiki-dark:#f2cc60/i)
+  })
+
   it('honors a language added through config', async () => {
     const config = resolveConfig({
       title: 'Carve',
