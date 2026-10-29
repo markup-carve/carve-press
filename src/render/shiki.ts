@@ -17,18 +17,20 @@ import { fenceContent } from './fence.js'
 import { syntaxPalette } from './syntax-palette.js'
 
 function paletteRules(colors: typeof syntaxPalette.light | typeof syntaxPalette.dark) {
-  const rule = (scope: string | string[], foreground: string, bold = false) => ({
+  const rule = (scope: string | string[], foreground: string, fontStyle?: 'bold' | 'italic') => ({
     scope,
-    settings: { foreground, ...(bold ? { fontStyle: 'bold' } : {}) },
+    settings: { foreground, ...(fontStyle === undefined ? {} : { fontStyle }) },
   })
   return [
-    rule('fenced_code.block.language', colors.language, true),
+    rule('fenced_code.block.language', colors.language, 'bold'),
     rule(['punctuation.definition.fenced', 'punctuation.definition.raw'], colors.muted),
-    rule(['punctuation.definition.list.unnumbered', 'punctuation.definition.list.numbered', 'punctuation.definition.list'], colors.list, true),
-    rule(['punctuation.definition.list.definition', 'entity.name.tag.definition.term', 'punctuation.definition.list.continuation'], colors.definition, true),
+    rule(['punctuation.definition.list.unnumbered', 'punctuation.definition.list.numbered', 'punctuation.definition.list'], colors.list, 'bold'),
+    rule(['punctuation.definition.list.definition', 'entity.name.tag.definition.term', 'punctuation.definition.list.continuation'], colors.definition, 'bold'),
     rule('punctuation.definition.checkbox', colors.muted),
-    rule(['constant.language.checkbox', 'constant.language.checkbox.done'], colors.task, true),
-    rule(['entity.name.abbreviation', 'constant.other.raw.format'], colors.language, true),
+    rule(['constant.language.checkbox', 'constant.language.checkbox.done'], colors.task, 'bold'),
+    rule(['entity.name.abbreviation', 'constant.other.raw.format'], colors.language, 'bold'),
+    rule('punctuation.definition.caption', colors.captionMarker, 'bold'),
+    rule('markup.caption', colors.captionText, 'italic'),
   ]
 }
 
@@ -46,6 +48,7 @@ export type ShikiHighlightCallback = (
   lang: string | undefined,
   attrs?: Attrs,
   ctx?: BlockExtensionRenderContext,
+  figureAttrs?: Attrs,
 ) => string
 
 const require = createRequire(import.meta.url)
@@ -74,6 +77,8 @@ const highlighterCache = new Map<string, Promise<Highlighter>>()
  */
 const RENDER_DIRECTIVE_KEYS = ['title', 'hl', 'start']
 const RENDER_DIRECTIVE_CLASSES = ['line-numbers', 'no-line-numbers']
+const FIGURE_DIRECTIVE_KEYS = ['hl', 'start']
+const FIGURE_DIRECTIVE_CLASSES = [...RENDER_DIRECTIVE_CLASSES, 'diff']
 /** Shiki's own `[!code ...]` notation handling, in the order it documents. */
 const NOTATION_TRANSFORMERS = [
   transformerNotationDiff,
@@ -320,6 +325,23 @@ function parseHighlightLines(value: string | undefined, warned: Set<string>): Se
   return lines
 }
 
+/**
+ * A captioned fence's attribute line belongs to the figure (PART 9 §4b,
+ * markup-carve/carve#2370), so the render directives are read from there too.
+ */
+function withFigureDirectives(attrs: Attrs | undefined, figureAttrs: Attrs | undefined): Attrs | undefined {
+  if (figureAttrs === undefined) return attrs
+  const figureClasses = (figureAttrs.classes ?? []).filter((className) => FIGURE_DIRECTIVE_CLASSES.includes(className))
+  const figureKeyValues = Object.fromEntries(
+    Object.entries(figureAttrs.keyValues ?? {}).filter(([key]) => FIGURE_DIRECTIVE_KEYS.includes(key)),
+  )
+  return {
+    ...attrs,
+    classes: [...new Set([...(attrs?.classes ?? []), ...figureClasses])],
+    keyValues: { ...figureKeyValues, ...attrs?.keyValues },
+  }
+}
+
 function lineNumberStart(opts: ShikiOptions, attrs: Attrs | undefined): number | undefined {
   const classes = attrs?.classes ?? []
   if (classes.includes('no-line-numbers')) return undefined
@@ -410,11 +432,12 @@ export async function createShikiHighlighter(opts: ShikiOptions): Promise<ShikiH
   const warnedHl = new Set<string>()
   const baseTransformers = NOTATION_TRANSFORMERS.map((create) => create())
 
-  return (content, lang, attrs, ctx) => {
+  return (content, lang, attrs, ctx, figureAttrs) => {
     const title = attrsKeyValues(attrs).title
     const renderedAttrs = cloneAttrsWithout(attrs, RENDER_DIRECTIVE_KEYS, RENDER_DIRECTIVE_CLASSES)
-    const highlightedLines = parseHighlightLines(attrsKeyValues(attrs).hl, warnedHl)
-    const lineStart = lineNumberStart(opts, attrs)
+    const directives = withFigureDirectives(attrs, figureAttrs)
+    const highlightedLines = parseHighlightLines(attrsKeyValues(directives).hl, warnedHl)
+    const lineStart = lineNumberStart(opts, directives)
     if (lang === undefined || lang === '') {
       return wrapCodeBlock({
         html: plainHighlightedBlockWithAttrs(content, lang, renderedAttrs, highlightedLines, ctx),
@@ -460,7 +483,7 @@ export async function createShikiHighlighter(opts: ShikiOptions): Promise<ShikiH
     // the leading +/-/space as diff markers. A fresh transformer per block: it
     // captures that block's markers while Shiki tokenizes. The cast bridges the
     // grammars' Shiki 4 typings to Shiki 1; the hooks it uses exist in both.
-    const isLanguageDiff = attrs?.classes?.includes('diff') === true
+    const isLanguageDiff = directives?.classes?.includes('diff') === true
     const html = highlighter.codeToHtml(content, {
       lang,
       themes: { light: opts.themes.light, dark: opts.themes.dark },
@@ -484,14 +507,31 @@ export async function createShikiHighlighter(opts: ShikiOptions): Promise<ShikiH
 }
 
 export function createShikiExtensionFromHighlighter(highlight: ShikiHighlightCallback): CarveExtension {
+  // Core renders a figure's target through the block renderers but passes no
+  // parent, so the figure records its code block target on the way down.
+  const figureAttrsByTarget = new WeakMap<object, Attrs>()
+  type FigureNode = { type?: string; target?: { type?: string }; attrs?: Attrs }
+  const rememberFigure = (figure: FigureNode): void => {
+    if (figure.target?.type === 'code_block' && figure.attrs !== undefined) figureAttrsByTarget.set(figure.target, figure.attrs)
+  }
   return {
     name: 'shiki',
     blockRenderers: {
+      figure(node) {
+        rememberFigure(node as FigureNode)
+        return undefined
+      },
+      figure_group(node) {
+        for (const child of (node as { children?: FigureNode[] }).children ?? []) {
+          if (child.type === 'figure') rememberFigure(child)
+        }
+        return undefined
+      },
       code_block(node, ctx) {
         const lang = (node as { lang?: string }).lang
         const content = fenceContent((node as { content: string }).content)
         const attrs = (node as { attrs?: Attrs }).attrs
-        const html = highlight(content, lang, attrs, ctx)
+        const html = highlight(content, lang, attrs, ctx, figureAttrsByTarget.get(node))
         if (isCodeBlockWrapper(html)) return html
         const title = attrsKeyValues(attrs).title
         const renderedAttrs = cloneAttrsWithout(attrs, RENDER_DIRECTIVE_KEYS, RENDER_DIRECTIVE_CLASSES)

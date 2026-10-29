@@ -45,6 +45,16 @@ describe('createShikiExtension', () => {
     expect(html).toMatch(/--shiki-dark:#f2cc60/i)
   })
 
+  it('uses the shared caption colors in both themes', async () => {
+    const carveExt = await createShikiExtension({
+      langs: ['carve'],
+      themes: { light: 'github-light', dark: 'github-dark' },
+    })
+    const html = carveToHtml('````carve\n```js\nx\n```\n^ Listing #: x\n````\n', { extensions: [carveExt] })
+    expect(html).toMatch(/color:#bc4c00;font-weight:bold;--shiki-dark:#ffab70;[^"]*">\^</i)
+    expect(html).toMatch(/color:#57606a;font-style:italic;--shiki-dark:#8b949e;[^"]*"> Listing/i)
+  })
+
   it('honors a language added through config', async () => {
     const config = resolveConfig({
       title: 'Carve',
@@ -115,6 +125,39 @@ describe('createShikiExtension', () => {
     // not `- old()`, and the language still tokenizes it (Shiki color spans).
     expect(html).toMatch(/class="diff-marker">-<\/span>[\s\S]*?old/)
     expect(html).toContain('<span style=')
+  })
+
+  it('presents a captioned {.diff} fence, whose class sits on the figure', () => {
+    const html = carveToHtml('{#lst-a .diff}\n```js\n- old();\n+ fresh();\n```\n^ Listing #: x\n', { extensions: [ext] })
+    expect(html).toContain('<figure id="lst-a" class="diff">')
+    expect(html).toContain('has-diff')
+    expect(html).toContain('class="line diff remove"')
+    expect(html).toContain('class="line diff add"')
+  })
+
+  it('presents a {.diff} panel fence inside a figure group', () => {
+    const html = carveToHtml('::: figure\n{.diff}\n```js\n- old();\n```\n^ a\n:::\n^ group\n', { extensions: [ext] })
+    expect(html).toContain('has-diff')
+    expect(html).toContain('class="line diff remove"')
+  })
+
+  it('needs diff as a whole class token on the figure or the fence', () => {
+    for (const source of [
+      '{.diffs}\n```js\n- old();\n```\n^ x\n',
+      '{.side-diff}\n```js\n- old();\n```\n^ x\n',
+      '{.side-diff}\n```js\n- old();\n```\n',
+    ]) {
+      const html = carveToHtml(source, { extensions: [ext] })
+      expect(html).not.toContain('has-diff')
+      expect(html).not.toContain('diff-marker')
+    }
+  })
+
+  it('reads line-number and hl directives from a captioned fence figure', () => {
+    const html = carveToHtml('{.line-numbers start="5" hl="2"}\n```js\none\ntwo\n```\n^ x\n', { extensions: [ext] })
+    expect(html).toContain('code-block--line-numbers')
+    expect(html).toContain('--code-block-line-start: 4')
+    expect(html).toContain('class="line highlighted"')
   })
 
   it('leaves an ordinary language fence without the diff presentation', () => {
