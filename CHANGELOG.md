@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixes
+
+- A captioned `{.diff}` fence gets the diff presentation, and its `.line-numbers`, `start` and `hl` apply, now that they sit on the figure (markup-carve/carve#2370).
+- Caption markers and caption text in Carve fences use the shared palette's caption colors.
+
 ## [0.1.8] - 2026-10-26
 
 Sites render the spec 0.1.13 task states, and Carve code fences use the current grammar colors.
