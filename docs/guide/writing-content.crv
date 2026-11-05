@@ -10,8 +10,7 @@ Every page is a `.crv` file with optional YAML frontmatter followed by Carve con
 
 ## Frontmatter Reference
 
-| Key | Type | Default | Effect |
-| --- | --- | --- | --- |
+|= Key |= Type |= Default |= Effect |
 | `title` | `string` | first H1 or path | Page title and search title. |
 | `description` | `string` | site description | Meta description and social description. |
 | `layout` | `string` | `'doc'` | Selects `doc`, `page`, `home`, `blog`, or a custom layout. |

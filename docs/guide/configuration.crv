@@ -19,8 +19,7 @@ export default defineConfig({
 
 ## Site Keys
 
-| Key | Type | Default | Example |
-| --- | --- | --- | --- |
+|= Key |= Type |= Default |= Example |
 | `title` | `string` | required | `'CarvePress'` |
 | `description` | `string` | `undefined` | `'Carve-native docs'` |
 | `hostname` | `string` | `undefined` | `'https://example.com'` |
@@ -51,8 +50,7 @@ A render extension from the config can import code from another file, and no fin
 
 ## Theme
 
-| Key | Type | Default | Example |
-| --- | --- | --- | --- |
+|= Key |= Type |= Default |= Example |
 | `theme.css` | `string` | built-in theme | `'theme.css'` |
 | `theme.extraCss` | `string[]` | `undefined` | `['docs/public/site.css']` |
 | `themeConfig.nav` | `NavItem[]` | `[]` | `[{ text: 'Guide', link: '/guide/getting-started' }]` |
@@ -71,8 +69,7 @@ Generated sidebar groups use `generate: '/prefix/'`; hand-written groups use `it
 
 ## Carve And Shiki
 
-| Key | Type | Default | Example |
-| --- | --- | --- | --- |
+|= Key |= Type |= Default |= Example |
 | `carve.extensions` | `CarveExtension[]` | `[]` | `[myExtension()]` |
 | `carve.profile` | `'full' | 'article' | 'comment' | 'minimal' | Profile` | `undefined` | `'full'` |
 | `carve.preset` | `'minimal' | 'docs' | 'full'` | `'docs'` | `'full'` |
@@ -83,8 +80,7 @@ Generated sidebar groups use `generate: '/prefix/'`; hand-written groups use `it
 
 ## Search, Blog, Feed
 
-| Key | Type | Default | Example |
-| --- | --- | --- | --- |
+|= Key |= Type |= Default |= Example |
 | `search` | `false | SearchIndexOptions` | `{ filename: 'search-index.json', exclude: [] }` | `{ exclude: ['/404'] }` |
 | `blog.dir` | `string` | required when `blog` is set | `'blog'` |
 | `blog.route` | `string` | route from `dir` | `'/blog/'` |
@@ -102,8 +98,7 @@ Generated sidebar groups use `generate: '/prefix/'`; hand-written groups use `it
 
 ## Locale Config
 
-| Key | Type | Default | Example |
-| --- | --- | --- | --- |
+|= Key |= Type |= Default |= Example |
 | `lang` | `string` | required | `'en-US'` |
 | `label` | `string` | required | `'English'` |
 | `title` | `string` | site title | `'CarvePress DE'` |

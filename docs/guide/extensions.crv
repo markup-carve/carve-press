@@ -10,8 +10,7 @@ CarvePress has two extension layers: Carve engine extensions that render markup,
 
 ## Presets
 
-| Preset | Included Carve engine factories |
-| --- | --- |
+|= Preset |= Included Carve engine factories |
 | `minimal` | heading permalinks plus CarvePress code, compare, playground, images, and table scrolling |
 | `docs` | `tabs`, `details`, `mathBlock`, `externalLinks`, `tableOfContents`, `tocPlacement`, `wikilinks` |
 | `full` | all `docs` factories plus `headingNumbers`, `glossary`, `index`, `citations`, `codeCallouts`, `colorSwatch`, `spoiler`, `listTable`, `imgFence`, `defaultAttributes` |
@@ -24,8 +23,7 @@ A glossary term keeps its case in its id, so `:: HTTP` renders `id="gloss-HTTP"`
 
 ## Site Extension Events
 
-| Event | Payload | Use |
-| --- | --- | --- |
+|= Event |= Payload |= Use |
 | `buildStarted` | `{ config }` | Validate settings or capture normalized config. |
 | `contentDiscovered` | `{ pages }` | Add virtual pages or filter pages. |
 | `rendererCreated` | `{ extensions }` | Add Carve render extensions. |
