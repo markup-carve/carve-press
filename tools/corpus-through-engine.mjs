@@ -61,16 +61,26 @@ if (enginePath === undefined || corpusDir === undefined) {
  * an example lands upstream.
  *
  * So the reference is the corpus's SOURCE: tests/corpus is generated from the
- * `::: compare` blocks in resources/examples/{core,extensions,edge-cases}.md,
- * one pair per `carve` fence in a block, and the generator refuses to write a
- * corpus where the two disagree. Both live in the same checkout, so this costs
+ * `::: compare` blocks in resources/examples/{core,extensions}.md and the
+ * section files under resources/examples/edge-cases/ (one file per section
+ * since carve#4132; older checkouts keep a single edge-cases.md), one pair per
+ * `carve` fence in a block, and the generator refuses to write a corpus where
+ * the two disagree. Both live in the same checkout, so this costs
  * no second clone.
  */
+function corpusSourcePages(examplesDir) {
+  const pages = ['core.md', 'extensions.md'].map((page) => join(examplesDir, page))
+  const sections = join(examplesDir, 'edge-cases')
+  if (!existsSync(sections)) return [...pages, join(examplesDir, 'edge-cases.md')]
+  const files = readdirSync(sections).filter((name) => name.endsWith('.md')).sort()
+  if (files.length === 0) return [...pages, join(sections, '*.md')]
+  return [...pages, ...files.map((name) => join(sections, name))]
+}
+
 function declaredCorpusSize(dir) {
   const examplesDir = resolve(dir, '..', '..', 'resources', 'examples')
   let declared = 0
-  for (const page of ['core.md', 'extensions.md', 'edge-cases.md']) {
-    const path = join(examplesDir, page)
+  for (const path of corpusSourcePages(examplesDir)) {
     if (!existsSync(path)) {
       // Not a soft skip: without this page there is no independent statement of
       // how big the corpus should be, and a corpus check with nothing to compare
@@ -234,7 +244,7 @@ const declared = declaredCorpusSize(corpusDir)
 if (all.length !== declared) {
   process.stderr.write(
     `::error::${all.length} corpus pairs found in ${corpusDir}, but the spec's example pages declare ${declared}. ` +
-      'Every carve fence in a ::: compare block in resources/examples/{core,extensions,edge-cases}.md becomes one corpus pair, so a ' +
+      'Every carve fence in a ::: compare block in resources/examples/{core,extensions}.md and resources/examples/edge-cases/*.md becomes one corpus pair, so a ' +
       'difference means the corpus checked out here is not the one those pages describe - a truncated or stale ' +
       'checkout, or a corpus that needs regenerating. It does not mean this run was clean.\n',
   )
