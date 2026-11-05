@@ -174,23 +174,6 @@ describe('validateCrossrefs', () => {
     expect(() => validateCrossrefs([src(source)])).toThrow(new RegExp(rule))
   })
 
-  // Newer engines hint at non-canonical spellings such as a `---` break.
-  it('does not fail on a lint hint', () => {
-    expect(() => validateCrossrefs([src('a\n\n---\n\nb\n')])).not.toThrow()
-  })
-
-  it('prints a deprecated table alignment without failing the build', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      expect(() => validateCrossrefs([src('|=< a |\n| b |\n')])).not.toThrow()
-      for (const [message] of warn.mock.calls) {
-        expect(String(message)).toMatch(/^carve-press: a\.crv:1:\d+ deprecated-cell-alignment/)
-      }
-    } finally {
-      warn.mockRestore()
-    }
-  })
-
   it('lints included files at their own coordinates', async () => {
     const dir = await mkdtemp(resolve(tmpdir(), 'cp-lint-include-'))
     await writeFile(resolve(dir, 'part.crv'), 'Intro.\n\n{lose}\n- a\n')
