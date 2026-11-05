@@ -72,7 +72,7 @@ function corpusSourcePages(examplesDir) {
   const pages = ['core.md', 'extensions.md'].map((page) => join(examplesDir, page))
   const sections = join(examplesDir, 'edge-cases')
   if (!existsSync(sections)) return [...pages, join(examplesDir, 'edge-cases.md')]
-  const files = readdirSync(sections).filter((name) => name.endsWith('.md')).sort()
+  const files = readdirSync(sections).filter((name) => name.endsWith('.md') && name !== 'README.md').sort()
   if (files.length === 0) return [...pages, join(sections, '*.md')]
   return [...pages, ...files.map((name) => join(sections, name))]
 }
