@@ -10,8 +10,7 @@ Run CarvePress with `carve-press <command> [options]`. If the first argument is 
 
 ## Commands
 
-| Command | Description |
-| --- | --- |
+|= Command |= Description |
 | `build` | Build the site, reusing the renders of unchanged pages. |
 | `check` | Run every build check without writing a build. |
 | `fmt [paths...]` | Format `.crv` sources in place, `srcDir` by default. |
@@ -25,8 +24,7 @@ Run CarvePress with `carve-press <command> [options]`. If the first argument is 
 
 ## Flags
 
-| Flag | Applies To | Default | Description |
-| --- | --- | --- | --- |
+|= Flag |= Applies To |= Default |= Description |
 | `--root <dir>` | all commands | current working directory | Project root. |
 | `--port <n>` | `dev`, `serve` | `5173` for dev, `4173` for serve | Server port from `0` through `65535`; invalid values fall back. |
 | `--host <host>` | `dev`, `serve` | `127.0.0.1` | Server host. |

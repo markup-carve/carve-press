@@ -10,15 +10,13 @@ This reference mirrors the exported TypeScript types from `src/config.ts`.
 
 ## Root Config
 
-| Type | Keys |
-| --- | --- |
+|= Type |= Keys |
 | `UserConfig` | `title`, `description`, `hostname`, `base`, `srcDir`, `outDir`, `publicDir`, `srcExclude`, `cleanUrls`, `ignoreDeadLinks`, `routeManifest`, `head`, `theme`, `assets`, `themeConfig`, `carve`, `shiki`, `search`, `blog`, `feed`, `redirects`, `robots`, `rewrites`, `islands`, `substitutions`, `extensions`, `layouts`, `locales`, `dev` |
 | `CarvePressConfig` | Normalized form of `UserConfig`; all defaulted keys are present. |
 
 ## Navigation Types
 
-| Type | Shape |
-| --- | --- |
+|= Type |= Shape |
 | `NavItem` | `{ text: string; link?: string; items?: NavItem[] }` |
 | `SidebarItem` | `{ text: string; link?: string; items?: SidebarItem[] }` |
 | `SidebarGroup` | `{ text: string; collapsed?: boolean; items: SidebarItem[] }` |
@@ -27,8 +25,7 @@ This reference mirrors the exported TypeScript types from `src/config.ts`.
 
 ## Theme Types
 
-| Type | Shape |
-| --- | --- |
+|= Type |= Shape |
 | `ThemeLogo` | `string | { light: string; dark: string; alt?: string }` |
 | `OutlineSetting` | `false | number | [number, number] | 'deep'` |
 | `ThemeAssetsConfig` | `{ css?: string; extraCss?: string[] }` |
@@ -37,8 +34,7 @@ This reference mirrors the exported TypeScript types from `src/config.ts`.
 
 ## Content Types
 
-| Type | Shape |
-| --- | --- |
+|= Type |= Shape |
 | `HeadTag` | `[tag: string, attrs: Record<string, string>]` |
 | `CarvePreset` | `'minimal' | 'docs' | 'full'` |
 | `ShikiLanguage` | `string | LanguageRegistration` |
@@ -48,15 +44,13 @@ This reference mirrors the exported TypeScript types from `src/config.ts`.
 
 ## Locale Types
 
-| Type | Shape |
-| --- | --- |
+|= Type |= Shape |
 | `LocaleConfig` | `{ lang: string; label: string; title?: string; description?: string; themeConfig?: LocaleThemeConfig }` |
 | `LocaleThemeConfig` | Optional locale overrides for nav, sidebar, footer, edit link, outline, and labels. |
 
 ## Extension Types
 
-| Type | Shape |
-| --- | --- |
+|= Type |= Shape |
 | `SiteExtension` | `{ name: string; setup(bus: BuildEventBus): void }` |
 | `Layout` | `(ctx: LayoutContext) => string` |
 

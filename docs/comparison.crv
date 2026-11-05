@@ -8,8 +8,7 @@ layout: comparison
 
 This table is a hand-maintained snapshot, last checked on 2026-08-03, not a benchmark. Every project here moves faster than a table written by hand, so treat a cell as a claim about that date and check the source before relying on it. Check the project docs directly: [VitePress](https://vitepress.dev/), [Docusaurus](https://docusaurus.io/), [Astro Starlight](https://starlight.astro.build/), and [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/). Corrections are welcome in [an issue](https://github.com/markup-carve/carve-press/issues).
 
-| Capability | CarvePress | VitePress | Docusaurus | Astro Starlight | MkDocs Material |
-| --- | --- | --- | --- | --- | --- |
+|= Capability |= CarvePress |= VitePress |= Docusaurus |= Astro Starlight |= MkDocs Material |
 | Markup language | Carve `.crv`. | Markdown compiled as Vue components. | Markdown and MDX. | Markdown and MDX by default; Markdoc can be added. | Markdown. |
 | Client framework in output | No client framework; small scripts for search, nav, copy, outline, and playground when used. | Vue-powered site; VitePress documents static HTML first visit and SPA navigation after hydration. | React-based site. | Astro output; UI islands are available through Astro integrations. | Static MkDocs output with theme JavaScript for features. |
 | Dev server | Yes, `carve-press dev`. | Yes, Vite dev server. | Yes. | Yes, Astro dev server. | Yes, `mkdocs serve`. |
