@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { carveToHtml } from '@markup-carve/carve'
 import { splitFrontmatter } from '../src/content/frontmatter.js'
 import { SourceError } from '../src/errors.js'
 
@@ -18,10 +19,32 @@ describe('splitFrontmatter', () => {
     expect(r.bodyStartLine).toBe(1)
   })
 
-  it('leaves an unclosed fence as body', () => {
-    // No closer, so the engine would not read frontmatter either; the `---`
-    // stays a thematic break.
-    const r = splitFrontmatter('---\ntitle: X\n\ntext\n')
+  // carve#5016: the engine reads an unclosed first-line opener as frontmatter
+  // to the end of the file, so the page would silently render empty.
+  it.each([
+    ['---\ntitle: X\n\ntext\n'],
+    ['---\n\ntext\n'],
+    ['--- yaml\ntitle: X\n'],
+    ['---\n'],
+    ['---'],
+  ])('rejects an unclosed opener in %j', (src) => {
+    let caught: unknown
+    try {
+      splitFrontmatter(src, 'docs/page.crv')
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(SourceError)
+    expect((caught as SourceError).line).toBe(1)
+    expect((caught as SourceError).message).toMatch(/no closing ---/)
+  })
+
+  it('agrees with the engine that an unclosed opener is all metadata', () => {
+    expect(carveToHtml('---\ntitle: X\n\ntext\n')).toBe('')
+  })
+
+  it('leaves a later thematic break alone', () => {
+    const r = splitFrontmatter('# H\n\n---\n\ntext\n')
     expect(r.data).toEqual({})
     expect(r.bodyStartLine).toBe(1)
   })

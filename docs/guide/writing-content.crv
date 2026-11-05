@@ -8,6 +8,8 @@ order: 3
 
 Every page is a `.crv` file with optional YAML frontmatter followed by Carve content.
 
+A `---` on the first line always opens frontmatter, and the build fails when no closing `---` line follows it. Write a thematic break at the top of a page as `***`.
+
 ## Frontmatter Reference
 
 |= Key |= Type |= Default |= Effect |

@@ -17,11 +17,20 @@ export interface FrontmatterSplit {
  */
 export function splitFrontmatter(source: string, srcPath = '<input>'): FrontmatterSplit {
   const lines = source.split('\n')
-  if (lines.length < 2 || !RE_OPEN.test(lines[0]!)) {
+  if (!RE_OPEN.test(lines[0]!)) {
     return { data: {}, body: source, bodyStartLine: 1 }
   }
   const close = lines.findIndex((l, i) => i > 0 && RE_CLOSE.test(l))
-  if (close === -1) return { data: {}, body: source, bodyStartLine: 1 }
+  // The engine reads an unclosed opener as frontmatter to the end of the file
+  // (carve#5016), so the page would render empty.
+  if (close === -1) {
+    throw new SourceError(
+      srcPath,
+      1,
+      1,
+      'frontmatter: the opening --- has no closing --- line, so the whole file would be metadata; close it, or write a thematic break as ***',
+    )
+  }
 
   const raw = lines.slice(1, close).join('\n')
   let value: unknown
