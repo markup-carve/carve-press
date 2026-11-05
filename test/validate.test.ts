@@ -169,7 +169,7 @@ describe('validateCrossrefs', () => {
   // from what the author wrote, so each fails the build.
   it.each([
     ['consumed-key-near-miss', '{lose}\n- a\n- b\n'],
-    ['continuation-marker-refused', 'q\n+\n- s\n'],
+    ['continuation-marker-refused', '- a\n+\n\nb\n'],
   ])('rejects %s', (rule, source) => {
     expect(() => validateCrossrefs([src(source)])).toThrow(new RegExp(rule))
   })

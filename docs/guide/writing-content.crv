@@ -67,7 +67,10 @@ Run `npx carve-press build`.
 ```
 
 Build-time lint covers included files as well as the page, and reports a
-finding at the included file's own line.
+finding at the included file's own line. A lint warning fails the build. A
+hint about a non-canonical spelling does not, and a deprecated spelling that
+still renders as written (`deprecated-cell-alignment`) is printed as a warning
+until you run `carve-press fmt`.
 
 The former `%% @include:` spelling is no longer expanded. Replace it with the
 standard directive before upgrading.

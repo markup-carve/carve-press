@@ -88,6 +88,8 @@ export const PLAYGROUND_EXTENSION_EXCLUSIONS = {
   createEditorSession: 'editor-session utility, not an extension factory',
   createReversibleAstPatch: 'AST utility, not an extension factory',
   createSourcePatch: 'source-patch utility, not an extension factory',
+  decisionTrace: 'parser diagnostic, not an extension factory',
+  decisionTraceJsonLines: 'parser diagnostic, not an extension factory',
   defaultAttributes: 'site policy extension; the playground has no project defaults to apply',
   diffAst: 'AST utility, not an extension factory',
   djotMigrationWarnings: 'migration utility, not an extension factory',
