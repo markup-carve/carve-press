@@ -161,7 +161,9 @@ export function validateNav(theme: ThemeConfig, routes: Set<string>): void {
  * Every lint warning names a construct that renders as something other than
  * what it says - a crossref that becomes literal text, an unresolved
  * reference. Those are exactly the silent degradations a docs build must not
- * ship, so a warning is fatal here. With an include root, included files are
+ * ship, so a warning is fatal here. Hints (a non-canonical spelling) are
+ * skipped, and a deprecated spelling that still renders as written is printed
+ * but does not fail the build. With an include root, included files are
  * linted too, at their own coordinates.
  */
 export function lintFailures(pages: Page[], includeRoot?: string): string[] {
@@ -172,17 +174,23 @@ export function lintFailures(pages: Page[], includeRoot?: string): string[] {
         ? undefined
         : { resolve: fileSystemResolver(includeRoot), sourcePath: page.srcPath }
     for (const warning of lintCarve(page.source, { includes })) {
+      // Engines up to 0.1.15 type no severity, so read it loosely.
+      if ((warning as { severity?: string }).severity === 'Hint') continue
+      let entry: string
       if (warning.file !== undefined) {
         const rel = includeRoot === undefined ? warning.file : relative(includeRoot, warning.file)
         const file = rel.startsWith('..') || isAbsolute(rel) ? '[outside-root]' : rel
-        bad.push(
-          `${file}:${warning.line}:${warning.column} ${warning.rule} - ${warning.message} (included from ${page.relPath})`,
-        )
+        entry = `${file}:${warning.line}:${warning.column} ${warning.rule} - ${warning.message} (included from ${page.relPath})`
+      } else {
+        // lintCarve lines are body-relative; shift them back to the source file.
+        const line = warning.line + page.bodyStartLine - 1
+        entry = `${page.relPath}:${line}:${warning.column} ${warning.rule} - ${warning.message}`
+      }
+      if (warning.rule.startsWith('deprecated-')) {
+        console.warn(`carve-press: ${entry}`)
         continue
       }
-      // lintCarve lines are body-relative; shift them back to the source file.
-      const line = warning.line + page.bodyStartLine - 1
-      bad.push(`${page.relPath}:${line}:${warning.column} ${warning.rule} - ${warning.message}`)
+      bad.push(entry)
     }
   }
   return bad
