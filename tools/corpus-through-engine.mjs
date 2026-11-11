@@ -78,9 +78,15 @@ function corpusSourcePages(examplesDir) {
   return [...pages, ...files.map((name) => join(sections, name))]
 }
 
-// Two sizes, because the generator changed: older spec checkouts write one pair
-// per fence, newer ones one per distinct input. A truncated or stale corpus
-// matches neither.
+// Older spec generators write one pair per fence, newer ones one per distinct
+// input. Which one this checkout runs decides the size, so a truncated corpus
+// cannot pass by matching the other count. Unrecognized means the fence count,
+// which fails loudly rather than passing a short corpus.
+function deduplicatesInputs(dir) {
+  const generator = resolve(dir, '..', '..', 'scripts', 'generate-corpus.mjs')
+  return existsSync(generator) && readFileSync(generator, 'utf8').includes('byInput')
+}
+
 function declaredCorpusSize(dir) {
   const examplesDir = resolve(dir, '..', '..', 'resources', 'examples')
   let declared = 0
@@ -105,7 +111,7 @@ function declaredCorpusSize(dir) {
     )
     process.exit(1)
   }
-  return { fences: declared, distinct: inputs.size }
+  return { fences: declared, distinct: inputs.size, expected: deduplicatesInputs(dir) ? inputs.size : declared }
 }
 
 async function loadEngine(path) {
@@ -248,10 +254,10 @@ function compareAgainstBaseline(path, wrong, present) {
 
 const all = pairs(corpusDir)
 const declared = declaredCorpusSize(corpusDir)
-if (all.length !== declared.fences && all.length !== declared.distinct) {
+if (all.length !== declared.expected) {
   process.stderr.write(
     `::error::${all.length} corpus pairs found in ${corpusDir}, but the spec's example pages declare ${declared.fences} ` +
-      `carve fences holding ${declared.distinct} distinct inputs. ` +
+      `carve fences holding ${declared.distinct} distinct inputs, and this checkout's generator writes ${declared.expected}. ` +
       'Every carve fence in a ::: compare block in resources/examples/{core,extensions}.md and resources/examples/edge-cases/*.md becomes a corpus pair, ' +
       'one per fence in older spec checkouts and one per distinct input since the generator deduplicated them, so a ' +
       'difference means the corpus checked out here is not the one those pages describe - a truncated or stale ' +

@@ -37,28 +37,37 @@ export function declaredPairs(source) {
   return pairs
 }
 
-// Modifiers that change the fixture's bytes. `no-render` does not, so two
-// blocks that differ only by it write the same .crv.
-const BYTE_MODIFIERS = new Set(['crlf', 'cr', 'bom', 'nul', 'no-final-newline'])
+// The byte transforms the spec generator applies to a fence body before it
+// writes the .crv (applyModifiers in scripts/generate-corpus.mjs). `no-render`
+// changes no bytes.
+function fixtureBytes(body, modifiers) {
+  let out = body + '\n'
+  if (modifiers.has('no-final-newline')) out = out.replace(/\n$/, '')
+  if (modifiers.has('crlf')) out = out.replace(/\n/g, '\r\n')
+  if (modifiers.has('cr')) out = out.replace(/\n/g, '\r')
+  if (modifiers.has('bom')) out = '\ufeff' + out
+  if (modifiers.has('nul')) out = out.replace(/\u2400/g, '\u0000')
+  return out
+}
 
 /**
- * One key per pair, naming the .crv bytes it generates: the carve fence body
- * plus the byte-changing modifiers of its compare block. Since the spec
- * generator writes one fixture per distinct input, the corpus holds as many
- * pairs as there are distinct keys across all source pages.
+ * The .crv bytes of every pair a page declares. The spec generator writes one
+ * fixture per distinct input, so a deduplicating corpus holds as many pairs as
+ * there are distinct entries across all source pages.
  *
  * @param {string} source @returns {string[]}
  */
 export function declaredInputs(source) {
-  const keys = []
+  const inputs = []
   let block = null
-  let modifiers = ''
+  let modifiers = new Set()
   let fence = null
   let body = null
   for (const line of source.split('\n')) {
     if (fence !== null) {
       if (line.startsWith(fence) && line.slice(fence.length).trim() === '') {
-        if (body !== null) keys.push(`${modifiers}\0${body.join('\n')}`)
+        // The generator skips a pair whose carve body is empty.
+        if (body !== null && body.join('\n') !== '') inputs.push(fixtureBytes(body.join('\n'), modifiers))
         fence = null
         body = null
       } else if (body !== null) {
@@ -79,11 +88,11 @@ export function declaredInputs(source) {
       const rest = trimmed.slice(colons)
       if (/^[ \t]+compare(?:[ \t]|$)/.test(rest)) {
         block = trimmed.slice(0, colons)
-        modifiers = rest.trim().split(/[ \t]+/).slice(1).filter((m) => BYTE_MODIFIERS.has(m)).sort().join(' ')
+        modifiers = new Set(rest.trim().split(/[ \t]+/).slice(1))
       }
     } else if (trimmed === block) {
       block = null
     }
   }
-  return keys
+  return inputs
 }
