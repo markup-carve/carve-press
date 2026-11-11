@@ -28,7 +28,7 @@
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { resolve, join, dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { declaredPairs } from './example-pair-census.mjs'
+import { declaredInputs, declaredPairs } from './example-pair-census.mjs'
 
 const argv = process.argv.slice(2)
 const positional = []
@@ -64,7 +64,8 @@ if (enginePath === undefined || corpusDir === undefined) {
  * `::: compare` blocks in resources/examples/{core,extensions}.md and the
  * section files under resources/examples/edge-cases/ (one file per section
  * since carve#4132; older checkouts keep a single edge-cases.md), one pair per
- * `carve` fence in a block, and the generator refuses to write a corpus where
+ * `carve` fence in a block (per distinct input since the generator dropped
+ * duplicate inputs), and the generator refuses to write a corpus where
  * the two disagree. Both live in the same checkout, so this costs
  * no second clone.
  */
@@ -77,9 +78,13 @@ function corpusSourcePages(examplesDir) {
   return [...pages, ...files.map((name) => join(sections, name))]
 }
 
+// Two sizes, because the generator changed: older spec checkouts write one pair
+// per fence, newer ones one per distinct input. A truncated or stale corpus
+// matches neither.
 function declaredCorpusSize(dir) {
   const examplesDir = resolve(dir, '..', '..', 'resources', 'examples')
   let declared = 0
+  const inputs = new Set()
   for (const path of corpusSourcePages(examplesDir)) {
     if (!existsSync(path)) {
       // Not a soft skip: without this page there is no independent statement of
@@ -90,7 +95,9 @@ function declaredCorpusSize(dir) {
       )
       process.exit(1)
     }
-    declared += declaredPairs(readFileSync(path, 'utf8'))
+    const source = readFileSync(path, 'utf8')
+    declared += declaredPairs(source)
+    for (const key of declaredInputs(source)) inputs.add(key)
   }
   if (declared === 0) {
     process.stderr.write(
@@ -98,7 +105,7 @@ function declaredCorpusSize(dir) {
     )
     process.exit(1)
   }
-  return declared
+  return { fences: declared, distinct: inputs.size }
 }
 
 async function loadEngine(path) {
@@ -241,10 +248,12 @@ function compareAgainstBaseline(path, wrong, present) {
 
 const all = pairs(corpusDir)
 const declared = declaredCorpusSize(corpusDir)
-if (all.length !== declared) {
+if (all.length !== declared.fences && all.length !== declared.distinct) {
   process.stderr.write(
-    `::error::${all.length} corpus pairs found in ${corpusDir}, but the spec's example pages declare ${declared}. ` +
-      'Every carve fence in a ::: compare block in resources/examples/{core,extensions}.md and resources/examples/edge-cases/*.md becomes one corpus pair, so a ' +
+    `::error::${all.length} corpus pairs found in ${corpusDir}, but the spec's example pages declare ${declared.fences} ` +
+      `carve fences holding ${declared.distinct} distinct inputs. ` +
+      'Every carve fence in a ::: compare block in resources/examples/{core,extensions}.md and resources/examples/edge-cases/*.md becomes a corpus pair, ' +
+      'one per fence in older spec checkouts and one per distinct input since the generator deduplicated them, so a ' +
       'difference means the corpus checked out here is not the one those pages describe - a truncated or stale ' +
       'checkout, or a corpus that needs regenerating. It does not mean this run was clean.\n',
   )

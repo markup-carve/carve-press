@@ -36,3 +36,54 @@ export function declaredPairs(source) {
   }
   return pairs
 }
+
+// Modifiers that change the fixture's bytes. `no-render` does not, so two
+// blocks that differ only by it write the same .crv.
+const BYTE_MODIFIERS = new Set(['crlf', 'cr', 'bom', 'nul', 'no-final-newline'])
+
+/**
+ * One key per pair, naming the .crv bytes it generates: the carve fence body
+ * plus the byte-changing modifiers of its compare block. Since the spec
+ * generator writes one fixture per distinct input, the corpus holds as many
+ * pairs as there are distinct keys across all source pages.
+ *
+ * @param {string} source @returns {string[]}
+ */
+export function declaredInputs(source) {
+  const keys = []
+  let block = null
+  let modifiers = ''
+  let fence = null
+  let body = null
+  for (const line of source.split('\n')) {
+    if (fence !== null) {
+      if (line.startsWith(fence) && line.slice(fence.length).trim() === '') {
+        if (body !== null) keys.push(`${modifiers}\0${body.join('\n')}`)
+        fence = null
+        body = null
+      } else if (body !== null) {
+        body.push(line)
+      }
+      continue
+    }
+    const ticks = leadingRun(line, '`')
+    if (ticks >= 3) {
+      fence = line.slice(0, ticks)
+      if (block !== null && line.slice(ticks).trim() === 'carve') body = []
+      continue
+    }
+    const trimmed = line.trim()
+    const colons = leadingRun(trimmed, ':')
+    if (colons < 3) continue
+    if (block === null) {
+      const rest = trimmed.slice(colons)
+      if (/^[ \t]+compare(?:[ \t]|$)/.test(rest)) {
+        block = trimmed.slice(0, colons)
+        modifiers = rest.trim().split(/[ \t]+/).slice(1).filter((m) => BYTE_MODIFIERS.has(m)).sort().join(' ')
+      }
+    } else if (trimmed === block) {
+      block = null
+    }
+  }
+  return keys
+}
