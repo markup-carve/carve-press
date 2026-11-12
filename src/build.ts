@@ -32,6 +32,7 @@ import {
   validateCrossrefs,
   validatePageNavOverrides,
 } from './validate.js'
+import { importConfig } from './config-loader.js'
 import { BuildEventBus } from './events.js'
 import type { RedirectEntry } from './events.js'
 import { BuildError, SourceError } from './errors.js'
@@ -713,7 +714,7 @@ export async function loadConfig(root: string, opts: { bustCache?: boolean } = {
       `${pathToFileURL(path).href}${
         opts.bustCache === true ? `?t=${Date.now()}-${configLoadVersion += 1}` : ''
       }`
-    const mod = (await import(href)) as { default?: UserConfig }
+    const mod = (await importConfig(path, href)) as { default?: UserConfig }
     if (mod.default === undefined) {
       throw new BuildError(`${name} has no default export`)
     }
