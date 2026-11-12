@@ -10,6 +10,10 @@ A new project made with `npm init -y` builds on the first try.
 
 - `carve-press.config.ts` loads as an ES module whatever the `type` in `package.json` is. With npm 12's `"type": "commonjs"` the first `build` failed with "Cannot use import statement outside a module", and with no `type` field Node printed a `MODULE_TYPELESS_PACKAGE_JSON` warning (#114, #115).
 
+### Improvements
+
+- Fences highlight with carve-grammars 0.1.24: paths and snake_case words such as `/usr/local/` and `_my_var_` are no longer emphasis, and a block glued to a heading's inline span is colored as attributes (#117).
+
 **Full Changelog**: https://github.com/markup-carve/carve-press/compare/v0.1.9...v0.1.10
 
 ## [0.1.9] - 2026-11-12
