@@ -61,7 +61,7 @@
   },
   "dependencies": {
     "@markup-carve/carve": "0.1.17",
-    "@markup-carve/carve-grammars": "0.1.23",
+    "@markup-carve/carve-grammars": "0.1.24",
     "@shikijs/themes": "^4.5.0",
     "@shikijs/transformers": "^1.29.0",
     "minisearch": "^7.2.0",
