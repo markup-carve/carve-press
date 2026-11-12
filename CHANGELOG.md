@@ -4,7 +4,7 @@
 
 ## [0.1.9] - 2026-11-12
 
-Sites build with carve-js 0.1.16 and the Carve 0.1.14 rules.
+Sites build with carve-js 0.1.17 and the Carve 0.1.14 rules.
 
 ### Breaking
 
@@ -18,7 +18,7 @@ Sites build with carve-js 0.1.16 and the Carve 0.1.14 rules.
 
 ### Improvements
 
-- Pages render with `@markup-carve/carve` 0.1.16 (#110).
+- Pages render with `@markup-carve/carve` 0.1.17 and fences highlight with carve-grammars 0.1.23 (#110, #113).
 - The default Shiki themes use the shared Carve token colors (#101).
 
 **Full Changelog**: https://github.com/markup-carve/carve-press/compare/v0.1.8...v0.1.9
