@@ -12,8 +12,8 @@ Sites build with carve-js 0.1.16 and the Carve 0.1.14 rules.
 
 ### Fixes
 
-- A captioned `{.diff}` fence gets the diff presentation, and its `.line-numbers`, `start` and `hl` apply, now that they sit on the figure (markup-carve/carve#2370).
-- Caption markers and caption text in Carve fences use the shared palette's caption colors.
+- A captioned `{.diff}` fence gets the diff presentation, and its `.line-numbers`, `start` and `hl` apply, now that they sit on the figure (markup-carve/carve#2370, #103).
+- Caption markers and caption text in Carve fences use the shared palette's caption colors (#103).
 - Lint hints no longer fail the build, and `deprecated-*` findings such as `deprecated-cell-alignment` print as warnings (#105).
 
 ### Improvements
