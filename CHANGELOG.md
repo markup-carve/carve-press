@@ -2,10 +2,26 @@
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-11-12
+
+Sites build with carve-js 0.1.16 and the Carve 0.1.14 rules.
+
+### Breaking
+
+- A page whose first line is a `---` with no closing `---` fails the build: the 0.1.14 engine would read the whole file as frontmatter. Close the block, or write a thematic break as `***` (markup-carve/carve#5016, #107).
+
 ### Fixes
 
 - A captioned `{.diff}` fence gets the diff presentation, and its `.line-numbers`, `start` and `hl` apply, now that they sit on the figure (markup-carve/carve#2370).
 - Caption markers and caption text in Carve fences use the shared palette's caption colors.
+- Lint hints no longer fail the build, and `deprecated-*` findings such as `deprecated-cell-alignment` print as warnings (#105).
+
+### Improvements
+
+- Pages render with `@markup-carve/carve` 0.1.16 (#110).
+- The default Shiki themes use the shared Carve token colors (#101).
+
+**Full Changelog**: https://github.com/markup-carve/carve-press/compare/v0.1.8...v0.1.9
 
 ## [0.1.8] - 2026-10-26
 
