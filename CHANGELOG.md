@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-11-12
+
+A new project made with `npm init -y` builds on the first try.
+
+### Fixes
+
+- `carve-press.config.ts` loads as an ES module whatever the `type` in `package.json` is. With npm 12's `"type": "commonjs"` the first `build` failed with "Cannot use import statement outside a module", and with no `type` field Node printed a `MODULE_TYPELESS_PACKAGE_JSON` warning (#114, #115).
+
+**Full Changelog**: https://github.com/markup-carve/carve-press/compare/v0.1.9...v0.1.10
+
 ## [0.1.9] - 2026-11-12
 
 Sites build with carve-js 0.1.17 and the Carve 0.1.14 rules.
