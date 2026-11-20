@@ -1,5 +1,7 @@
-import type { Attrs, BlockExtensionRenderContext, CarveExtension } from '@markup-carve/carve'
+import type { Attrs, BlockExtensionNode, ExtensionRenderHost } from '@markup-carve/carve'
 import { BuildError } from '../errors.js'
+import { divExtension } from './div-extension.js'
+import type { PressExtension } from './press-extension.js'
 
 export type HydrateStrategy = 'load' | 'idle' | 'visible'
 
@@ -36,14 +38,8 @@ export function normalizeIslands(islands: IslandsConfig | undefined): Record<str
   return out
 }
 
-interface IslandNode {
-  kind?: string
-  attrs?: Attrs
-  children?: unknown[]
-}
-
 function attrValue(attrs: Attrs | undefined, key: string): string | undefined {
-  return attrs?.keyValues?.[key]
+  return attrs?.keyValues?.find(([name]) => name === key)?.[1]
 }
 
 /**
@@ -55,45 +51,40 @@ function attrValue(attrs: Attrs | undefined, key: string): string | undefined {
  * ships no runtime of its own, which is the whole reason the output has no
  * client framework in it.
  */
-export function islandsExtension(islands: Record<string, NormalizedIsland>): CarveExtension {
-  return {
-    name: 'carve-press-islands',
-    blockRenderers: {
-      admonition(node, ctx) {
-        const island = node as IslandNode
-        // A `::: island` block is an admonition whose kind is `island`; every
-        // other kind falls through to the next extension and then to the core.
-        if (island.kind !== 'island') return undefined
-
-        const name = attrValue(island.attrs, 'name')
-        if (name === undefined || name === '') {
-          throw new BuildError('an ::: island block needs a name attribute', [
-            'write {name="counter"} on the line above ::: island',
-          ])
-        }
-        const definition = islands[name]
-        if (definition === undefined) {
-          throw new BuildError(`island "${name}" is not configured`, [
-            `add islands["${name}"] to the config, or remove the block`,
-          ])
-        }
-
-        const props = attrValue(island.attrs, 'props')
-        if (props !== undefined) {
-          try {
-            JSON.parse(props)
-          } catch (error) {
-            const reason = error instanceof Error ? error.message : String(error)
-            throw new BuildError(`island "${name}" has invalid props JSON`, [reason])
-          }
-        }
-
-        const fallback = ctx.renderChildren((island.children ?? []) as never, ctx.level + 1)
-        const propsAttr = props === undefined ? '' : ` data-island-props="${ctx.escapeAttr(props)}"`
-        return `<div class="island" data-island="${ctx.escapeAttr(name)}" data-island-hydrate="${
-          definition.hydrate
-        }"${propsAttr}>${fallback}</div>`
-      },
-    },
+export function islandsExtension(islands: Record<string, NormalizedIsland>): PressExtension {
+  function definitionOf(attrs: Attrs | undefined): { name: string; definition: NormalizedIsland; props?: string } {
+    const name = attrValue(attrs, 'name')
+    if (name === undefined || name === '') {
+      throw new BuildError('an ::: island block needs a name attribute', [
+        'write {name="counter"} on the line above ::: island',
+      ])
+    }
+    const definition = islands[name]
+    if (definition === undefined) {
+      throw new BuildError(`island "${name}" is not configured`, [
+        `add islands["${name}"] to the config, or remove the block`,
+      ])
+    }
+    const props = attrValue(attrs, 'props')
+    if (props !== undefined) {
+      try {
+        JSON.parse(props)
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error)
+        throw new BuildError(`island "${name}" has invalid props JSON`, [reason])
+      }
+    }
+    return { name, definition, ...(props === undefined ? {} : { props }) }
   }
+
+  function render(node: BlockExtensionNode, host: ExtensionRenderHost): string {
+    const { name, definition, props } = definitionOf(node.attrs)
+    const fallback = host.blocks(node.children, host.blockDepth + 1)
+    const propsAttr = props === undefined ? '' : ` data-island-props="${host.escapeAttribute(props)}"`
+    return `<div class="island" data-island="${host.escapeAttribute(name)}" data-island-hydrate="${
+      definition.hydrate
+    }"${propsAttr}>${fallback}</div>`
+  }
+
+  return { name: 'carve-press-islands', ...divExtension('carve-press.island', 'island', render, (claim) => definitionOf(claim.attrs)) }
 }

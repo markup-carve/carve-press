@@ -1,4 +1,4 @@
-import { resolve, type Document } from '@markup-carve/carve'
+import type { DocumentNode } from '@markup-carve/carve'
 
 export interface OutlineEntry {
   level: number
@@ -13,6 +13,7 @@ interface AnyNode {
   attrs?: {
     id?: string
   }
+  generatedId?: string
   children?: AnyNode[]
 }
 
@@ -32,9 +33,7 @@ function textOf(node: AnyNode): string {
  * Walk the AST for headings. A regex over rendered HTML would also match a `#`
  * inside a fenced code block; only the tree knows the difference.
  */
-export function outlineFromAst(ast: Document, levels: [number, number]): OutlineEntry[] {
-  resolve(ast)
-
+export function outlineFromAst(ast: DocumentNode, levels: [number, number]): OutlineEntry[] {
   const [min, max] = levels
   const entries: OutlineEntry[] = []
 
@@ -42,7 +41,7 @@ export function outlineFromAst(ast: Document, levels: [number, number]): Outline
     if (node.type === 'heading' && node.level !== undefined) {
       if (node.level >= min && node.level <= max) {
         const title = textOf(node)
-        const slug = node.attrs?.id
+        const slug = node.attrs?.id ?? node.generatedId
         // A missing resolved id is safer to omit than to link to a wrong anchor.
         if (slug !== undefined) entries.push({ level: node.level, title, slug })
       }

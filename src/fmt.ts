@@ -1,6 +1,6 @@
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { relative, resolve, sep } from 'node:path'
-import { carveToCarve } from '@markup-carve/carve'
+import { format } from '@markup-carve/carve'
 import { loadConfig } from './build.js'
 import { resolveConfig } from './config.js'
 import { BuildError } from './errors.js'
@@ -78,7 +78,7 @@ export async function formatSources(opts: FormatOptions): Promise<FormatResult> 
       continue
     }
     try {
-      formatted = carveToCarve(source, { alignTables: opts.alignTables === true })
+      formatted = format(source, { alignTables: opts.alignTables === true })
     } catch (error) {
       result.errors.push(`${rel}: ${error instanceof Error ? error.message : String(error)}`)
       continue

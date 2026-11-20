@@ -1,6 +1,7 @@
 import { statSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { Profile, type CarveExtension } from '@markup-carve/carve'
+import type { Profile } from '@markup-carve/carve'
+import type { PressExtension } from './render/press-extension.js'
 import type { LanguageRegistration } from 'shiki'
 import { BuildError } from './errors.js'
 import type { BuildEventBus } from './events.js'
@@ -182,7 +183,7 @@ export interface CarvePressConfig {
   theme: ThemeAssetsConfig
   assets: AssetsConfig
   themeConfig: ThemeConfig
-  carve: { extensions: CarveExtension[]; profile?: Profile; preset: CarvePreset }
+  carve: { extensions: PressExtension[]; profile?: Profile; preset: CarvePreset }
   shiki: ShikiConfig
   search: SearchConfig
   blog?: Required<BlogOptions>
@@ -206,7 +207,7 @@ export type UserConfig = Partial<
   theme?: Partial<ThemeAssetsConfig>
   assets?: Partial<AssetsConfig>
   themeConfig?: Partial<Omit<ThemeConfig, 'labels'>> & { labels?: Partial<ThemeLabels> }
-  carve?: { extensions?: CarveExtension[]; profile?: string | Profile; preset?: CarvePreset }
+  carve?: { extensions?: PressExtension[]; profile?: string; preset?: CarvePreset }
   shiki?: Partial<Omit<ShikiConfig, 'themes'>> & { themes?: Partial<ShikiConfig['themes']> }
   search?: false | SearchIndexOptions
   blog?: BlogOptions
@@ -288,26 +289,17 @@ function normalizeBase(base: string): string {
   return trimmed === '' ? '/' : `/${trimmed}/`
 }
 
-function resolveProfile(profile: string | Profile | undefined): Profile | undefined {
+const PROFILES: readonly Profile[] = ['full', 'article', 'comment', 'minimal']
+
+function resolveProfile(profile: string | undefined): Profile | undefined {
   if (profile === undefined) return undefined
-  if (profile instanceof Profile) return profile.onDisallowed(Profile.ACTION_ERROR)
   const name = profile.toLowerCase()
-  const resolved =
-    name === 'full'
-      ? Profile.full()
-      : name === 'article'
-        ? Profile.article()
-        : name === 'comment'
-          ? Profile.comment()
-          : name === 'minimal'
-            ? Profile.minimal()
-            : undefined
-  if (resolved === undefined) {
+  if (!(PROFILES as readonly string[]).includes(name)) {
     throw new BuildError(`config: unsupported carve.profile "${profile}"`, [
       'supported profiles: full, article, comment, minimal',
     ])
   }
-  return resolved.onDisallowed(Profile.ACTION_ERROR)
+  return name as Profile
 }
 
 function normalizeRoute(route: string): string {

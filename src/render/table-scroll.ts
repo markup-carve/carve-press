@@ -1,168 +1,79 @@
-import type { BlockNode, CarveExtension, InlineNode, Table } from '@markup-carve/carve'
+import type { Block, BlockExtensionNode, DocumentNode, ExtensionRenderHost, Node, TableNode } from '@markup-carve/carve'
+import { declareExtension, type PressExtension } from './press-extension.js'
 
-function captionText(nodes: InlineNode[]): string {
-  const parts: string[] = []
+const NAME = 'carve-press.table-scroll'
 
-  function visit(node: InlineNode): void {
-    switch (node.type) {
-      case 'text':
-      case 'escaped_text':
-        parts.push(node.value)
-        return
-      case 'smart_punctuation':
-        parts.push(node.glyph ?? node.value)
-        return
-      case 'code':
-        parts.push(node.value)
-        return
-      case 'image':
-        parts.push(node.alt)
-        return
-      case 'math':
-      case 'literal_inline':
-      case 'raw_inline':
-        parts.push(node.content)
-        return
-      case 'symbol':
-        parts.push(`:${node.name}:`)
-        return
-      case 'autolink':
-        parts.push(node.text ?? node.href)
-        return
-      case 'heading_ref':
-        parts.push(node.target)
-        return
-      case 'caption_number':
-        if (node.n !== undefined) parts.push(String(node.n))
-        return
-      case 'mention':
-        parts.push(`@${node.user}`)
-        return
-      case 'tag':
-        parts.push(`#${node.name}`)
-        return
-      case 'abbreviation':
-        parts.push(node.abbr)
-        return
-      case 'substitution':
-        // The inserted half, which is what the caption reads as. Inline content
-        // since markup-carve/carve#2083, so it recurses like `insert` below
-        // rather than reading a string off the node.
-        for (const child of node.new) visit(child)
-        return
-      case 'critic_comment':
-        parts.push(node.text)
-        return
-      case 'soft_break':
-      case 'hard_break':
-        parts.push(' ')
-        return
-      case 'emphasis':
-      case 'strong':
-      case 'underline':
-      case 'strike':
-      case 'superscript':
-      case 'subscript':
-      case 'highlight':
-      case 'link':
-      case 'span':
-      case 'insert':
-      case 'delete':
-        for (const child of node.children) visit(child)
-        return
-      case 'inline_extension':
-        for (const child of node.content) visit(child)
-        return
-      case 'citation_group':
-        for (const item of node.items) {
-          for (const child of item.prefix ?? []) visit(child)
-          parts.push(`@${item.key}`)
-          for (const child of item.locator ?? []) visit(child)
-          for (const child of item.suffix ?? []) visit(child)
-        }
-        return
-      case 'footnote_ref':
-        if (node.number !== undefined) parts.push(String(node.number))
-        return
-      case 'inline_footnote':
-        for (const child of node.inline) visit(child)
-        return
-      case 'comment':
-        return
-    }
-  }
-
-  for (const node of nodes) visit(node)
-  return parts.join('').replace(/\s+/g, ' ').trim()
-}
-
-function captionId(nodes: InlineNode[]): string | undefined {
+function captionId(nodes: readonly Node[]): string | undefined {
   for (const node of nodes) {
     if (node.attrs?.id !== undefined) return node.attrs.id
-
-    const nested = (() => {
-      switch (node.type) {
-        case 'emphasis':
-        case 'strong':
-        case 'underline':
-        case 'strike':
-        case 'superscript':
-        case 'subscript':
-        case 'highlight':
-        case 'link':
-        case 'span':
-        case 'insert':
-        case 'delete':
-          return node.children
-        case 'inline_extension':
-          return node.content
-        case 'inline_footnote':
-          return node.inline
-        default:
-          return undefined
-      }
-    })()
-
-    if (nested !== undefined) {
-      const id = captionId(nested)
+    const children = (node as { children?: Node[] }).children
+    if (Array.isArray(children)) {
+      const id = captionId(children)
       if (id !== undefined) return id
     }
   }
-
   return undefined
 }
 
-export function tableScrollExtension(): CarveExtension {
-  let renderingInnerTable = false
+// The region is named after what the caption says now: a deletion is left out.
+function captionText(nodes: readonly Node[], out: string[] = []): string[] {
+  for (const node of nodes) {
+    if (node.type === 'delete' || node.type === 'comment') continue
+    const value = (node as { value?: unknown }).value
+    if (typeof value === 'string' && (node.type === 'text' || node.type === 'code' || node.type === 'math')) out.push(value)
+    else if (node.type === 'soft_break' || node.type === 'hard_break') out.push(' ')
+    else if (node.type === 'image') out.push((node as { alt?: string }).alt ?? '')
+    const children = (node as { children?: Node[] }).children
+    if (Array.isArray(children)) captionText(children, out)
+  }
+  return out
+}
 
+function wrapTables(blocks: Block[]): { blocks: Block[]; wrapped: boolean } {
+  let wrapped = false
+  const out = blocks.map((block): Block => {
+    if (block.type === 'table') {
+      wrapped = true
+      const wrapper: BlockExtensionNode = { type: 'block_extension', name: NAME, version: '1', children: [block], fallback: [block] }
+      return wrapper
+    }
+    const children = (block as { children?: unknown }).children
+    if (!Array.isArray(children) || children.length === 0 || typeof (children[0] as Node | undefined)?.type !== 'string') return block
+    const inner = wrapTables(children as Block[])
+    if (!inner.wrapped) return block
+    wrapped = true
+    return { ...block, children: inner.blocks } as Block
+  })
+  return { blocks: out, wrapped }
+}
+
+function render(node: BlockExtensionNode, host: ExtensionRenderHost): string {
+  const table = node.children[0] as TableNode | undefined
+  const attrs = ['class="table-scroll"', 'tabindex="0"']
+  if (table?.caption !== undefined) {
+    attrs.push('role="region"')
+    const id = captionId(table.caption.children)
+    if (id !== undefined) attrs.push(`aria-labelledby="${host.escapeAttribute(id)}"`)
+    else attrs.push(`aria-label="${host.escapeAttribute(captionText(table.caption.children).join('').replace(/\s+/g, ' ').trim())}"`)
+  }
+  const indent = '  '.repeat(host.blockDepth)
+  return `<div ${attrs.join(' ')}>\n${indent}  ${host.blocks(node.children, host.blockDepth + 1)}\n${indent}</div>`
+}
+
+/** Wraps every table in a keyboard-focusable scroll region; a captioned one is named after its caption. */
+export function tableScrollExtension(): PressExtension {
   return {
     name: 'carve-press-table-scroll',
-    blockRenderers: {
-      table(node, ctx) {
-        if (renderingInnerTable) return undefined
-
-        const table = node as Table
-        renderingInnerTable = true
-        try {
-          const renderedTable = ctx.renderChildren([node as BlockNode], ctx.level)
-          const attrs = ['class="table-scroll"', 'tabindex="0"']
-          if (table.caption !== undefined) {
-            attrs.push('role="region"')
-            const id = captionId(table.caption)
-            if (id !== undefined) {
-              attrs.push(`aria-labelledby="${ctx.escapeAttr(id)}"`)
-            } else {
-              attrs.push(`aria-label="${ctx.escapeAttr(captionText(table.caption))}"`)
-            }
-          }
-
-          return `${ctx.indent(ctx.level)}<div ${attrs.join(' ')}>\n${renderedTable}\n${ctx.indent(
-            ctx.level,
-          )}</div>`
-        } finally {
-          renderingInnerTable = false
-        }
+    extensions: [{ name: NAME, version: '1', props: {}, slots: {} }],
+    renderers: { [NAME]: { version: '1', render: (node, host) => render(node as BlockExtensionNode, host) } },
+    transforms: [
+      {
+        name: NAME,
+        transform(doc: DocumentNode): DocumentNode {
+          const result = wrapTables(doc.children as Block[])
+          return result.wrapped ? declareExtension({ ...doc, children: result.blocks }, NAME) : doc
+        },
       },
-    },
+    ],
   }
 }

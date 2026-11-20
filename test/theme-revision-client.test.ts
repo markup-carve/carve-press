@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
-import { carveToHtml } from '@markup-carve/carve'
+import { render } from '@markup-carve/carve'
 import { describe, expect, it } from 'vitest'
 
 const execFileAsync = promisify(execFile)
@@ -132,8 +132,8 @@ async function read(bin: string, themeAttribute: string, extraFlags: string[]): 
   const css = await readFile(resolve(import.meta.dirname, '../theme/default.css'), 'utf8')
   // Engine-rendered, not hand-written: a hand-written <ins> stops matching the
   // moment the engine changes which element a revision span becomes.
-  const rendered = carveToHtml(
-    'plain {+an insertion+} {-a deletion-} =a highlight= and ={+nested+} with {-dropped-}= tail',
+  const rendered = render(
+    'plain {+an insertion+} {-a deletion-} {=a highlight=} and {={+nested+} with {-dropped-}=} tail',
   )
   const userDataDir = await mkdtemp(resolve(tmpdir(), 'cp-chrome-'))
   const fixtureDir = await mkdtemp(resolve(tmpdir(), 'cp-revision-'))

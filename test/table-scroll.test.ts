@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { carveToHtml } from '@markup-carve/carve'
+import { renderWithStack } from '../src/render/press-extension.js'
 import { tableScrollExtension } from '../src/render/table-scroll.js'
 
-const render = (source: string) => carveToHtml(source, { extensions: [tableScrollExtension()] })
+const render = (source: string) => renderWithStack(source, [tableScrollExtension()])
 
 describe('tableScrollExtension', () => {
   it('wraps a table in a keyboard-focusable scroll region', () => {
@@ -32,7 +32,7 @@ describe('tableScrollExtension', () => {
   })
 
   it('delegates table rendering to the core renderer', () => {
-    const html = render('|=> H | B | < |\n| a | b | c |\n')
+    const html = render('|={>} H | B | < |\n| a | b | c |\n')
     // The engine scopes header cells: a header cell in a body row is a row
     // header, and the scope rides ahead of the author's own attributes.
     expect(html).toContain('<th scope="row" style="text-align: right;">H</th>')
@@ -41,10 +41,9 @@ describe('tableScrollExtension', () => {
   })
 
   it('names a region after the inserted half of a substitution', () => {
-    // The halves are inline content since markup-carve/carve#2083, so the
-    // region name comes from walking `new` rather than reading a string. A
+    // 0.2 spells a substitution as a deletion and an insertion (U-069). A
     // reader is told what the table says NOW, not what it used to say.
-    const html = render('| a | b |\n^ Price {~/old/~>/new/~} now\n')
+    const html = render('| a | b |\n^ Price {-/old/-}{+/new/+} now\n')
     expect(html).toContain('role="region" aria-label="Price new now"')
     expect(html).not.toContain('aria-label="Price old now"')
   })

@@ -1,10 +1,15 @@
-import { isAbsolute, relative } from 'node:path'
-import { lintCarve } from '@markup-carve/carve'
+import { readFileSync } from 'node:fs'
+import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { lint, positionOf, type Diagnostic } from '@markup-carve/carve'
 import { fileSystemResolver } from '@markup-carve/carve/node'
 import type { NavItem, SidebarConfigGroup, SidebarItem, ThemeConfig } from './config.js'
 import type { Page } from './content/discover.js'
 import { BuildError } from './errors.js'
 import type { RenderedPage } from './render/page.js'
+
+// 0.1 refused a continuation marker and failed the build; 0.2 reports it as
+// deprecated, but the marker still renders as text, so it stays fatal here.
+const STILL_FATAL = new Set(['deprecated-continuation-marker'])
 
 const RE_HREF = /<a\b[^>]*\bhref="([^"]*)"/g
 
@@ -157,6 +162,25 @@ export function validateNav(theme: ThemeConfig, routes: Set<string>): void {
   }
 }
 
+/** 1-based line and column of a diagnostic, or 1:1 when it carries no range. */
+function locate(text: string | Uint8Array | undefined, diagnostic: Diagnostic): { line: number; column: number } {
+  if (text === undefined || diagnostic.range === undefined) return { line: 1, column: 1 }
+  return positionOf(text, diagnostic.range.startOffset)
+}
+
+function readIncluded(root: string, file: string, cache: Map<string, Uint8Array | undefined>): Uint8Array | undefined {
+  if (!cache.has(file)) {
+    let text: Uint8Array | undefined
+    try {
+      text = readFileSync(resolve(root, file))
+    } catch {
+      text = undefined
+    }
+    cache.set(file, text)
+  }
+  return cache.get(file)
+}
+
 /**
  * Every lint warning names a construct that renders as something other than
  * what it says - a crossref that becomes literal text, an unresolved
@@ -168,25 +192,34 @@ export function validateNav(theme: ThemeConfig, routes: Set<string>): void {
  */
 export function lintFailures(pages: Page[], includeRoot?: string): string[] {
   const bad: string[] = []
+  const included = new Map<string, Uint8Array | undefined>()
   for (const page of pages) {
     const includes =
       includeRoot === undefined
         ? undefined
-        : { resolve: fileSystemResolver(includeRoot), sourcePath: page.srcPath }
-    for (const warning of lintCarve(page.source, { includes })) {
-      // Engines up to 0.1.15 type no severity, so read it loosely.
-      if ((warning as { severity?: string }).severity === 'Hint') continue
+        : {
+            resolver: fileSystemResolver(includeRoot),
+            file: relative(includeRoot, page.srcPath).split(sep).join('/'),
+          }
+    for (const diagnostic of lint(page.source, includes === undefined ? {} : { includes })) {
+      if (diagnostic.severity === 'hint') continue
+      // Without an include root nothing is expanded on purpose, as with the 0.1 engine.
+      if (includes === undefined && diagnostic.code === 'include-no-resolver') continue
       let entry: string
-      if (warning.file !== undefined) {
-        const rel = includeRoot === undefined ? warning.file : relative(includeRoot, warning.file)
-        const file = rel.startsWith('..') || isAbsolute(rel) ? '[outside-root]' : rel
-        entry = `${file}:${warning.line}:${warning.column} ${warning.rule} - ${warning.message} (included from ${page.relPath})`
+      if (diagnostic.file !== undefined) {
+        const rel = diagnostic.file
+        const outside = rel.startsWith('..') || isAbsolute(rel)
+        const file = outside ? '[outside-root]' : rel
+        const text = outside || includeRoot === undefined ? undefined : readIncluded(includeRoot, rel, included)
+        const { line, column } = locate(text, diagnostic)
+        entry = `${file}:${line}:${column} ${diagnostic.code} - ${diagnostic.message} (included from ${page.relPath})`
       } else {
-        // lintCarve lines are body-relative; shift them back to the source file.
-        const line = warning.line + page.bodyStartLine - 1
-        entry = `${page.relPath}:${line}:${warning.column} ${warning.rule} - ${warning.message}`
+        const { line: bodyLine, column } = locate(page.source, diagnostic)
+        // Lint positions are body-relative; shift them back to the source file.
+        const line = bodyLine + page.bodyStartLine - 1
+        entry = `${page.relPath}:${line}:${column} ${diagnostic.code} - ${diagnostic.message}`
       }
-      if (warning.rule.startsWith('deprecated-')) {
+      if (diagnostic.code.startsWith('deprecated-') && !STILL_FATAL.has(diagnostic.code)) {
         console.warn(`carve-press: ${entry}`)
         continue
       }

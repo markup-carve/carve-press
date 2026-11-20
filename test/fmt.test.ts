@@ -9,8 +9,8 @@ import { formatSources } from '../src/fmt.js'
 const execFileAsync = promisify(execFile)
 const cli = resolve(import.meta.dirname, '../dist/cli.js')
 
-const MESSY = '# T\n\n| a | bbbb |\n| cc | d |\n'
-const ALIGNED = '# T\n\n| a  | bbbb |\n| cc | d    |\n'
+const MESSY = '= T\n\n| a | bbbb |\n| cc | d |\n'
+const ALIGNED = '= T\n\n| a  | bbbb |\n| cc | d    |\n'
 
 async function site(): Promise<string> {
   const root = await mkdtemp(resolve(tmpdir(), 'cp-fmt-'))
@@ -31,7 +31,7 @@ describe('formatSources', () => {
     expect(result.files).toEqual(['docs/index.crv', 'docs/snippets/part.crv', 'docs/tables.crv'])
     expect(result.changed).toEqual(['docs/index.crv'])
     expect(await readFile(resolve(root, 'docs/index.crv'), 'utf8')).toBe(
-      '---yaml\ntitle: Home\n---\n\n# Home\n',
+      '---\ntitle: Home\n---\n\n= Home\n',
     )
     expect(await readFile(resolve(root, 'docs/.hidden/skip.crv'), 'utf8')).toBe('---\ntitle: X\n---\n')
   })

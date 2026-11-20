@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { carveToHtml } from '@markup-carve/carve'
+import { render } from '@markup-carve/carve'
 import { splitFrontmatter } from '../src/content/frontmatter.js'
 import { SourceError } from '../src/errors.js'
 
@@ -40,7 +40,7 @@ describe('splitFrontmatter', () => {
   })
 
   it('agrees with the engine that an unclosed opener is all metadata', () => {
-    expect(carveToHtml('---\ntitle: X\n\ntext\n')).toBe('')
+    expect(render('---\ntitle: X\n\ntext\n')).toBe('')
   })
 
   it('leaves a later thematic break alone', () => {

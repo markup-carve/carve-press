@@ -1,23 +1,21 @@
-import { dirname, isAbsolute, relative, resolve as resolvePath } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { isAbsolute, relative, resolve as resolvePath } from 'node:path'
 import {
-  ProfileViolationError,
-  applyProfile,
-  formatProfileViolation,
-  parse,
-  renderHtml,
-  resolve,
-  type BeforeRenderContext,
-  type CarveExtension,
-  type Document,
+  CarveInputError,
+  includeDependencies,
+  parseWithDiagnostics,
+  positionOf,
+  renderWithDocumentTransforms,
+  type Diagnostic,
+  type DocumentNode,
   type Profile,
-  type RenderOptions,
-  expandIncludes as expandStandardIncludes,
 } from '@markup-carve/carve'
 import { fileSystemResolver } from '@markup-carve/carve/node'
 import type { Page } from '../content/discover.js'
 import { outlineFromAst, type OutlineEntry } from '../outline.js'
 import { SourceError } from '../errors.js'
 import { trackImageReads } from './images.js'
+import { mergeStack, takePendingError, type PressExtension } from './press-extension.js'
 
 interface IncludeFile {
   path: string
@@ -48,12 +46,11 @@ export interface RenderedPage {
 }
 
 export interface RenderContext {
-  extensions: CarveExtension[]
+  extensions: PressExtension[]
   outlineLevels: [number, number] | false
   includeRoots: string[]
   base: string
   profile?: Profile
-  profileBaseHost?: string
 }
 
 interface AnyNode {
@@ -62,9 +59,12 @@ interface AnyNode {
   value?: string
   href?: string
   src?: string
-  attrs?: { id?: string }
+  generatedId?: string
+  attrs?: { id?: string; keyValues?: [string, string][] }
   children?: AnyNode[]
 }
+
+type Document = DocumentNode
 
 /**
  * Collect prose text for the search index and for page titles.
@@ -132,7 +132,7 @@ function searchSections(ast: Document, outline: OutlineEntry[]): SearchSection[]
   for (let i = 0; i < children.length; i += 1) {
     const node = children[i]
     if (node === undefined || node.type !== 'heading' || node.level === undefined) continue
-    const slug = node.attrs?.id
+    const slug = node.attrs?.id ?? node.generatedId
     if (slug === undefined || !outlineKeys.has(`${node.level}\0${slug}`)) continue
 
     const body: AnyNode[] = []
@@ -157,59 +157,45 @@ function searchSections(ast: Document, outline: OutlineEntry[]): SearchSection[]
   return sections
 }
 
-function profileError(page: Page, error: ProfileViolationError): SourceError {
-  const violation = error.violations[0]
-  const message =
-    violation === undefined
-      ? 'profile violation'
-      : `profile: ${formatProfileViolation(violation)}`
-  return new SourceError(page.relPath, 1, 1, message)
+/** A profile turns a construct it does not allow into this loss; a site build treats it as an error. */
+const PROFILE_LOSS = 'profile-construct-degraded'
+
+// C2-H-163 refuses a source over `max_length` before parsing, but only when it
+// renders source; a page renders its parsed tree, so the limit is applied here.
+const PROFILE_MAX_BYTES: Partial<Record<Profile, number>> = { comment: 100_000, minimal: 10_000 }
+
+function enforceProfileMaxLength(page: Page, profile: Profile | undefined): void {
+  const limit = profile === undefined ? undefined : PROFILE_MAX_BYTES[profile]
+  if (limit === undefined || Buffer.byteLength(page.source, 'utf8') <= limit) return
+  throw new SourceError(page.relPath, 1, 1, `profile: the input is longer than the ${limit} bytes the profile ${profile} accepts`)
 }
 
-/**
- * `carveToHtml` guards the source length before it parses, and that guard is
- * internal to the engine. Rendering step by step would otherwise drop a
- * profile's max-length limit without a word.
- */
-function enforceProfileMaxLength(source: string, profile: Profile | undefined): void {
-  if (profile === undefined) return
-  const maxLength = profile.getMaxLength()
-  const length = Buffer.byteLength(source, 'utf8')
-  if (maxLength > 0 && length > maxLength) {
-    throw new RangeError(
-      `Input exceeds the profile's maximum length of ${maxLength} bytes (got ${length} bytes).`,
-    )
-  }
+function isIncludeFailure(diagnostic: Diagnostic): boolean {
+  return diagnostic.code.startsWith('include-') && diagnostic.severity !== 'hint'
 }
 
-function applyTransforms(
-  doc: Document,
-  extensions: CarveExtension[],
-  options: Readonly<RenderOptions>,
-): Document {
-  let out = doc
-  for (const extension of extensions) {
-    if (extension.afterParse !== undefined) out = extension.afterParse(out)
+function rethrowPending(): void {
+  const pending = takePendingError()
+  if (pending !== undefined) throw pending
+}
+
+function includeError(page: Page, diagnostic: Diagnostic, root: string | undefined): SourceError {
+  const inPage = diagnostic.file === undefined
+  let text = page.source
+  let file = page.relPath
+  if (!inPage && root !== undefined) {
+    const full = resolvePath(root, diagnostic.file!)
+    const withinRoot = relative(root, full)
+    file = withinRoot.startsWith('..') || isAbsolute(withinRoot) ? '[outside-root]' : withinRoot
+    try {
+      text = readFileSync(full, 'utf8')
+    } catch {
+      text = ''
+    }
   }
-  // The render below is unrolled, so the read-only context `carveToHtml` hands
-  // `beforeRender` has to be built here (spec §2.2). A hook runs before any
-  // render starts and so has nothing to inherit from: without this it renders
-  // its own output with DEFAULTS, and a `symbols` map or `allowRawHtml: false`
-  // reaches the heading but not the node a hook builds from the same heading.
-  //
-  // Frozen shallow copy, not the object handed to `renderHtml` a few lines
-  // later, so a hook cannot clear a setting a later guard reads. Only HTML is
-  // ever the target here, and this generator exposes no static mode.
-  const hookContext: BeforeRenderContext = Object.freeze({
-    options: Object.freeze({ ...options }),
-    mode: 'interactive',
-    isStatic: false,
-    targetIsHtml: true,
-  })
-  for (const extension of extensions) {
-    if (extension.beforeRender !== undefined) out = extension.beforeRender(out, hookContext)
-  }
-  return out
+  const at = diagnostic.range === undefined || text === '' ? { line: 1, column: 1 } : positionOf(text, diagnostic.range.startOffset)
+  const line = inPage ? at.line + page.bodyStartLine - 1 : at.line
+  return new SourceError(file, line, at.column, `${diagnostic.code} - ${diagnostic.message}`)
 }
 
 function shouldRewriteUrl(value: string, base: string): boolean {
@@ -269,16 +255,15 @@ function childNodes(node: AnyNode): AnyNode[] {
 }
 
 function rewriteContentUrls(node: AnyNode, base: string): void {
-  if (node.type === 'link' && node.href !== undefined) node.href = rewriteUrl(node.href, base)
+  if ((node.type === 'link' || node.type === 'link_reference_definition') && node.href !== undefined) {
+    node.href = rewriteUrl(node.href, base)
+  }
   if (node.type === 'image' && node.src !== undefined) node.src = rewriteUrl(node.src, base)
 
-  const keyValues = (node.attrs as { keyValues?: Record<string, string> } | undefined)?.keyValues
-  if (keyValues !== undefined) {
-    for (const key of ['href', 'src']) {
-      const value = keyValues[key]
-      if (value !== undefined) keyValues[key] = rewriteUrl(value, base)
-    }
-    if (keyValues.srcset !== undefined) keyValues.srcset = rewriteSrcset(keyValues.srcset, base)
+  for (const pair of node.attrs?.keyValues ?? []) {
+    const key = pair[0].toLowerCase()
+    if (key === 'href' || key === 'src') pair[1] = rewriteUrl(pair[1], base)
+    else if (key === 'srcset') pair[1] = rewriteSrcset(pair[1], base)
   }
 
   for (const child of childNodes(node)) rewriteContentUrls(child, base)
@@ -302,58 +287,45 @@ function renderUntracked(page: Page, ctx: RenderContext): RenderedPage {
     )
   }
 
-  // This is `carveToHtml` unrolled: parse, resolve, transforms, profile,
-  // render. The steps have to be separate because the base rewrite operates on
-  // the AST, and because outline and search read the same resolved document
-  // instead of parsing the page a second time.
-  let html: string
-  let ast: Document
+  // Parse once: the base rewrite operates on the tree, and outline and search
+  // read the same resolved document instead of parsing the page a second time.
+  enforceProfileMaxLength(page, ctx.profile)
+  const stack = mergeStack(ctx.extensions)
+  stack.beginPage()
+  const root = ctx.includeRoots.at(-1)
   const includeFiles: IncludeFile[] = []
+  const parsed = parseWithDiagnostics(page.source, {
+    ...(stack.options.extensions === undefined ? {} : { extensions: stack.options.extensions }),
+    ...(root === undefined
+      ? {}
+      : { includes: { resolver: fileSystemResolver(root), file: relative(root, page.srcPath).split('\\').join('/') } }),
+  })
+  rethrowPending()
+  const failure = parsed.diagnostics.find(isIncludeFailure)
+  if (failure !== undefined) throw includeError(page, failure, root)
+  const ast = parsed.document
+  for (const dependency of includeDependencies(ast)) {
+    if (dependency.file === undefined || root === undefined) continue
+    const path = resolvePath(root, dependency.file)
+    if (!includeFiles.some((file) => file.path === path)) includeFiles.push({ path })
+  }
+  stack.prepare(ast)
+  rewriteContentUrls(ast as unknown as AnyNode, ctx.base)
+  let html: string
   try {
-    enforceProfileMaxLength(page.source, ctx.profile)
-    const renderOptions: RenderOptions = { extensions: ctx.extensions }
-    const parsed = parse(page.source, { extensions: ctx.extensions })
-    const root = ctx.includeRoots.at(-1)
-    const included = expandStandardIncludes(parsed, page.source, {
-      resolve: root === undefined ? undefined : fileSystemResolver(root),
-      sourcePath: page.srcPath,
-      extensions: ctx.extensions,
+    const result = renderWithDocumentTransforms(ast, stack.transforms, {
+      ...stack.options,
+      ...(ctx.profile === undefined ? {} : { profile: ctx.profile }),
     })
-    for (const warning of included.warnings) {
-      let file = warning.file ?? page.relPath
-      const isPage = warning.file === undefined
-        || (isAbsolute(warning.file) && resolvePath(warning.file) === resolvePath(page.srcPath))
-      if (root !== undefined && isAbsolute(file)) {
-        const withinRoot = relative(root, file)
-        file = withinRoot.startsWith('..') || isAbsolute(withinRoot) ? '[outside-root]' : withinRoot
-      }
-      const line = isPage ? warning.line + page.bodyStartLine - 1 : warning.line
-      throw new SourceError(
-        file,
-        line,
-        warning.column,
-        `${warning.rule} - ${warning.message}`,
-      )
+    rethrowPending()
+    const loss = ctx.profile === undefined ? undefined : result.diagnostics.find((d) => d.code === PROFILE_LOSS)
+    if (loss !== undefined) {
+      const line = loss.range === undefined ? 1 : positionOf(page.source, loss.range.startOffset).line
+      throw new SourceError(page.relPath, line + page.bodyStartLine - 1, 1, `profile: ${loss.message}`)
     }
-    for (const dependency of included.dependencies) {
-      const path = isAbsolute(dependency.id)
-        ? dependency.id
-        : resolvePath(dirname(page.srcPath), dependency.id)
-      if (!includeFiles.some((file) => file.path === path)) includeFiles.push({ path })
-    }
-    ast = applyTransforms(
-      resolve(included.doc),
-      ctx.extensions,
-      renderOptions,
-    )
-    if (ctx.profile !== undefined) applyProfile(ast, ctx.profile, ctx.profileBaseHost)
-    rewriteContentUrls(ast as unknown as AnyNode, ctx.base)
-    html = renderHtml(ast, renderOptions)
+    html = result.html
   } catch (error) {
-    if (error instanceof ProfileViolationError) throw profileError(page, error)
-    if (ctx.profile !== undefined && error instanceof RangeError) {
-      throw new SourceError(page.relPath, 1, 1, `profile: ${error.message}`)
-    }
+    if (error instanceof CarveInputError) throw new SourceError(page.relPath, 1, 1, `profile: ${error.message}`)
     throw error
   }
   const outline = ctx.outlineLevels === false ? [] : outlineFromAst(ast, ctx.outlineLevels)

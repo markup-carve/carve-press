@@ -1,19 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Page } from '../src/content/discover.js'
 
-// Published 0.1.15 emits neither kind of finding, so the engine is stubbed.
+// The engine is stubbed so each severity is exercised in isolation.
 vi.mock('@markup-carve/carve', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@markup-carve/carve')>()
+  const at = (startOffset: number) => ({ startOffset, endOffset: startOffset + 1 })
   return {
     ...actual,
-    lintCarve: (source: string) => {
+    lint: (source: string) => {
       if (source.includes('hint')) {
-        return [{ line: 3, column: 1, rule: 'thematic-break-spelling', severity: 'Hint', message: 'Write ***.' }]
+        return [{ code: 'thematic-break-spelling', severity: 'hint', channel: 'lint', message: 'Write ***.', range: at(0) }]
       }
       if (source.includes('deprecated')) {
-        return [{ line: 1, column: 3, rule: 'deprecated-cell-alignment', message: 'Write ={<}.' }]
+        return [{ code: 'deprecated-cell-alignment', severity: 'warning', channel: 'lint', message: 'Write ={<}.', range: at(2) }]
       }
-      return [{ line: 2, column: 1, rule: 'broken-crossref', severity: 'warning', message: 'No target.' }]
+      return [{ code: 'broken-crossref', severity: 'warning', channel: 'lint', message: 'No target.', range: at(6) }]
     },
   }
 })
@@ -37,6 +38,6 @@ describe('validateCrossrefs lint severity', () => {
   })
 
   it('still fails on a warning that carries a severity', () => {
-    expect(() => validateCrossrefs([src('other')])).toThrow(/a\.crv:2:1 broken-crossref/)
+    expect(() => validateCrossrefs([src('other\nx')])).toThrow(/a\.crv:2:1 broken-crossref/)
   })
 })
