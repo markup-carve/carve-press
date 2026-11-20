@@ -102,6 +102,10 @@ export const PLAYGROUND_EXTENSION_EXCLUSIONS = {
   fencedRender: 'generic factory requiring host renderer choices',
   fencedRenderName: 'naming utility, not an extension factory',
   glossaryExtension: BUNDLE_PART,
+  // A preview shows the source as written: these change every document, and
+  // a page of this site asks for a table of contents with `::: toc`.
+  headingLevelShift: 'site policy extension; it moves every heading of the source down',
+  headingNumbers: 'site policy extension; it numbers headings the source does not number',
   glossaryRenderer: BUNDLE_PART,
   imgFenceExtensions: BUNDLE_PART,
   imgFenceRenderers: BUNDLE_PART,
@@ -124,6 +128,7 @@ export const PLAYGROUND_EXTENSION_EXCLUSIONS = {
   spoilerExtension: BUNDLE_PART,
   spoilerExtensions: BUNDLE_PART,
   standardTabsRenderer: 'renderer factory; tabs use the core tabsRenderer',
+  tableOfContents: 'site policy extension; it inserts a table of contents the source does not ask for',
   tabNormalize: 'site policy extension; the site this playground mirrors keeps tabs in code',
   termExtension: BUNDLE_PART,
   termRenderer: BUNDLE_PART,

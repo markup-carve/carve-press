@@ -37,6 +37,7 @@ export default defineConfig({
             { text: 'Blog', link: '/guide/blog' },
             { text: 'Deploying', link: '/guide/deploying' },
             { text: 'Extensions', link: '/guide/extensions' },
+            { text: 'Upgrading to Carve 0.2', link: '/guide/upgrading' },
           ],
         },
         {
