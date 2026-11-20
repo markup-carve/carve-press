@@ -1,0 +1,27 @@
+---
+title: Upgrading to Carve 0.2
+description: Config changes for a site that moves from Carve 0.1 to Carve 0.2.
+order: 12
+---
+
+= Upgrading to Carve 0.2
+
+== Profiles
+
+`carve.profile` takes one of the four profile names: `full`, `article`, `comment` or `minimal`. Custom profiles are gone: a `Profile` object, a custom maximum length and allow lists have no 0.2 counterpart, and a config that passes one fails the build.
+
+== Link policy and base host
+
+In 0.1 a custom profile could carry a link policy, and the build passed the host of `hostname` to it as the base host. In 0.2 the link policy is the `carve.linkPolicy` config key, which takes the options of the `linkPolicy()` extension:
+
+```ts
+export default {
+  title: 'Docs',
+  hostname: 'https://example.com',
+  carve: { linkPolicy: { allowExternal: false } },
+}
+```
+
+The base host is still the host of `hostname`, without its port. With `allowExternal: false`, a link to `https://example.com/...` stays and a link to any other host is written as its text. Set `baseHost` in `carve.linkPolicy` to compare with another host.
+
+The four named profiles never limited link hosts, so a site that only sets `carve.profile` renders its links as before.

@@ -12,7 +12,7 @@ CarvePress has two extension layers: Carve engine extensions that render markup,
 
 |= Preset |= Included Carve engine factories |
 | `minimal` | heading permalinks plus CarvePress code, compare, playground, images, and table scrolling |
-| `docs` | `tabs`, `details`, `mathBlock`, `externalLinks`, `tableOfContents`, `tocPlacement`, `wikilinks` |
+| `docs` | `tabs`, `details`, `mathBlock`, `externalLinks`, `tocPlacement`, `wikilinks` |
 | `full` | all `docs` factories plus `headingNumbers`, `glossary`, `index`, `citations`, `codeCallouts`, `colorSwatch`, `spoiler`, `listTable`, `imgFence`, `defaultAttributes` |
 
 CarvePress always wraps the preset with Shiki, table scrolling, compare, playground, code groups, heading permalinks, and image defaults.
@@ -26,10 +26,24 @@ A glossary term keeps its case in its id, so `:: HTTP` renders `id="gloss-HTTP"`
 |= Event |= Payload |= Use |
 | `buildStarted` | `{ config }` | Validate settings or capture normalized config. |
 | `contentDiscovered` | `{ pages }` | Add virtual pages or filter pages. |
-| `rendererCreated` | `{ extensions }` | Add Carve render extensions. |
+| `rendererCreated` | `{ extensions }` | Add Carve render extensions (see [Render Extensions][]). |
 | `pageRendered` | `{ rendered, html }` | Post-process rendered HTML. |
 | `pageWritten` | `{ rendered, outPath }` | Track emitted files. |
 | `buildCompleted` | `{ rendered, outDir }` | Write derived artifacts. |
+
+## Render Extensions
+
+A render extension is a `PressExtension`: the extension bundle of Carve 0.2 (`extensions`, `renderers`, `transforms`), as each factory of `@markup-carve/carve/extensions` returns it, plus an optional `codeBlockRenderer`. Add one through `carve.extensions` or in a `rendererCreated` handler. A later entry replaces an earlier renderer of the same name, and an error a renderer throws fails the build.
+
+```ts "carve-press.config.ts"
+import { defineConfig } from '@markup-carve/carve-press'
+import { glossary } from '@markup-carve/carve/extensions'
+
+export default defineConfig({
+  title: 'Docs',
+  carve: { extensions: [glossary()] },
+})
+```
 
 ## Worked Example
 

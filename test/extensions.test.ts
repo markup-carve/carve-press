@@ -57,3 +57,43 @@ describe('buildExtensionStack', () => {
     expect(stack.at(-1)?.name).toBe('mine')
   })
 })
+
+describe('render stack output', () => {
+  it('renders ::: toc with its own renderer under the docs preset', async () => {
+    const { renderPage } = await import('../src/render/page.js')
+    const stack = await buildExtensionStack(resolveConfig({ title: 'x' }), shiki)
+    const page = { route: '/p', srcPath: '/tmp/p.crv', relPath: 'p.crv', frontmatter: { title: 'T' }, source: '# T\n\n## A\n\n::: toc\n:::\n', bodyStartLine: 1 }
+    const rendered = renderPage(page as never, { extensions: stack, outlineLevels: [2, 3], includeRoots: [], base: '/' })
+    expect(rendered.html).toContain('<nav class="toc" aria-label="Table of contents">')
+  })
+
+  it('reads the outline from what the page shows, without the permalink anchor', async () => {
+    const { renderPage } = await import('../src/render/page.js')
+    const stack = await buildExtensionStack(resolveConfig({ title: 'x', carve: { preset: 'full' } }), shiki)
+    const page = { route: '/p', srcPath: '/tmp/p.crv', relPath: 'p.crv', frontmatter: { title: 'T' }, source: '# T\n\n## Section\n', bodyStartLine: 1 }
+    const rendered = renderPage(page as never, { extensions: stack, outlineLevels: [2, 3], includeRoots: [], base: '/' })
+    expect(rendered.outline).toEqual([{ level: 2, title: '1 Section', slug: 'Section' }])
+    expect(rendered.searchDoc.text).not.toContain('¶')
+  })
+
+  it('applies carve.linkPolicy with the host of hostname as its base host', async () => {
+    const { renderPage } = await import('../src/render/page.js')
+    const config = resolveConfig({
+      title: 'x',
+      hostname: 'https://Example.com:8443/docs/',
+      carve: { linkPolicy: { allowExternal: false, rel: ['nofollow'] } },
+    })
+    const stack = await buildExtensionStack(config, shiki)
+    const source = '[a](https://example.com/x) [b](https://other.org/y) [c](/z)\n'
+    const page = { route: '/p', srcPath: '/tmp/p.crv', relPath: 'p.crv', frontmatter: { title: 'T' }, source, bodyStartLine: 1 }
+    const rendered = renderPage(page as never, { extensions: stack, outlineLevels: [2, 3], includeRoots: [], base: '/' })
+    expect(rendered.html).toContain(
+      '<p><a href="https://example.com/x" rel="noopener noreferrer nofollow" target="_blank">a</a> b <a href="/z" rel="nofollow">c</a></p>',
+    )
+  })
+
+  it('adds no link policy without carve.linkPolicy', async () => {
+    const stack = await buildExtensionStack(resolveConfig({ title: 'x', hostname: 'https://example.com' }), shiki)
+    expect(stack.map((e) => e.name)).not.toContain('link-policy')
+  })
+})

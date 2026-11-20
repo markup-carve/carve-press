@@ -1,4 +1,14 @@
-const engine = import('./carve/index.js').catch((error) => ({ __carveImportError: error }))
+// The standard extensions ship in their own module. A site whose engine copy
+// lacks it still gets a working core playground, only without extensions.
+const engine = Promise.all([
+  import('./carve/index.js'),
+  import('./carve/extensions.js').catch((error) => {
+    console.warn(`Carve playground extensions unavailable: ${errorMessage(error)}`)
+    return {}
+  }),
+])
+  .then(([core, extensions]) => ({ core, extensions }))
+  .catch((error) => ({ __carveImportError: error }))
 let nextId = 0
 let mermaidSeq = 0
 let chartSeq = 0
@@ -8,16 +18,10 @@ function themeLabel(key, fallback) {
   return window.__carvePressLabels?.[key] ?? fallback
 }
 
-const EXTENSION_HOOKS = new Set([
-  'afterParse',
-  'beforeRender',
-  'matchInline',
-  'renderers',
-  'inlineRenderers',
-  'blockRenderers',
-  'staticInlineRenderers',
-  'staticBlockRenderers',
-])
+const CORE_ENTRY = 'core engine entry point, not an extension factory'
+const CORE_CONSTANT = 'constant, not an extension factory'
+const ERROR_CLASS = 'error class, not an extension factory'
+const BUNDLE_PART = 'part of a bundle the playground assembles, not a factory'
 
 // These factories produce placeholders for tools/libraries the playground does
 // not load. Enabling them would turn readable source into inert hydration shells.
@@ -32,151 +36,124 @@ export const PLAYGROUND_EXTENSION_EXCLUSIONS = {
   vegaLite: 'requires Vega-Lite/Vega renderer',
   wavedrom: 'requires WaveDrom renderer',
 
-  AstJsonDepthError: 'error class, not an extension factory',
-  AstJsonNodeTypeError: 'error class, not an extension factory',
-  AstJsonPartitionError: 'error class, not an extension factory',
-  AstJsonRootError: 'error class, not an extension factory',
-  AstJsonRootFieldError: 'error class, not an extension factory',
-  AstJsonSchemaError: 'error class, not an extension factory',
-  AstJsonUnknownFieldError: 'error class, not an extension factory',
-  AstJsonUnknownNodeTypeError: 'error class, not an extension factory',
-  AstPatchError: 'error class, not an extension factory',
-  BBCODE_MAX_INPUT_LENGTH: 'constant, not an extension factory',
-  BbcodeSentinelSpaceExhaustedError: 'error class, not an extension factory',
-  BbcodeInputTooLargeError: 'error class, not an extension factory',
-  CANONICAL_ADMONITION_KINDS: 'constant, not an extension factory',
-  CANONICAL_BLOCK_TYPES: 'constant, not an extension factory',
-  CANONICAL_INLINE_TYPES: 'constant, not an extension factory',
-  EditorChangeError: 'error class, not an extension factory',
-  HtmlImportLimitError: 'error class, not an extension factory',
-  KNOWN_LINT_PLATFORMS: 'constant, not an extension factory',
-  LIB_VERSION: 'constant, not an extension factory',
-  LinkPolicy: 'class, not an extension factory',
-  MAX_AST_JSON_DEPTH: 'constant, not an extension factory',
-  MAX_RENDER_DEPTH: 'constant, not an extension factory',
-  Profile: 'class, not an extension factory',
-  ProfileViolationError: 'error class, not an extension factory',
-  RenderDepthError: 'error class, not an extension factory',
-  RenderLossError: 'error class, not an extension factory',
-  SMART_PUNCTUATION_GLYPHS: 'constant, not an extension factory',
-  SourceUnspellableError: 'error class, not an extension factory',
-  SMART_QUOTE_LOCALES: 'constant, not an extension factory',
-  SPEC_VERSION: 'constant, not an extension factory',
-  applyAstPatch: 'AST utility, not an extension factory',
-  applyMigrationFixes: 'migration utility, not an extension factory',
-  applyProfile: 'profile utility, not an extension factory',
-  applyReversibleAstPatch: 'AST utility, not an extension factory',
-  applySourcePatch: 'source-patch utility, not an extension factory',
-  bbcodeToCarve: 'migration utility, not an extension factory',
-  buildMarker: 'stamp utility, not an extension factory',
-  canonicalType: 'profile utility, not an extension factory',
-  checkPortability: 'djot-comparison utility needing a djot engine, not an extension factory',
-  carveToAnsi: 'renderer entry point, not an extension factory',
-  carveToAnsiWithReport: 'renderer entry point, not an extension factory',
-  carveToAstJson: 'renderer entry point, not an extension factory',
-  carveToCarve: 'renderer entry point, not an extension factory',
-  carveToCarvePatch: 'source-patch utility, not an extension factory',
-  carveToCarveWithReport: 'renderer entry point, not an extension factory',
-  carveToHtml: 'renderer entry point, not an extension factory',
-  carveToHtmlWithReport: 'renderer entry point, not an extension factory',
-  carveToMarkdown: 'renderer entry point, not an extension factory',
-  carveToMarkdownWithReport: 'renderer entry point, not an extension factory',
-  carveToPlainText: 'renderer entry point, not an extension factory',
-  carveToPlainTextWithReport: 'renderer entry point, not an extension factory',
-  compareSpecVersions: 'version utility, not an extension factory',
-  createAstPatch: 'AST utility, not an extension factory',
-  createEditorSession: 'editor-session utility, not an extension factory',
-  createReversibleAstPatch: 'AST utility, not an extension factory',
-  createSourcePatch: 'source-patch utility, not an extension factory',
-  decisionTrace: 'parser diagnostic, not an extension factory',
-  decisionTraceJsonLines: 'parser diagnostic, not an extension factory',
+  // `@markup-carve/carve`
+  AST_VERSION: CORE_CONSTANT,
+  CarveInputError: ERROR_CLASS,
+  CarveLayoutError: ERROR_CLASS,
+  CarveOptionError: ERROR_CLASS,
+  CarvePatchError: ERROR_CLASS,
+  CarveRenderError: ERROR_CLASS,
+  CarveTreeError: ERROR_CLASS,
+  CarveWriteError: ERROR_CLASS,
+  DEFAULT_DENIED_SCHEMES: CORE_CONSTANT,
+  ImportInputError: ERROR_CLASS,
+  LAYOUT_VERSION: CORE_CONSTANT,
+  MAX_TREE_DEPTH: CORE_CONSTANT,
+  NODE_TYPES: CORE_CONSTANT,
+  RESERVED_WRITER_TARGETS: CORE_CONSTANT,
+  SMART_PUNCTUATION: CORE_CONSTANT,
+  SPEC_VERSION: CORE_CONSTANT,
+  VERSION: CORE_CONSTANT,
+  applyPatch: CORE_ENTRY,
+  createWriterRegistry: CORE_ENTRY,
+  decodeTree: CORE_ENTRY,
+  diffTree: CORE_ENTRY,
+  encodeEnvelope: CORE_ENTRY,
+  encodeTree: CORE_ENTRY,
+  fix: CORE_ENTRY,
+  fixEdits: CORE_ENTRY,
+  fixableRules: CORE_ENTRY,
+  flatten: CORE_ENTRY,
+  format: CORE_ENTRY,
+  formatWithDiagnostics: CORE_ENTRY,
+  headingId: CORE_ENTRY,
+  importDocument: CORE_ENTRY,
+  includeDependencies: CORE_ENTRY,
+  includeRegion: CORE_ENTRY,
+  isUrlAllowed: CORE_ENTRY,
+  lint: CORE_ENTRY,
+  migrateTree: CORE_ENTRY,
+  parse: CORE_ENTRY,
+  parseWithDiagnostics: CORE_ENTRY,
+  parseWithLayout: CORE_ENTRY,
+  positionOf: CORE_ENTRY,
+  render: CORE_ENTRY,
+  renderWithDiagnostics: CORE_ENTRY,
+  renderWithDocumentTransforms: CORE_ENTRY,
+  sourceFingerprint: CORE_ENTRY,
+  stringOffsetOfByte: CORE_ENTRY,
+  tabsExtensions: BUNDLE_PART,
+  tabsRenderer: BUNDLE_PART,
+  treeFingerprint: CORE_ENTRY,
+  treesEqual: CORE_ENTRY,
+  urlScheme: CORE_ENTRY,
+  utf8Length: CORE_ENTRY,
+  validateLayout: CORE_ENTRY,
+  validateTree: CORE_ENTRY,
+  write: CORE_ENTRY,
+  writeDocument: CORE_ENTRY,
+  writeWithDiagnostics: CORE_ENTRY,
+
+  // `@markup-carve/carve/extensions`
+  SMART_QUOTE_LOCALES: CORE_CONSTANT,
+  citeExtension: BUNDLE_PART,
   defaultAttributes: 'site policy extension; the playground has no project defaults to apply',
-  diffAst: 'AST utility, not an extension factory',
-  djotMigrationWarnings: 'migration utility, not an extension factory',
-  djotToCarve: 'migration utility, not an extension factory',
+  detailsExtension: BUNDLE_PART,
   fencedRender: 'generic factory requiring host renderer choices',
-  formatChanges: 'formatter utility, not an extension factory',
-  formatLintWarnings: 'formatter utility, not an extension factory',
-  formatMigrationWarnings: 'formatter utility, not an extension factory',
-  formatProfileViolation: 'formatter utility, not an extension factory',
-  fromAstJson: 'AST utility, not an extension factory',
-  htmlToAst: 'HTML-import utility, not an extension factory',
-  htmlToCarve: 'migration utility, not an extension factory',
-  inspectColonFences: 'source-inspection utility, not an extension factory',
+  fencedRenderName: 'naming utility, not an extension factory',
+  glossaryExtension: BUNDLE_PART,
+  // A preview shows the source as written: these change every document, and
+  // a page of this site asks for a table of contents with `::: toc`.
+  headingLevelShift: 'site policy extension; it moves every heading of the source down',
+  headingNumbers: 'site policy extension; it numbers headings the source does not number',
+  glossaryRenderer: BUNDLE_PART,
+  imgFenceExtensions: BUNDLE_PART,
+  imgFenceRenderers: BUNDLE_PART,
+  indexExtension: BUNDLE_PART,
+  indexRenderer: BUNDLE_PART,
+  indexTermExtension: BUNDLE_PART,
+  indexTermRenderer: BUNDLE_PART,
+  inlineFootnotesToParentheses: 'site policy extension; the site this playground mirrors keeps inline footnotes',
   isSmartQuoteLocaleSupported: 'smart-quote utility, not an extension factory',
-  lintAccessibility: 'lint utility, not an extension factory',
-  lintCarve: 'lint utility, not an extension factory',
-  markdownToCarve: 'migration utility, not an extension factory',
-  mergeAst: 'AST utility, not an extension factory',
-  migrateDjot: 'migration utility, not an extension factory',
-  migrateHtml: 'migration utility, not an extension factory',
-  migrateMarkdown: 'migration utility, not an extension factory',
-  needsReview: 'stamp utility, not an extension factory',
-  normalizeHtml: 'HTML-comparison utility, not an extension factory',
-  parse: 'parser entry point, not an extension factory',
-  parseWithSourceLayout: 'parser entry point, not an extension factory',
-  readStamp: 'stamp utility, not an extension factory',
-  renderAnsi: 'renderer utility, not an extension factory',
-  renderAnsiWithReport: 'renderer utility, not an extension factory',
-  renderCarve: 'renderer utility, not an extension factory',
-  renderCarveWithReport: 'renderer utility, not an extension factory',
-  renderHtml: 'renderer utility, not an extension factory',
-  renderHtmlWithReport: 'renderer utility, not an extension factory',
-  renderMarkdown: 'renderer utility, not an extension factory',
-  renderMarkdownWithReport: 'renderer utility, not an extension factory',
-  renderPlainText: 'renderer utility, not an extension factory',
-  renderPlainTextWithReport: 'renderer utility, not an extension factory',
-  resolve: 'resolver entry point, not an extension factory',
+  linkPolicy: 'site policy extension; the playground has no link policy to apply',
+  referencesExtension: BUNDLE_PART,
+  referencesRenderer: BUNDLE_PART,
   sanitizeSvg: 'SVG utility, not an extension factory',
   smartQuoteLocales: 'smart-quote utility, not an extension factory',
-  // The one entry here that IS a real extension. The playground exists to show
-  // what THIS site renders, and the site's stack does not enable smart quotes,
-  // so enabling it only in the playground would make the two disagree on the
-  // same source - the same reason defaultAttributes is excluded.
+  // The playground exists to show what THIS site renders, and the site's stack
+  // does not enable smart quotes, so enabling it only in the playground would
+  // make the two disagree on the same source.
   smartQuotes: 'site policy extension; the site this playground mirrors does not enable smart quotes',
-  sourceFingerprint: 'source-patch utility, not an extension factory',
-  stampCarve: 'stamp utility, not an extension factory',
-  expandIncludes: 'include processor, not an extension factory',
-  expandsForTarget: 'include target predicate, not an extension factory',
-  findDirectiveSites: 'include inspection utility, not an extension factory',
-  isDirectiveShape: 'include syntax predicate, not an extension factory',
-  parseDirective: 'include syntax parser, not an extension factory',
-  migrateBbcode: 'migration utility, not an extension factory',
-  renderDocument: 'renderer entry point, not an extension factory',
-  renderDocumentWithReport: 'renderer entry point, not an extension factory',
-  stripTrailingMarker: 'stamp utility, not an extension factory',
-  tabNormalize: 'source transform utility, not an extension factory',
-  toAstJson: 'AST utility, not an extension factory',
-  toSourceLayout: 'source-layout utility, not an extension factory',
-  tryRenderHtmlStreaming: 'renderer entry point, not an extension factory',
-  AST_CONTRACT_VERSION: 'constant, not an extension factory',
-  CORE_AST_VOCABULARY: 'constant, not an extension factory',
-  GENERATED_CONTENT_KINDS: 'constant, not an extension factory',
-  AstEnvelopeExtensionError: 'error class, not an extension factory',
-  AstEnvelopeShapeError: 'error class, not an extension factory',
-  AstEnvelopeVersionError: 'error class, not an extension factory',
-  AstEnvelopeVocabularyError: 'error class, not an extension factory',
-  AstJsonMisplacedNodeTypeError: 'error class, not an extension factory',
-  AstSidecarError: 'error class, not an extension factory',
-  astNodePaths: 'AST utility, not an extension factory',
-  fromAstEnvelope: 'AST-envelope utility, not an extension factory',
-  toAstEnvelope: 'AST-envelope utility, not an extension factory',
-  parseWithProvenance: 'parser entry point, not an extension factory',
-  readProvenance: 'provenance utility, not an extension factory',
-  toProvenance: 'provenance utility, not an extension factory',
-  toAuthoredProvenance: 'provenance utility, not an extension factory',
-  readNodeIdentity: 'node-identity utility, not an extension factory',
-  toNodeIdentity: 'node-identity utility, not an extension factory',
-  readAnnotationRanges: 'annotation-range utility, not an extension factory',
-  toAnnotationRanges: 'annotation-range utility, not an extension factory',
-  renderCarveWithConversionReport: 'renderer entry point, not an extension factory',
-  FOLDED_NODE_TYPES: 'constant, not an extension factory',
-  PreservationError: 'error class, not an extension factory',
-  assessTablePreservation: 'table-preservation utility, not an extension factory',
-  carveToPreservationReport: 'preservation-report entry point, not an extension factory',
-  migrateCaseOnlyReferences: 'migration utility, not an extension factory',
-  lintIncludes: 'lint utility, not an extension factory',
-  selectIncludeRegion: 'include region lookup, not an extension factory',
+  spoilerBlockExtension: BUNDLE_PART,
+  spoilerExtension: BUNDLE_PART,
+  spoilerExtensions: BUNDLE_PART,
+  standardTabsRenderer: 'renderer factory; tabs use the core tabsRenderer',
+  tableOfContents: 'site policy extension; it inserts a table of contents the source does not ask for',
+  tabNormalize: 'site policy extension; the site this playground mirrors keeps tabs in code',
+  termExtension: BUNDLE_PART,
+  termRenderer: BUNDLE_PART,
+  tocRenderers: BUNDLE_PART,
+  withExtensions: 'bundle merge utility, not an extension factory',
+}
+
+// A factory returning a bare definition needs these renderers registered with it.
+const COMPANION_RENDERERS = {
+  tableOfContents: 'tocRenderers',
+  tocPlacement: 'tocRenderers',
+}
+
+function isDefinition(value) {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    typeof value.name === 'string' &&
+    typeof value.version === 'string' &&
+    typeof value.slots === 'object'
+  )
+}
+
+function isBundle(value) {
+  return value !== null && typeof value === 'object' && Array.isArray(value.extensions)
 }
 
 export function classifyEngineExport(name, value) {
@@ -192,20 +169,39 @@ export function classifyEngineExport(name, value) {
   } catch (error) {
     return { kind: 'throws', error }
   }
-  if (
-    extension &&
-    typeof extension === 'object' &&
-    typeof extension.name === 'string' &&
-    Object.keys(extension).some((key) => EXTENSION_HOOKS.has(key))
-  ) {
-    return { kind: 'enabled' }
-  }
+  if (isBundle(extension) || isDefinition(extension)) return { kind: 'enabled' }
   return { kind: 'unclassified' }
 }
 
+function toBundle(name, made, mod) {
+  if (isBundle(made)) {
+    return {
+      name,
+      extensions: made.extensions,
+      renderers: made.renderers ?? {},
+      transforms: made.transforms ?? [],
+    }
+  }
+  const companion = COMPANION_RENDERERS[name]
+  return { name, extensions: [made], renderers: (companion && mod[companion]) || {}, transforms: [] }
+}
+
+/**
+ * `mod` is the core entry and `@markup-carve/carve/extensions` in one namespace.
+ * Each entry is a bundle named after the export it came from, in name order,
+ * which is also the order the document transforms run in.
+ */
 export function buildPlaygroundExtensions(mod, available = {}) {
-  const extensions = []
-  for (const name of Object.keys(mod).sort()) {
+  const bundles = []
+  if (Array.isArray(mod.tabsExtensions) && mod.tabsRenderer !== undefined) {
+    bundles.push({
+      name: 'tabs',
+      extensions: mod.tabsExtensions,
+      renderers: { 'carve.tabs': mod.tabsRenderer },
+      transforms: [],
+    })
+  }
+  for (const name of Object.keys(mod)) {
     const classified = classifyEngineExport(name, mod[name])
     // An exclusion states a missing runtime library, not a permanent verdict.
     // Once the site ships that library the extension is exactly what we want, so
@@ -213,12 +209,23 @@ export function buildPlaygroundExtensions(mod, available = {}) {
     const satisfied = classified.kind === 'excluded' && available[name] === true
     if (!satisfied && classified.kind !== 'enabled' && classified.kind !== 'throws') continue
     try {
-      extensions.push(mod[name]())
+      bundles.push(toBundle(name, mod[name](), mod))
     } catch (error) {
       console.error(`Carve playground extension "${name}" failed to initialize`, error)
     }
   }
-  return extensions
+  return bundles.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+}
+
+function renderOptions(bundles) {
+  const options = { extensions: [], renderers: {} }
+  const transforms = []
+  for (const bundle of bundles) {
+    options.extensions.push(...bundle.extensions)
+    Object.assign(options.renderers, bundle.renderers)
+    transforms.push(...bundle.transforms)
+  }
+  return { options, transforms }
 }
 
 function debounce(fn, delay) {
@@ -448,7 +455,7 @@ class CarvePlayground extends HTMLElementBase {
     this.replaceChildren(sourcePane, output)
 
     let token = 0
-    let extensions
+    let stack
     let selectedEngine = 'js'
     let wasmToken = 0
     let wasmModule
@@ -622,13 +629,22 @@ class CarvePlayground extends HTMLElementBase {
         // been torn down - a navigation mid-render, or a test document being
         // disposed. Touching the DOM then throws an unhandled rejection.
         if (current !== token || !this.isConnected) return
-        extensions ??= buildPlaygroundExtensions(mod, {
-          mermaid: this.dataset.playgroundMermaid !== undefined,
-          chart: this.dataset.playgroundChart !== undefined,
-        })
-        const options = { extensions }
-        const jsHtml = mod.carveToHtml(textarea.value, options)
-        const ast = mod.carveToAstJson(textarea.value, options)
+        const { core } = mod
+        stack ??= renderOptions(
+          buildPlaygroundExtensions(
+            { ...core, ...mod.extensions },
+            {
+              mermaid: this.dataset.playgroundMermaid !== undefined,
+              chart: this.dataset.playgroundChart !== undefined,
+            },
+          ),
+        )
+        const { options, transforms } = stack
+        const jsHtml =
+          transforms.length > 0 && typeof core.renderWithDocumentTransforms === 'function'
+            ? core.renderWithDocumentTransforms(textarea.value, transforms, options).html
+            : core.render(textarea.value, options)
+        const ast = core.encodeTree(core.parse(textarea.value, { extensions: options.extensions }))
         let previewHtml = jsHtml
         if (selectedEngine === 'rust' && wasmModule !== undefined) {
           try {
@@ -647,7 +663,7 @@ class CarvePlayground extends HTMLElementBase {
         }
         renderedContent.innerHTML = previewHtml
         code.textContent = textWithFinalNewline(jsHtml)
-        astCode.textContent = `${JSON.stringify(ast, null, 2)}\n`
+        astCode.textContent = `${JSON.stringify(JSON.parse(ast), null, 2)}\n`
         await renderRuntimeAssets(current)
       } catch (error) {
         if (current !== token || !this.isConnected) return

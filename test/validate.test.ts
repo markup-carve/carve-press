@@ -167,17 +167,22 @@ describe('validateCrossrefs', () => {
 
   // Engine 0.1.13 rules: each would ship a construct that reads differently
   // from what the author wrote, so each fails the build.
+  it('rejects consumed-key-near-miss', () => {
+    expect(() => validateCrossrefs([src('{tabel}\n```csv\na,b\n```\n')])).toThrow(/consumed-key-near-miss/)
+  })
+
+  // 0.2 folds both 0.1 continuation-marker rules into deprecated-continuation-marker,
+  // which still fails the build because the marker renders as text.
   it.each([
-    ['consumed-key-near-miss', '{lose}\n- a\n- b\n'],
-    ['continuation-marker-refused', '- +\n\npara\n'],
-    ['refused-continuation-marker', '- a\n+\n\nb\n'],
-  ])('rejects %s', (rule, source) => {
-    expect(() => validateCrossrefs([src(source)])).toThrow(new RegExp(rule))
+    ['- +\n\npara\n', 'a.crv:1:3'],
+    ['- a\n+\n\nb\n', 'a.crv:2:1'],
+  ])('rejects a removed continuation marker in %j', (source, at) => {
+    expect(() => validateCrossrefs([src(source)])).toThrow(new RegExp(`${at} deprecated-continuation-marker`))
   })
 
   it('lints included files at their own coordinates', async () => {
     const dir = await mkdtemp(resolve(tmpdir(), 'cp-lint-include-'))
-    await writeFile(resolve(dir, 'part.crv'), 'Intro.\n\n{lose}\n- a\n')
+    await writeFile(resolve(dir, 'part.crv'), 'Intro.\n\n{tabel}\n```csv\na,b\n```\n')
     const page = {
       relPath: 'index.crv',
       srcPath: resolve(dir, 'index.crv'),

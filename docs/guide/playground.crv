@@ -16,12 +16,14 @@ The playground ships the Carve engine to the browser. CarvePress only copies tho
 ```carve
 # Try Carve
 
-/italic/, *bold*, _underline_, ~strike~, =highlight=.
+/italic/, *bold*, {_underline_}, {~strike~}, {=highlight=}.
 
 ::: details "Disclosure"
 Edit the source and the preview updates.
 :::
 ```
 :::
+
+The preview renders the source as written, with the site's extensions. It leaves out the extensions that change every document: `tableOfContents`, `headingNumbers` and `headingLevelShift`.
 
 Use the static `::: compare` block from [Carve Syntax](/guide/carve-syntax) when a page only needs a fixed source and output demonstration.

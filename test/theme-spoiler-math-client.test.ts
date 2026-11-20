@@ -5,7 +5,9 @@ import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
-import { carveToHtml, mathBlock, spoiler } from '@markup-carve/carve'
+import { render } from '@markup-carve/carve'
+import { mathBlock, spoiler } from '@markup-carve/carve/extensions'
+import { renderWithStack } from '../src/render/press-extension.js'
 import { describe, expect, it } from 'vitest'
 
 const execFileAsync = promisify(execFile)
@@ -91,13 +93,13 @@ const SOURCE = [
 function renderAll(): string {
   const extensions = [spoiler(), mathBlock()]
   return [
-    `<div id="interactive">${carveToHtml(SOURCE, { extensions })}</div>`,
-    `<div id="static">${carveToHtml(SOURCE, { extensions, mode: 'static' })}</div>`,
-    `<div id="bare">${carveToHtml(SOURCE)}</div>`,
+    `<div id="interactive">${renderWithStack(SOURCE, extensions)}</div>`,
+    `<div id="static">${renderWithStack(SOURCE, extensions, { mode: 'static' })}</div>`,
+    `<div id="bare">${render(SOURCE)}</div>`,
     // The same source again inside the theme's own small print. `figcaption` is
     // 0.8rem, so an `em` radius here has to come out smaller than in body text;
     // a `rem` radius would come out identical.
-    `<figure id="small"><figcaption>${carveToHtml(SOURCE, { extensions })}</figcaption></figure>`,
+    `<figure id="small"><figcaption>${renderWithStack(SOURCE, extensions)}</figcaption></figure>`,
   ].join('\n')
 }
 

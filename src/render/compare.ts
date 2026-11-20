@@ -1,20 +1,11 @@
-import type { Attrs, CarveExtension } from '@markup-carve/carve'
+import type { Attrs, Block, BlockExtensionNode, CodeBlockNode, ExtensionRenderHost } from '@markup-carve/carve'
+import { divExtension } from './div-extension.js'
+import type { PressExtension } from './press-extension.js'
 
-interface CodeBlockNode {
-  type: string
-  lang?: string
-  content: string
-}
-
-/**
- * Merge structural classes ahead of the author's own `{.foo}` classes into a
- * single Attrs, so `ctx.renderAttrs` emits one `class="..."` instead of a
- * second, invalid `class=` attribute alongside a hardcoded literal one.
- */
-function withBaseClasses(attrs: Attrs | undefined, ...baseClasses: string[]): Attrs {
-  const classes = [...baseClasses, ...(attrs?.classes ?? [])]
-  const order = attrs?.order === undefined ? undefined : attrs.order.includes('.class') ? attrs.order : ['.class', ...attrs.order]
-  return { ...attrs, classes, ...(order === undefined ? {} : { order }) }
+/** The node with structural classes ahead of the author's own, so the host writes one `class`. */
+export function withBaseClasses(node: BlockExtensionNode, ...baseClasses: string[]): BlockExtensionNode {
+  const attrs: Attrs = { ...node.attrs, classes: [...baseClasses, ...(node.attrs?.classes ?? [])] }
+  return { ...node, attrs }
 }
 
 /**
@@ -61,14 +52,8 @@ function excerpt(content: string): string {
  * block out, for raw-HTML and security examples that must not execute in the
  * page.
  */
-export function compareExtension(): CarveExtension {
+export function compareExtension(): PressExtension {
   let counter = 0
-  // Keyed by pattern name, not by block: a `warned` set scoped per document
-  // (reset alongside `counter` in beforeRender) would still print once per
-  // page on a site with the same demo repeated across many docs. Scoping it
-  // to the extension instance instead - which a site build creates exactly
-  // once via buildExtensionStack - warns once per distinct pattern for the
-  // whole build, matching the Shiki unregistered-language warning.
   const warned = new Set<string>()
 
   function warnIfExecutable(group: string, content: string): void {
@@ -81,77 +66,50 @@ export function compareExtension(): CarveExtension {
     }
   }
 
+  function render(node: BlockExtensionNode, host: ExtensionRenderHost): string {
+    const depth = host.blockDepth + 1
+    const fences = node.children.filter((child): child is CodeBlockNode => child.type === 'code_block')
+    const carve = fences.find((fence) => fence.syntax === 'carve')
+    const html = fences.find((fence) => fence.syntax === 'html')
+
+    if (!carve || !html) {
+      const attrs = host.attributes(withBaseClasses(node, 'carve-compare', 'carve-compare--malformed'), { block: true })
+      return `<div${attrs}>${host.blocks(node.children, depth)}</div>`
+    }
+
+    const attrs = host.attributes(withBaseClasses(node, 'carve-compare'), { block: true })
+    const noRender = node.attrs?.classes?.includes('no-render') ?? false
+    const group = `compare-${++counter}`
+    const renderedId = host.nextId(`${group}-rendered`)
+    const htmlId = host.nextId(`${group}-html`)
+    const source = `<div class="carve-compare__source">${host.blocks([carve as Block], depth)}</div>`
+
+    const tabs: string[] = []
+    const panes: string[] = []
+    if (!noRender) {
+      warnIfExecutable(group, html.value)
+      tabs.push(
+        `<input type="radio" name="${group}" id="${renderedId}" class="carve-compare__radio" checked>`,
+        `<label for="${renderedId}" class="carve-compare__label">Rendered</label>`,
+      )
+      panes.push(`<div class="carve-compare__pane carve-compare__live">${html.value}</div>`)
+    }
+    tabs.push(
+      `<input type="radio" name="${group}" id="${htmlId}" class="carve-compare__radio"${noRender ? ' checked' : ''}>`,
+      `<label for="${htmlId}" class="carve-compare__label">HTML</label>`,
+    )
+    panes.push(`<div class="carve-compare__pane">${host.blocks([html as Block], depth)}</div>`)
+
+    return `<div${attrs}><div class="carve-compare__frame">${source}<div class="carve-compare__output">${tabs.join(
+      '',
+    )}${panes.join('')}</div></div></div>`
+  }
+
   return {
     name: 'carve-press-compare',
-    // The extension instance is shared across every page in a site build, but
-    // ids only need to be unique within one document. Resetting here (fired
-    // once per carveToHtml call) keeps a page's compare ids stable across
-    // rebuilds instead of drifting with whatever order other pages rendered.
-    beforeRender(doc) {
+    ...divExtension('carve-press.compare', 'compare', render),
+    beginPage: () => {
       counter = 0
-      return doc
-    },
-    blockRenderers: {
-      admonition(node, ctx) {
-        const adm = node as {
-          kind?: string
-          children?: unknown[]
-          attrs?: { classes?: string[] }
-        }
-        // Returning undefined defers to the next extension, then to the core
-        // renderer - so every other admonition kind is untouched.
-        if (adm.kind !== 'compare') return undefined
-
-        const children = (adm.children ?? []) as CodeBlockNode[]
-        const fences = children.filter((c) => c.type === 'code_block')
-        const carve = fences.find((f) => f.lang === 'carve')
-        const html = fences.find((f) => f.lang === 'html')
-
-        if (!carve || !html) {
-          const attrs = ctx.renderAttrs(withBaseClasses(node.attrs, 'carve-compare', 'carve-compare--malformed'))
-          return `<div${attrs}>${ctx.renderChildren(adm.children as never, ctx.level + 1)}</div>`
-        }
-
-        const attrs = ctx.renderAttrs(withBaseClasses(node.attrs, 'carve-compare'))
-        const noRender = adm.attrs?.classes?.includes('no-render') ?? false
-        // `name` only has to be unique per document among compare blocks (it
-        // just groups this block's own radios), which the monotonic counter
-        // already guarantees. `id`/`for` must be unique across the WHOLE
-        // document - an authored `{#compare-1-html}` elsewhere (plausible in
-        // docs that talk about this very extension) would otherwise collide
-        // and misdirect a label - so those go through ctx.uniqueId.
-        const group = `compare-${++counter}`
-        const renderedId = ctx.uniqueId(`${group}-rendered`)
-        const htmlId = ctx.uniqueId(`${group}-html`)
-        const source = `<div class="carve-compare__source">${ctx.renderChildren(
-          [carve] as never,
-          ctx.level + 1,
-        )}</div>`
-
-        const tabs: string[] = []
-        const panes: string[] = []
-        if (!noRender) {
-          warnIfExecutable(group, html.content)
-          tabs.push(
-            `<input type="radio" name="${group}" id="${renderedId}" class="carve-compare__radio" checked>`,
-            `<label for="${renderedId}" class="carve-compare__label">Rendered</label>`,
-          )
-          panes.push(`<div class="carve-compare__pane carve-compare__live">${html.content}</div>`)
-        }
-        tabs.push(
-          `<input type="radio" name="${group}" id="${htmlId}" class="carve-compare__radio"${
-            noRender ? ' checked' : ''
-          }>`,
-          `<label for="${htmlId}" class="carve-compare__label">HTML</label>`,
-        )
-        panes.push(
-          `<div class="carve-compare__pane">${ctx.renderChildren([html] as never, ctx.level + 1)}</div>`,
-        )
-
-        return `<div${attrs}><div class="carve-compare__frame">${source}<div class="carve-compare__output">${tabs.join(
-          '',
-        )}${panes.join('')}</div></div></div>`
-      },
     },
   }
 }

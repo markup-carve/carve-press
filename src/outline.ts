@@ -1,4 +1,4 @@
-import { resolve, type Document } from '@markup-carve/carve'
+import type { DocumentNode } from '@markup-carve/carve'
 
 export interface OutlineEntry {
   level: number
@@ -13,6 +13,7 @@ interface AnyNode {
   attrs?: {
     id?: string
   }
+  generatedId?: string
   children?: AnyNode[]
 }
 
@@ -23,7 +24,13 @@ interface AnyNode {
  * like `text` it carries a `value` and no children, so it has to be read here
  * or `## A `code` word` loses the word entirely.
  */
+/** The permalink anchor is page chrome, not heading text. */
+export function isPermalink(node: { type: string; attrs?: object }): boolean {
+  return node.type === 'link' && (node.attrs as { classes?: string[] } | undefined)?.classes?.includes('permalink') === true
+}
+
 function textOf(node: AnyNode): string {
+  if (isPermalink(node)) return ''
   if (node.type === 'text' || node.type === 'code') return node.value ?? ''
   return (node.children ?? []).map(textOf).join('')
 }
@@ -32,17 +39,15 @@ function textOf(node: AnyNode): string {
  * Walk the AST for headings. A regex over rendered HTML would also match a `#`
  * inside a fenced code block; only the tree knows the difference.
  */
-export function outlineFromAst(ast: Document, levels: [number, number]): OutlineEntry[] {
-  resolve(ast)
-
+export function outlineFromAst(ast: DocumentNode, levels: [number, number]): OutlineEntry[] {
   const [min, max] = levels
   const entries: OutlineEntry[] = []
 
   const visit = (node: AnyNode): void => {
     if (node.type === 'heading' && node.level !== undefined) {
       if (node.level >= min && node.level <= max) {
-        const title = textOf(node)
-        const slug = node.attrs?.id
+        const title = textOf(node).trim()
+        const slug = node.attrs?.id ?? node.generatedId
         // A missing resolved id is safer to omit than to link to a wrong anchor.
         if (slug !== undefined) entries.push({ level: node.level, title, slug })
       }

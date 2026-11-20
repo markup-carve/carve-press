@@ -123,23 +123,83 @@ function withoutSourceMappingComment(source: string): string {
   return source.replace(/\n?\/\/# sourceMappingURL=.*\n?$/, '\n')
 }
 
-async function copyEngineRuntime(src: string, dest: string): Promise<void> {
+/** A bare import the browser cannot resolve, and the copied module it points at. */
+interface BrowserImport {
+  specifier: string
+  target: string
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function withBrowserImports(source: string, destPath: string, imports: readonly BrowserImport[]): string {
+  let result = source
+  for (const { specifier, target } of imports) {
+    const relativePath = relative(dirname(destPath), target).split(sep).join('/')
+    const path = relativePath.startsWith('.') ? relativePath : `./${relativePath}`
+    result = result.replace(
+      new RegExp(`(\\bfrom\\s*|\\bimport\\s*\\(?\\s*)(["'])${escapeRegExp(specifier)}\\2`, 'g'),
+      (_match, lead: string, quote: string) => `${lead}${quote}${path}${quote}`,
+    )
+  }
+  return result
+}
+
+async function copyEngineRuntime(
+  src: string,
+  dest: string,
+  imports: readonly BrowserImport[] = [],
+  skip: readonly string[] = [],
+): Promise<void> {
   const entries = await readdir(src, { withFileTypes: true })
   await mkdir(dest, { recursive: true })
   for (const entry of entries) {
+    if (skip.includes(entry.name)) continue
     const srcPath = resolve(src, entry.name)
     const destPath = resolve(dest, entry.name)
     if (entry.isDirectory()) {
-      await copyEngineRuntime(srcPath, destPath)
+      await copyEngineRuntime(srcPath, destPath, imports)
     } else if (entry.isFile() && isEngineRuntimeFile(entry.name)) {
       await mkdir(dirname(destPath), { recursive: true })
       if (entry.name.endsWith('.js')) {
-        await writeFile(destPath, withoutSourceMappingComment(await readFile(srcPath, 'utf8')))
+        const source = withoutSourceMappingComment(await readFile(srcPath, 'utf8'))
+        await writeFile(destPath, withBrowserImports(source, destPath, imports))
       } else {
         await copyFile(srcPath, destPath)
       }
     }
   }
+}
+
+/**
+ * The 0.2 engine's shared chunk imports `parse5` (and parse5 imports
+ * `entities`) by bare name, which a browser without an import map cannot load,
+ * so the playground's `import('./carve/index.js')` failed before it ran. Both
+ * packages are copied as ES modules under `assets/carve/vendor/` and every bare
+ * import is rewritten to a relative path.
+ */
+async function copyEngineWithDependencies(engineDir: string): Promise<void> {
+  const engineRequire = createRequire(resolve(carveEngineDistPath, 'index.js'))
+  const parse5Cjs = engineRequire.resolve('parse5')
+  const parse5Esm = resolve(dirname(parse5Cjs), '..')
+  const entitiesEsm = resolve(dirname(createRequire(parse5Cjs).resolve('entities/decode')), '../esm')
+  const parse5Dir = resolve(engineDir, 'vendor/parse5')
+  const entitiesDir = resolve(engineDir, 'vendor/entities')
+  const modules = [
+    { specifier: 'parse5', from: resolve(parse5Esm, 'index.js'), target: resolve(parse5Dir, 'index.js') },
+    { specifier: 'entities/decode', from: resolve(entitiesEsm, 'decode.js'), target: resolve(entitiesDir, 'decode.js') },
+    { specifier: 'entities/escape', from: resolve(entitiesEsm, 'escape.js'), target: resolve(entitiesDir, 'escape.js') },
+  ]
+  for (const { from } of modules) {
+    if (!(await fileExists(from))) {
+      throw new BuildError('cannot copy the playground engine', [`missing ES module ${from}`])
+    }
+  }
+  const imports: BrowserImport[] = modules.map(({ specifier, target }) => ({ specifier, target }))
+  await copyEngineRuntime(carveEngineDistPath, engineDir, imports)
+  await copyEngineRuntime(parse5Esm, parse5Dir, imports, ['cjs'])
+  await copyEngineRuntime(entitiesEsm, entitiesDir, imports)
 }
 
 async function copyDirectoryContents(src: string, dest: string): Promise<void> {
@@ -222,20 +282,6 @@ function resolveMiniSearchScriptPath(): string {
     const entry = require.resolve('minisearch')
     if (entry.endsWith('dist/cjs/index.cjs')) return resolve(dirname(entry), '../es/index.js')
     return resolve(dirname(entry), 'dist/es/index.js')
-  }
-}
-
-function profileBaseHost(hostname: string | undefined): string | undefined {
-  if (hostname === undefined || hostname === '') return undefined
-  // Hostname, not host: the engine compares absolute link hosts with the port
-  // already stripped, so keeping `:3000` here rejects same-site links.
-  try {
-    return new URL(hostname).hostname
-  } catch {
-    return hostname
-      .replace(/^https?:\/\//, '')
-      .replace(/\/.*$/, '')
-      .replace(/:\d+$/, '')
   }
 }
 
@@ -582,7 +628,7 @@ async function writePlaygroundAssets(
   hash: boolean,
 ): Promise<void> {
   await emitAsset(outDir, 'playground.js', await readFile(defaultPlaygroundScriptPath), manifest, hash)
-  await copyEngineRuntime(carveEngineDistPath, resolve(outDir, 'assets/carve'))
+  await copyEngineWithDependencies(resolve(outDir, 'assets/carve'))
   await copyConfiguredPlaygroundAssets(outDir, playground)
 }
 
@@ -791,7 +837,6 @@ export async function buildSite(opts: {
 
   const extensions = await buildExtensionStack(config, opts.shiki ?? config.shiki, opts.root)
   const stack = (await bus.emit('rendererCreated', { extensions })).extensions
-  const host = profileBaseHost(config.hostname)
 
   const routes = new Set(pages.map((p) => p.route))
   await validateRouteManifest({
@@ -812,8 +857,7 @@ export async function buildSite(opts: {
       outlineLevels: renderOutlineLevels(outline),
       includeRoots: [srcDir, opts.root],
       base: config.base,
-      profile: config.carve.profile,
-      profileBaseHost: host,
+      ...(config.carve.profile === undefined ? {} : { profile: config.carve.profile }),
     }
     const result =
       renderCache?.render(page, renderContext, () => renderPage(page, renderContext)) ??
@@ -831,8 +875,7 @@ export async function buildSite(opts: {
     outlineLevels: renderOutlineLevels(notFoundOutline),
     includeRoots: [srcDir, opts.root],
     base: config.base,
-    profile: config.carve.profile,
-    profileBaseHost: host,
+    ...(config.carve.profile === undefined ? {} : { profile: config.carve.profile }),
   })
 
   // The 404 page is written outside the normal loop but gets the same layout,

@@ -230,9 +230,20 @@ function offendingReason(spec) {
   return null
 }
 
+// Before a 0.2 engine is on the registry, the `next2` branch pins a carve-js
+// commit. CI sets CARVE_PRERELEASE_PINS only there, and only this exact shape
+// passes: a markup-carve repository at a full commit hash.
+const PRERELEASE_PIN = /^github:markup-carve\/[a-z0-9-]+#[0-9a-f]{40}$/
+const allowPrerelease = process.env.CARVE_PRERELEASE_PINS === '1'
+
 const offenders = []
+let prerelease = 0
 for (const field of FIELDS) {
   for (const [name, spec] of Object.entries(manifest[field] ?? {})) {
+    if (allowPrerelease && typeof spec === 'string' && PRERELEASE_PIN.test(spec)) {
+      prerelease++
+      continue
+    }
     const reason = offendingReason(spec)
     if (reason) offenders.push({ field, name, spec, reason })
   }
@@ -253,4 +264,8 @@ if (offenders.length > 0) {
 }
 
 const counted = FIELDS.reduce((n, field) => n + Object.keys(manifest[field] ?? {}).length, 0)
-console.log(`all ${counted} runtime, optional and peer dependencies resolve from the registry`)
+console.log(
+  prerelease === 0
+    ? `all ${counted} runtime, optional and peer dependencies resolve from the registry`
+    : `${counted - prerelease} of ${counted} runtime, optional and peer dependencies resolve from the registry; ${prerelease} accepted as next2 commit pin(s)`,
+)

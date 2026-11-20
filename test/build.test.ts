@@ -157,7 +157,9 @@ describe('buildSite', () => {
 
     // The runtime is there, so a filter that copied nothing cannot pass this.
     expect(copied).toContain('index.js')
-    expect(copied.filter((name) => name.endsWith('.js')).length).toBeGreaterThan(50)
+    expect(copied).toContain('extensions.js')
+    // The 0.2 dist ships 9 modules; the vendored parse5 and entities add 23.
+    expect(copied.filter((name) => name.endsWith('.js')).length).toBeGreaterThan(25)
 
     // What a browser never asks for: a declaration has no runtime meaning and a
     // map is 7.1 MB of devtools payload on this engine (#70).

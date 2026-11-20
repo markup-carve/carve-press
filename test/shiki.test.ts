@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { carveToHtml } from '@markup-carve/carve'
+import { renderWithStack } from '../src/render/press-extension.js'
 import type { LanguageRegistration } from '@shikijs/types'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -29,7 +29,7 @@ describe('createShikiExtension', () => {
       langs: ['carve'],
       themes: { light: 'github-light', dark: 'github-dark' },
     })
-    const html = carveToHtml('```carve\n# Heading\n```\n', { extensions: [carveExt] })
+    const html = renderWithStack('```carve\n# Heading\n```\n', [carveExt])
     expect(html).toContain('shiki')
     expect(html).toContain('<span')
     expect(html).not.toMatch(/^<pre><code class="language-carve">/)
@@ -40,7 +40,7 @@ describe('createShikiExtension', () => {
       langs: ['carve'],
       themes: { light: 'github-light', dark: 'github-dark' },
     })
-    const html = carveToHtml('```carve\n:: term\n: description\n- [x] done\n```\n', { extensions: [carveExt] })
+    const html = renderWithStack('```carve\n:: term\n: description\n- [x] done\n```\n', [carveExt])
     expect(html).toMatch(/color:#735c0f/i)
     expect(html).toMatch(/--shiki-dark:#f2cc60/i)
   })
@@ -50,7 +50,7 @@ describe('createShikiExtension', () => {
       langs: ['carve'],
       themes: { light: 'github-light', dark: 'github-dark' },
     })
-    const html = carveToHtml('````carve\n```js\nx\n```\n^ Listing #: x\n````\n', { extensions: [carveExt] })
+    const html = renderWithStack('````carve\n```js\nx\n```\n^ Listing #: x\n````\n', [carveExt])
     expect(html).toMatch(/color:#bc4c00;font-weight:bold;--shiki-dark:#ffab70;[^"]*">\^</i)
     expect(html).toMatch(/color:#57606a;font-style:italic;--shiki-dark:#8b949e;[^"]*"> Listing/i)
   })
@@ -61,7 +61,7 @@ describe('createShikiExtension', () => {
       shiki: { langs: ['c'] },
     })
     const extensions = await buildExtensionStack(config, config.shiki)
-    const html = carveToHtml('```c\nint main(void) { return 0; }\n```\n', { extensions })
+    const html = renderWithStack('```c\nint main(void) { return 0; }\n```\n', extensions)
     expect(html).toContain('shiki')
     expect(html).toContain('<span')
     expect(html).toContain('int')
@@ -75,7 +75,7 @@ describe('createShikiExtension', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     try {
-      const html = carveToHtml('```custom\nCUSTOM token\n```\n', { extensions: [customExt] })
+      const html = renderWithStack('```custom\nCUSTOM token\n```\n', [customExt])
 
       expect(html).toContain('shiki')
       expect(html).toContain('<span')
@@ -87,7 +87,7 @@ describe('createShikiExtension', () => {
   })
 
   it('highlights a fence in a registered language', () => {
-    const html = carveToHtml('```js\nconst x = 1\n```\n', { extensions: [ext] })
+    const html = renderWithStack('```js\nconst x = 1\n```\n', [ext])
     expect(html).toContain('shiki')
     expect(html).toContain('const')
     expect(html).toContain('<span')
@@ -97,25 +97,25 @@ describe('createShikiExtension', () => {
   })
 
   it('emits both theme variants as CSS variables', () => {
-    const html = carveToHtml('```js\nconst x = 1\n```\n', { extensions: [ext] })
+    const html = renderWithStack('```js\nconst x = 1\n```\n', [ext])
     expect(html).toContain('--shiki-dark')
   })
 
   it('renders an unregistered language plain and warns', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const html = carveToHtml('```brainfuck\n+++\n```\n', { extensions: [ext] })
+    const html = renderWithStack('```brainfuck\n+++\n```\n', [ext])
     expect(html).toContain('+++')
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('brainfuck'))
     warn.mockRestore()
   })
 
   it('renders a fence with no language plain', () => {
-    const html = carveToHtml('```\nplain\n```\n', { extensions: [ext] })
+    const html = renderWithStack('```\nplain\n```\n', [ext])
     expect(html).toContain('plain')
   })
 
   it('presents a {.diff} language fence while keeping the highlighting', () => {
-    const html = carveToHtml('{.diff}\n```js\n  keep();\n- old();\n+ fresh();\n```\n', { extensions: [ext] })
+    const html = renderWithStack('{.diff}\n```js\n  keep();\n- old();\n+ fresh();\n```\n', [ext])
     expect(html).toContain('has-diff')
     expect(html).toContain('class="line diff remove"')
     expect(html).toContain('class="line diff add"')
@@ -128,7 +128,7 @@ describe('createShikiExtension', () => {
   })
 
   it('presents a captioned {.diff} fence, whose class sits on the figure', () => {
-    const html = carveToHtml('{#lst-a .diff}\n```js\n- old();\n+ fresh();\n```\n^ Listing #: x\n', { extensions: [ext] })
+    const html = renderWithStack('{#lst-a .diff}\n```js\n- old();\n+ fresh();\n```\n^ Listing #: x\n', [ext])
     expect(html).toContain('<figure id="lst-a" class="diff">')
     expect(html).toContain('has-diff')
     expect(html).toContain('class="line diff remove"')
@@ -136,7 +136,7 @@ describe('createShikiExtension', () => {
   })
 
   it('presents a {.diff} panel fence inside a figure group', () => {
-    const html = carveToHtml('::: figure\n{.diff}\n```js\n- old();\n```\n^ a\n:::\n^ group\n', { extensions: [ext] })
+    const html = renderWithStack('::: figure\n{.diff}\n```js\n- old();\n```\n^ a\n:::\n^ group\n', [ext])
     expect(html).toContain('has-diff')
     expect(html).toContain('class="line diff remove"')
   })
@@ -147,41 +147,39 @@ describe('createShikiExtension', () => {
       '{.side-diff}\n```js\n- old();\n```\n^ x\n',
       '{.side-diff}\n```js\n- old();\n```\n',
     ]) {
-      const html = carveToHtml(source, { extensions: [ext] })
+      const html = renderWithStack(source, [ext])
       expect(html).not.toContain('has-diff')
       expect(html).not.toContain('diff-marker')
     }
   })
 
   it('reads line-number and hl directives from a captioned fence figure', () => {
-    const html = carveToHtml('{.line-numbers start="5" hl="2"}\n```js\none\ntwo\n```\n^ x\n', { extensions: [ext] })
+    const html = renderWithStack('{.line-numbers start="5" hl="2"}\n```js\none\ntwo\n```\n^ x\n', [ext])
     expect(html).toContain('code-block--line-numbers')
     expect(html).toContain('--code-block-line-start: 4')
     expect(html).toContain('class="line highlighted"')
   })
 
   it('leaves an ordinary language fence without the diff presentation', () => {
-    const html = carveToHtml('```js\n- old();\n```\n', { extensions: [ext] })
+    const html = renderWithStack('```js\n- old();\n```\n', [ext])
     expect(html).not.toContain('has-diff')
     expect(html).not.toContain('diff-marker')
   })
 
   it('escapes HTML in an unhighlighted block', () => {
-    const html = carveToHtml('```\n<script>x</script>\n```\n', { extensions: [ext] })
+    const html = renderWithStack('```\n<script>x</script>\n```\n', [ext])
     expect(html).not.toContain('<script>x')
     expect(html).toContain('&lt;script&gt;')
   })
 
   it('escapes HTML in a highlighted, registered-language block', () => {
-    const html = carveToHtml('```js\n<script>alert(1)</script>\n```\n', { extensions: [ext] })
+    const html = renderWithStack('```js\n<script>alert(1)</script>\n```\n', [ext])
     expect(html).not.toContain('<script>alert(1)</script>')
   })
 
   it('preserves fence attributes and title on the highlighted path, alongside Shiki\'s own class/style/tabindex', () => {
-    const html = carveToHtml(
-      '{#my-id .foo data-x=y}\n```js "src/index.js"\nconst x = 1\n```\n',
-      { extensions: [ext] },
-    )
+    const html = renderWithStack(
+      '{#my-id .foo data-x=y}\n```js "src/index.js"\nconst x = 1\n```\n', [ext])
     const openTag = /<pre[^>]*>/.exec(html)?.[0] ?? ''
     expect(openTag).toContain('id="my-id"')
     expect(openTag).not.toContain('title="src/index.js"')
@@ -197,10 +195,8 @@ describe('createShikiExtension', () => {
   })
 
   it('consumes the render directives instead of emitting them on the pre', () => {
-    const html = carveToHtml(
-      '{hl="1,3" .line-numbers start="5"}\n```js\nconst a = 1\nconst b = 2\nconst c = 3\n```\n',
-      { extensions: [ext] },
-    )
+    const html = renderWithStack(
+      '{hl="1,3" .line-numbers start="5"}\n```js\nconst a = 1\nconst b = 2\nconst c = 3\n```\n', [ext])
     const openTag = /<pre[^>]*>/.exec(html)?.[0] ?? ''
     expect(openTag).not.toContain('hl=')
     expect(openTag).not.toContain('start=')
@@ -212,7 +208,7 @@ describe('createShikiExtension', () => {
   })
 
   it('renders the copy control as a labeled icon rather than a text button', () => {
-    const html = carveToHtml('```js\nconst a = 1\n```\n', { extensions: [ext] })
+    const html = renderWithStack('```js\nconst a = 1\n```\n', [ext])
     const button = /<button class="code-block__copy".*?<\/button>/s.exec(html)?.[0] ?? ''
 
     expect(button).toContain('aria-label="Copy code"')
@@ -225,17 +221,15 @@ describe('createShikiExtension', () => {
   })
 
   it('copies code without the notation comments the renderer consumed', () => {
-    const html = carveToHtml(
-      '```js\nconst a = 1 // [!code ++]\nconst b = 2 // [!code highlight]\n```\n',
-      { extensions: [ext] },
-    )
+    const html = renderWithStack(
+      '```js\nconst a = 1 // [!code ++]\nconst b = 2 // [!code highlight]\n```\n', [ext])
     const copyText = /<template data-code-block-copy>(.*?)<\/template>/s.exec(html)?.[1] ?? ''
     expect(copyText).toBe('const a = 1\nconst b = 2')
     expect(html).toContain('line diff add')
   })
 
   it('copies a plain fence verbatim, notation-looking text included', () => {
-    const html = carveToHtml('```text\nconst a = 1 // [!code ++]\n```\n', { extensions: [ext] })
+    const html = renderWithStack('```text\nconst a = 1 // [!code ++]\n```\n', [ext])
     const copyText = /<template data-code-block-copy>(.*?)<\/template>/s.exec(html)?.[1] ?? ''
     // Nothing consumed the marker here, so it is content, not an instruction.
     expect(copyText).toBe('const a = 1 // [!code ++]')
@@ -243,10 +237,8 @@ describe('createShikiExtension', () => {
 
   it('preserves fence attributes and title for an unregistered language', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const html = carveToHtml(
-      '{#my-id .foo data-x=y}\n```brainfuck "src/prog.b"\n+++\n```\n',
-      { extensions: [ext] },
-    )
+    const html = renderWithStack(
+      '{#my-id .foo data-x=y}\n```brainfuck "src/prog.b"\n+++\n```\n', [ext])
     expect(html).toContain('id="my-id"')
     expect(html).toContain('class="foo"')
     expect(html).toContain('data-x="y"')
@@ -256,19 +248,17 @@ describe('createShikiExtension', () => {
   })
 
   it('preserves fence attributes for a fence with no language', () => {
-    const html = carveToHtml('{#my-id .foo data-x=y}\n```\nplain\n```\n', { extensions: [ext] })
+    const html = renderWithStack('{#my-id .foo data-x=y}\n```\nplain\n```\n', [ext])
     expect(html).toContain('id="my-id"')
     expect(html).toContain('class="foo"')
     expect(html).toContain('data-x="y"')
   })
 
   it('applies Shiki notation transformer classes', () => {
-    const html = carveToHtml(
+    const html = renderWithStack(
       ['```js', 'const add = 1 // [!code ++]', 'const remove = 2 // [!code --]', 'const hot = 3 // [!code highlight]', '```'].join(
         '\n',
-      ),
-      { extensions: [ext] },
-    )
+      ), [ext])
     expect(html).toContain('diff')
     expect(html).toContain('add')
     expect(html).toContain('remove')
@@ -277,14 +267,14 @@ describe('createShikiExtension', () => {
   })
 
   it('highlights 1-based line ranges from fence attributes', () => {
-    const html = carveToHtml('{hl="1,3-4"}\n```js\none\ntwo\nthree\nfour\n```\n', { extensions: [ext] })
+    const html = renderWithStack('{hl="1,3-4"}\n```js\none\ntwo\nthree\nfour\n```\n', [ext])
     const highlighted = html.match(/class="line highlighted"/g) ?? []
     expect(highlighted).toHaveLength(3)
   })
 
   it('warns once per malformed highlight range value', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    carveToHtml('{hl="x"}\n```js\none\n```\n\n{hl="x"}\n```js\ntwo\n```\n', { extensions: [ext] })
+    renderWithStack('{hl="x"}\n```js\none\n```\n\n{hl="x"}\n```js\ntwo\n```\n', [ext])
     expect(warn).toHaveBeenCalledTimes(1)
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('hl="x"'))
     warn.mockRestore()
@@ -296,7 +286,7 @@ describe('createShikiExtension', () => {
       themes: { light: 'github-light', dark: 'github-dark' },
       lineNumbers: 5,
     })
-    const html = carveToHtml('```js\none\ntwo\n```\n', { extensions: [ext] })
+    const html = renderWithStack('```js\none\ntwo\n```\n', [ext])
     expect(html).toContain('code-block--line-numbers')
     expect(html).toContain('--code-block-line-start: 4')
     expect(html).not.toContain('>5<')
@@ -312,10 +302,10 @@ describe('createShikiExtension', () => {
       themes: { light: 'github-light', dark: 'github-dark' },
       lineNumbers: true,
     })
-    expect(carveToHtml('{.no-line-numbers}\n```js\none\n```\n', { extensions: [ext] })).not.toContain(
+    expect(renderWithStack('{.no-line-numbers}\n```js\none\n```\n', [ext])).not.toContain(
       'code-block--line-numbers',
     )
-    expect(carveToHtml('{.line-numbers start="9"}\n```js\none\n```\n', { extensions: [ext] })).toContain(
+    expect(renderWithStack('{.line-numbers start="9"}\n```js\none\n```\n', [ext])).toContain(
       '--code-block-line-start: 8',
     )
   })
@@ -330,7 +320,7 @@ describe('plain-text fence languages', () => {
       themes: { light: 'github-light', dark: 'github-dark' },
     })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const html = carveToHtml('```txt\nhello\n```\n', { extensions: [ext] })
+    const html = renderWithStack('```txt\nhello\n```\n', [ext])
     expect(html).toContain('hello')
     expect(html).not.toContain('shiki')
     expect(warn).not.toHaveBeenCalled()
@@ -343,7 +333,7 @@ describe('plain-text fence languages', () => {
       themes: { light: 'github-light', dark: 'github-dark' },
     })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    carveToHtml('```brainfuck\n+++\n```\n', { extensions: [ext] })
+    renderWithStack('```brainfuck\n+++\n```\n', [ext])
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('brainfuck'))
     warn.mockRestore()
   })
@@ -356,7 +346,7 @@ describe('code-group highlighting', () => {
       shiki: { langs: ['js'] },
     })
     const extensions = await buildExtensionStack(config, config.shiki)
-    const html = carveToHtml('::: code-group\n```js\nconst x = 1\n```\n:::\n', { extensions })
+    const html = renderWithStack('::: code-group\n```js\nconst x = 1\n```\n:::\n', extensions)
     const panel = html.match(/<div class="code-group-panel"[^>]*>[\s\S]*?<\/div>/)?.[0] ?? ''
     expect(panel).toContain('shiki')
     expect(panel).toContain('<span')
@@ -370,7 +360,7 @@ describe('code-group highlighting', () => {
     })
     const extensions = await buildExtensionStack(config, config.shiki)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const html = carveToHtml('::: code-group\n```brainfuck\n+++\n```\n:::\n', { extensions })
+    const html = renderWithStack('::: code-group\n```brainfuck\n+++\n```\n:::\n', extensions)
     const panel = html.match(/<div class="code-group-panel"[^>]*>[\s\S]*?<\/div>/)?.[0] ?? ''
     expect(panel).toContain('+++')
     expect(panel).toContain('<pre><code class="language-brainfuck">')
@@ -467,7 +457,7 @@ describe('csv and tsv fences', () => {
   it('scopes the separator apart from the fields with the default languages', async () => {
     const config = resolveConfig({ title: 'Carve' })
     const extensions = await buildExtensionStack(config, config.shiki)
-    const html = carveToHtml('```csv\nname,qty\napple,2\n```\n', { extensions })
+    const html = renderWithStack('```csv\nname,qty\napple,2\n```\n', extensions)
     const separator = colorOf(html, ',')
     const field = colorOf(html, 'apple')
     expect(separator).toBeDefined()
@@ -480,7 +470,7 @@ describe('csv and tsv fences', () => {
       langs: ['tsv'],
       themes: { light: 'github-light', dark: 'github-dark' },
     })
-    const html = carveToHtml('```tsv\nname\tqty\napple\t2\n```\n', { extensions: [tsvExt] })
+    const html = renderWithStack('```tsv\nname\tqty\napple\t2\n```\n', [tsvExt])
     expect(colorOf(html, '\t')).not.toBe(colorOf(html, 'apple'))
   })
 
@@ -489,7 +479,7 @@ describe('csv and tsv fences', () => {
       langs: ['carve'],
       themes: { light: 'github-light', dark: 'github-dark' },
     })
-    const html = carveToHtml('````carve\n```csv\nname,qty\napple,2\n```\n````\n', { extensions: [carveExt] })
+    const html = renderWithStack('````carve\n```csv\nname,qty\napple,2\n```\n````\n', [carveExt])
     expect(colorOf(html, ',')).toBeDefined()
     expect(colorOf(html, ',')).not.toBe(colorOf(html, 'apple'))
   })

@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs'
 import { isAbsolute, relative as relativePath, resolve } from 'node:path'
-import type { CarveExtension } from '@markup-carve/carve'
+import type { DocumentNode } from '@markup-carve/carve'
+import type { PressExtension } from './press-extension.js'
 
 interface ImageNode {
   type: string
   src?: string
-  attrs?: { keyValues?: Record<string, string>; order?: string[] }
+  attrs?: { keyValues?: [string, string][] }
   children?: ImageNode[]
 }
 
@@ -14,18 +15,11 @@ interface ImageSize {
   height: number
 }
 
-function attrs(node: ImageNode): { keyValues: Record<string, string>; order: string[] } {
-  node.attrs ??= {}
-  node.attrs.keyValues ??= {}
-  node.attrs.order ??= []
-  return { keyValues: node.attrs.keyValues, order: node.attrs.order }
-}
-
 function setDefault(node: ImageNode, key: string, value: string): void {
-  const { keyValues, order } = attrs(node)
-  if (Object.keys(keyValues).some((existing) => existing.toLowerCase() === key.toLowerCase())) return
-  keyValues[key] = value
-  order.push(key)
+  node.attrs ??= {}
+  node.attrs.keyValues ??= []
+  if (node.attrs.keyValues.some(([existing]) => existing.toLowerCase() === key.toLowerCase())) return
+  node.attrs.keyValues.push([key, value])
 }
 
 function png(buffer: Buffer): ImageSize | undefined {
@@ -170,12 +164,11 @@ function nestedNodes(node: ImageNode): ImageNode[] {
   return out
 }
 
-export function imageDefaultsExtension(opts: { root: string; publicDir: string }): CarveExtension {
+export function imageDefaultsExtension(opts: { root: string; publicDir: string }): PressExtension {
   return {
     name: 'carve-press-images',
-    beforeRender(doc) {
+    prepare(doc: DocumentNode) {
       visit(doc as unknown as ImageNode, opts)
-      return doc
     },
   }
 }
