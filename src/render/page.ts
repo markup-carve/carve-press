@@ -12,7 +12,7 @@ import {
 } from '@markup-carve/carve'
 import { fileSystemResolver } from '@markup-carve/carve/node'
 import type { Page } from '../content/discover.js'
-import { outlineFromAst, type OutlineEntry } from '../outline.js'
+import { isPermalink, outlineFromAst, type OutlineEntry } from '../outline.js'
 import { SourceError } from '../errors.js'
 import { trackImageReads } from './images.js'
 import { mergeStack, takePendingError, type PressExtension } from './press-extension.js'
@@ -75,7 +75,7 @@ type Document = DocumentNode
  * like `# The `carve` CLI` would otherwise title the page "The  CLI".
  */
 function searchText(node: AnyNode, out: string[]): void {
-  if (node.type === 'code_block' || node.type === 'raw_block' || node.type === 'comment') return
+  if (node.type === 'code_block' || node.type === 'raw_block' || node.type === 'comment' || isPermalink(node)) return
   if (node.type === 'text' || node.type === 'code') {
     out.push(node.value ?? '')
     return
@@ -328,16 +328,20 @@ function renderUntracked(page: Page, ctx: RenderContext): RenderedPage {
     if (error instanceof CarveInputError) throw new SourceError(page.relPath, 1, 1, `profile: ${error.message}`)
     throw error
   }
-  const outline = ctx.outlineLevels === false ? [] : outlineFromAst(ast, ctx.outlineLevels)
+  // Outline and search read what the page shows, as 0.1 did by transforming
+  // before reading: heading numbers belong in the outline labels too.
+  const view = stack.view(ast)
+  takePendingError()
+  const outline = ctx.outlineLevels === false ? [] : outlineFromAst(view, ctx.outlineLevels)
 
   const fmTitle = page.frontmatter.title
-  const title = typeof fmTitle === 'string' && fmTitle !== '' ? fmTitle : firstH1(ast)
+  const title = typeof fmTitle === 'string' && fmTitle !== '' ? fmTitle : firstH1(view)
   if (title === undefined || title === '') {
     throw new SourceError(page.relPath, 1, 1, 'page has no frontmatter title and no H1')
   }
 
   const parts: string[] = []
-  for (const child of (ast as unknown as AnyNode).children ?? []) searchText(child, parts)
+  for (const child of (view as unknown as AnyNode).children ?? []) searchText(child, parts)
 
   return {
     page,
@@ -348,7 +352,7 @@ function renderUntracked(page: Page, ctx: RenderContext): RenderedPage {
       route: page.route,
       title,
       headings: outline.map((o) => o.title),
-      sections: searchSections(ast, outline),
+      sections: searchSections(view, outline),
       text: normalizeSearchParts(parts),
     },
   }

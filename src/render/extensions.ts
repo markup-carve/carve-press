@@ -17,6 +17,7 @@ import {
   mathBlock,
   spoiler,
   tocPlacement,
+  tocRenderers,
   wikilinks,
 } from '@markup-carve/carve/extensions'
 import type { CarvePressConfig } from '../config.js'
@@ -85,7 +86,7 @@ function presetExtensions(preset: CarvePressConfig['carve']['preset']): PressExt
     // every document, which on this theme means a bare list of links above the
     // H1 duplicating the outline column. A page that wants one asks for it with
     // a ::: toc block.
-    definition('toc', tocPlacement()),
+    { name: 'toc', extensions: [tocPlacement()], renderers: tocRenderers },
     named('wikilinks', wikilinks()),
   ]
   const full: PressExtension[] = [

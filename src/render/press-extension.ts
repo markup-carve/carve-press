@@ -34,6 +34,8 @@ export interface MergedStack {
   transforms: DocumentTransform[]
   beginPage: () => void
   prepare: (doc: DocumentNode) => void
+  /** The render view of a parsed tree: every registered and stack transform applied to a copy. */
+  view: (doc: DocumentNode) => DocumentNode
 }
 
 /** The declaration a transform-made `block_extension` needs in the view it adds the node to. */
@@ -109,6 +111,20 @@ export function mergeStack(stack: readonly PressExtension[]): MergedStack {
     },
     prepare: (doc) => {
       for (const fn of prepare) fn(doc)
+    },
+    view: (doc) => {
+      let out = structuredClone(doc)
+      const registered = [...byName.values()].flatMap((definition) =>
+        definition.documentTransform === undefined ? [] : [definition.documentTransform],
+      )
+      for (const fn of [...registered, ...transforms.map((entry) => entry.transform)]) {
+        try {
+          out = fn(out)
+        } catch {
+          // The render reports a failed transform; the view skips it the same way.
+        }
+      }
+      return out
     },
   }
 }
