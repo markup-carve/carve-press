@@ -13,6 +13,7 @@ import {
   headingPermalinks,
   imgFence,
   index as indexTerms,
+  linkPolicy,
   listTable,
   mathBlock,
   spoiler,
@@ -74,6 +75,23 @@ function topLevelPermalinks(): PressExtension {
       return out
     },
   })
+}
+
+/** The host of `hostname`, which the link policy compares without the port, as 0.1 `profileBaseHost` did. */
+function hostOf(hostname: string | undefined): string | undefined {
+  if (hostname === undefined || hostname === '') return undefined
+  try {
+    return new URL(hostname).hostname
+  } catch {
+    return hostname
+  }
+}
+
+function sitePolicy(config: CarvePressConfig): PressExtension[] {
+  const options = config.carve.linkPolicy
+  if (options === undefined) return []
+  const baseHost = hostOf(config.hostname)
+  return [definition('link-policy', linkPolicy({ ...(baseHost === undefined ? {} : { baseHost }), ...options }))]
 }
 
 function presetExtensions(preset: CarvePressConfig['carve']['preset']): PressExtension[] {
@@ -147,6 +165,8 @@ export async function buildExtensionStack(
     islandsExtension(config.islands),
     ...(Object.keys(config.substitutions).length === 0 ? [] : [substitutionsExtension(config.substitutions)]),
     ...presetExtensions(config.carve.preset),
+    // After externalLinks, which replaces `rel`: the policy adds its values to it.
+    ...sitePolicy(config),
     ...config.carve.extensions,
   ]
 }

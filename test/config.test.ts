@@ -99,6 +99,16 @@ describe('resolveConfig', () => {
     )
   })
 
+  it('rejects a 0.1 Profile object with a build error', () => {
+    const profile = { getLinkPolicy: () => null } as unknown as string
+    expect(() => resolveConfig({ title: 'Carve', carve: { profile } })).toThrow(/not a Profile object/)
+  })
+
+  it('keeps carve.linkPolicy as given', () => {
+    const c = resolveConfig({ title: 'Carve', carve: { linkPolicy: { allowExternal: false } } })
+    expect(c.carve.linkPolicy).toEqual({ allowExternal: false })
+  })
+
   it('resolves configured playground paths relative to the site root', async () => {
     const root = await mkdtemp(resolve(tmpdir(), 'cp-config-playground-'))
     await mkdir(resolve(root, 'runtime/carve-wasm'), { recursive: true })

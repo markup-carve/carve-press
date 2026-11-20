@@ -12,7 +12,7 @@ CarvePress has two extension layers: Carve engine extensions that render markup,
 
 |= Preset |= Included Carve engine factories |
 | `minimal` | heading permalinks plus CarvePress code, compare, playground, images, and table scrolling |
-| `docs` | `tabs`, `details`, `mathBlock`, `externalLinks`, `tableOfContents`, `tocPlacement`, `wikilinks` |
+| `docs` | `tabs`, `details`, `mathBlock`, `externalLinks`, `tocPlacement`, `wikilinks` |
 | `full` | all `docs` factories plus `headingNumbers`, `glossary`, `index`, `citations`, `codeCallouts`, `colorSwatch`, `spoiler`, `listTable`, `imgFence`, `defaultAttributes` |
 
 CarvePress always wraps the preset with Shiki, table scrolling, compare, playground, code groups, heading permalinks, and image defaults.
