@@ -90,7 +90,7 @@ describe('resolveConfig', () => {
   it('resolves supported carve profile names', () => {
     const c = resolveConfig({ title: 'Carve', carve: { profile: 'article' } })
 
-    expect(c.carve.profile?.getName()).toBe('article')
+    expect(c.carve.profile).toBe('article')
   })
 
   it('rejects unsupported carve profile names', () => {

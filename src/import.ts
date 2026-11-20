@@ -1,11 +1,7 @@
 import { copyFile, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, posix, relative, resolve, sep } from 'node:path'
-import {
-  migrateHtml,
-  migrateMarkdown,
-  parse,
-  type MigrationDiagnostic,
-} from '@markup-carve/carve'
+import { parse, positionOf } from '@markup-carve/carve'
+import { importDocument, type ImportDiagnostic as EngineDiagnostic } from '@markup-carve/carve/import'
 import { stringify } from 'yaml'
 import { BuildError } from './errors.js'
 
@@ -30,10 +26,13 @@ export interface ImportOptions {
   exclude?: string[]
 }
 
+/** How much of the source a finding says survived; derived from the engine code. */
+export type ImportFidelity = 'normalized' | 'degraded' | 'dropped'
+
 export interface ImportDiagnostic {
   code: string
   severity: 'info' | 'warning' | 'error'
-  fidelity: MigrationDiagnostic['fidelity']
+  fidelity: ImportFidelity
   message: string
   /** 1-based; in the source file, or in the written page when `inOutput` is set. */
   line?: number
@@ -206,14 +205,31 @@ function siteDiagnostics(carve: string, dir: string): { diagnostics: ImportDiagn
   return { diagnostics, hasH1 }
 }
 
-function fromEngine(diagnostic: MigrationDiagnostic): ImportDiagnostic {
+const DROPPED_CODES = new Set([
+  'import-element-dropped',
+  'import-attribute-dropped',
+  'import-destination-denied',
+  'import-carrier-ignored',
+  'import-unsupported',
+])
+const NORMALIZED_CODES = new Set(['import-structure-repaired', 'import-whitespace-normalized'])
+
+function fidelityOf(diagnostic: EngineDiagnostic): ImportFidelity {
+  if (DROPPED_CODES.has(diagnostic.code)) return 'dropped'
+  if (NORMALIZED_CODES.has(diagnostic.code) || diagnostic.channel !== 'render-loss') return 'normalized'
+  return 'degraded'
+}
+
+/** `input` is the text the engine read, for turning a byte range into a line. */
+function fromEngine(diagnostic: EngineDiagnostic, input: string): ImportDiagnostic {
+  const message =
+    diagnostic.foreignType === undefined ? diagnostic.message : `${diagnostic.message} (<${diagnostic.foreignType}>)`
   return {
     code: diagnostic.code,
-    severity: diagnostic.severity,
-    fidelity: diagnostic.fidelity,
-    message: diagnostic.message,
-    ...(diagnostic.line === undefined ? {} : { line: diagnostic.line }),
-    ...(diagnostic.path === undefined ? {} : { path: diagnostic.path }),
+    severity: diagnostic.severity === 'hint' ? 'info' : diagnostic.severity,
+    fidelity: fidelityOf(diagnostic),
+    message,
+    ...(diagnostic.range === undefined ? {} : { line: positionOf(input, diagnostic.range.startOffset).line }),
   }
 }
 
@@ -226,14 +242,22 @@ export function convertPage(
   let diagnostics: ImportDiagnostic[]
   let title: string | undefined
   if (format === 'markdown') {
-    const result = migrateMarkdown(text)
-    carve = result.value
-    diagnostics = result.report.diagnostics.map(fromEngine)
+    // 0.1 Markdown import was GFM; `markdown` would drop tables, task lists and strikethrough.
+    const result = importDocument(text, { from: 'gfm' })
+    carve = result.source
+    diagnostics = result.diagnostics.map((d) => fromEngine(d, text))
+    // The hub reports no Markdown-side losses (reference links, empty links), so the page gets the note.
+    diagnostics.push({
+      code: 'fidelity-unverified',
+      severity: 'info',
+      fidelity: 'normalized',
+      message: 'the Markdown importer does not assess every construct',
+    })
   } else {
     const content = htmlContent(text)
-    const result = migrateHtml(content.body)
-    carve = result.value
-    diagnostics = result.report.diagnostics.map(fromEngine).map((d) =>
+    const result = importDocument(content.body, { from: 'html' })
+    carve = result.source
+    diagnostics = result.diagnostics.map((d) => fromEngine(d, content.body)).map((d) =>
       d.line === undefined ? d : { ...d, line: d.line + content.bodyLine - 1 },
     )
     title = content.title
@@ -341,8 +365,8 @@ export function formatImportReport(report: ImportReport): string[] {
   let losses = 0
   for (const page of report.pages) {
     for (const d of page.diagnostics) {
-      // The engine attaches this to every Markdown page; it says the report is
-      // not exhaustive, which is one note, not one line per page.
+      // Every Markdown page carries this; it says the report is not
+      // exhaustive, which is one note, not one line per page.
       if (d.code === 'fidelity-unverified') {
         unverified = true
         continue

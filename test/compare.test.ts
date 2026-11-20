@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
-import { carveToHtml } from '@markup-carve/carve'
+import { renderWithStack } from '../src/render/press-extension.js'
 import { compareExtension } from '../src/render/compare.js'
 import { createShikiExtension } from '../src/render/shiki.js'
 
 const ext = compareExtension()
-const render = (src: string) => carveToHtml(src, { extensions: [ext] })
+const render = (src: string) => renderWithStack(src, [ext])
 
 const BLOCK = ['::: compare', '```carve', '*bold*', '```', '```html', '<p>x</p>', '```', ':::'].join(
   '\n',
@@ -62,7 +62,7 @@ describe('compareExtension', () => {
       langs: ['carve', 'html'],
       themes: { light: 'github-light', dark: 'github-dark' },
     })
-    const html = carveToHtml(BLOCK, { extensions: [shiki, compareExtension()] })
+    const html = renderWithStack(BLOCK, [shiki, compareExtension()])
     const sourcePane =
       html.match(/<div class="carve-compare__source">[\s\S]*?<\/div><div class="carve-compare__output">/)?.[0] ??
       ''
@@ -90,7 +90,7 @@ describe('compareExtension executable-content warning', () => {
   it('warns when the live pane contains a <script> tag', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const localExt = compareExtension()
-    carveToHtml(compareBlock('<script>alert(1)</script>'), { extensions: [localExt] })
+    renderWithStack(compareBlock('<script>alert(1)</script>'), [localExt])
     expect(warn).toHaveBeenCalledTimes(1)
     expect(warn.mock.calls[0]?.[0]).toContain('<script')
     expect(warn.mock.calls[0]?.[0]).toContain('{.no-render}')
@@ -100,7 +100,7 @@ describe('compareExtension executable-content warning', () => {
   it('does not warn for ordinary markup', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const localExt = compareExtension()
-    carveToHtml(compareBlock('<p>hello <strong>world</strong></p>'), { extensions: [localExt] })
+    renderWithStack(compareBlock('<p>hello <strong>world</strong></p>'), [localExt])
     expect(warn).not.toHaveBeenCalled()
     warn.mockRestore()
   })
@@ -108,7 +108,7 @@ describe('compareExtension executable-content warning', () => {
   it('never warns for a {.no-render} block, regardless of content', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const localExt = compareExtension()
-    carveToHtml(compareBlock('<script>alert(1)</script>', '{.no-render}'), { extensions: [localExt] })
+    renderWithStack(compareBlock('<script>alert(1)</script>', '{.no-render}'), [localExt])
     expect(warn).not.toHaveBeenCalled()
     warn.mockRestore()
   })
@@ -117,7 +117,7 @@ describe('compareExtension executable-content warning', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const localExt = compareExtension()
     const src = `${compareBlock('<script>a()</script>')}\n\n${compareBlock('<script>b()</script>')}`
-    carveToHtml(src, { extensions: [localExt] })
+    renderWithStack(src, [localExt])
     expect(warn).toHaveBeenCalledTimes(1)
     warn.mockRestore()
   })
@@ -125,9 +125,7 @@ describe('compareExtension executable-content warning', () => {
   it('names the offending block and includes an excerpt of the content', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const localExt = compareExtension()
-    carveToHtml(compareBlock('<script>alert("hello from the excerpt")</script>'), {
-      extensions: [localExt],
-    })
+    renderWithStack(compareBlock('<script>alert("hello from the excerpt")</script>'), [localExt])
     const message = warn.mock.calls[0]?.[0] as string
     expect(message).toContain('compare-1')
     expect(message).toContain('alert("hello from the excerpt")')
@@ -147,7 +145,7 @@ describe('compareExtension executable-content warning', () => {
   ])('warns for %s', (_label, htmlContent) => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const localExt = compareExtension()
-    carveToHtml(compareBlock(htmlContent), { extensions: [localExt] })
+    renderWithStack(compareBlock(htmlContent), [localExt])
     expect(warn).toHaveBeenCalledTimes(1)
     warn.mockRestore()
   })
@@ -161,7 +159,7 @@ describe('compareExtension executable-content warning', () => {
   ])('does not warn for %s (false positive)', (_label, htmlContent) => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const localExt = compareExtension()
-    carveToHtml(compareBlock(htmlContent), { extensions: [localExt] })
+    renderWithStack(compareBlock(htmlContent), [localExt])
     expect(warn).not.toHaveBeenCalled()
     warn.mockRestore()
   })

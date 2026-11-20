@@ -65,7 +65,7 @@ function serializableConfig(config: CarvePressConfig): unknown {
     ...config,
     carve: {
       ...config.carve,
-      profile: config.carve.profile === undefined ? undefined : config.carve.profile.constructor.name,
+      profile: config.carve.profile,
       extensions: codeOf(config.carve.extensions),
     },
     extensions: codeOf(config.extensions),

@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { carveToHtml } from '@markup-carve/carve'
-import { playgroundExtension } from '../src/render/playground.js'
+import { render as renderCarve } from '@markup-carve/carve'
+import { playgroundExtension, type PlaygroundAssetUrls } from '../src/render/playground.js'
 
-const render = (src: string) => carveToHtml(src, { extensions: [playgroundExtension()] })
+const renderWith = (src: string, assets?: PlaygroundAssetUrls) => {
+  const playground = playgroundExtension(assets)
+  return renderCarve(src, { extensions: playground.extensions, renderers: playground.renderers })
+}
+const render = (src: string) => renderWith(src)
 
 describe('playgroundExtension', () => {
   it('renders a playground element with the initial source and rendered output', () => {
@@ -14,13 +18,9 @@ describe('playgroundExtension', () => {
   })
 
   it('emits configured playground asset data attributes only when provided', () => {
-    const html = carveToHtml('::: playground\n:::', {
-      extensions: [
-        playgroundExtension({
-          wasm: '/base/assets/playground/carve-wasm/carve_wasm.js',
-          mermaid: '/base/assets/playground/mermaid.min.js',
-        }),
-      ],
+    const html = renderWith('::: playground\n:::', {
+      wasm: '/base/assets/playground/carve-wasm/carve_wasm.js',
+      mermaid: '/base/assets/playground/mermaid.min.js',
     })
 
     expect(html).toContain('data-playground-wasm="/base/assets/playground/carve-wasm/carve_wasm.js"')
@@ -30,9 +30,7 @@ describe('playgroundExtension', () => {
   })
 
   it('escapes configured playground asset data attributes', () => {
-    const html = carveToHtml('::: playground\n:::', {
-      extensions: [playgroundExtension({ wasm: '/assets/"bad"/carve_wasm.js' })],
-    })
+    const html = renderWith('::: playground\n:::', { wasm: '/assets/"bad"/carve_wasm.js' })
 
     expect(html).toContain('data-playground-wasm="/assets/&quot;bad&quot;/carve_wasm.js"')
   })

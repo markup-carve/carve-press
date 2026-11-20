@@ -12,7 +12,7 @@ import type {
 } from '../config.js'
 import type { RenderedPage } from '../render/page.js'
 import type { FlatLink } from '../nav.js'
-import { sanitizeSvg } from '@markup-carve/carve'
+import { sanitizeSvg } from '@markup-carve/carve/extensions'
 import { BuildError } from '../errors.js'
 import { htmlDocument, escapeAttr, escapeText, withBase } from './shell.js'
 

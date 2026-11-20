@@ -1,4 +1,3 @@
-import { Profile } from '@markup-carve/carve'
 import { describe, it, expect } from 'vitest'
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -79,7 +78,7 @@ describe('renderPage', () => {
   })
 
   it('throws a SourceError when a carve profile rejects the page', () => {
-    const profile = Profile.article().onDisallowed(Profile.ACTION_ERROR)
+    const profile = 'article' as const
 
     expect(() =>
       renderPage(page('# T\n\n```=html\n<strong>raw</strong>\n```\n'), { ...ctx, profile }),
@@ -87,12 +86,13 @@ describe('renderPage', () => {
   })
 
   it('enforces the profile max length that the engine checks before parsing', () => {
-    const profile = Profile.article().onDisallowed(Profile.ACTION_ERROR).setMaxLength(16)
+    // 0.2 profiles carry fixed limits (C2-H-163): `minimal` accepts 10000 bytes.
+    const profile = 'minimal' as const
 
-    expect(() => renderPage(page('# T\n\nplenty of prose here\n'), { ...ctx, profile })).toThrow(
-      /maximum length of 16 bytes/,
+    expect(() => renderPage(page(`${'x'.repeat(10_001)}\n`), { ...ctx, profile })).toThrow(
+      /longer than the 10000 bytes the profile minimal accepts/,
     )
-    expect(() => renderPage(page('# T\n'), { ...ctx, profile })).not.toThrow()
+    expect(() => renderPage(page('Short.\n'), { ...ctx, profile })).not.toThrow()
   })
 
   it('rejects the removed private include spelling at its source line', async () => {
@@ -195,7 +195,7 @@ describe('renderPage', () => {
       expect.unreachable('should reject an unresolved include')
     } catch (error) {
       const formatted = (error as SourceError).format()
-      expect(formatted).toMatch(/start\.crv:6:1 include-unresolved/)
+      expect(formatted).toMatch(/start\.crv:6:1 include-not-found/)
       expect(formatted).not.toContain(dir)
     }
   })
@@ -211,7 +211,7 @@ describe('renderPage', () => {
       srcPath: resolve(site, 'start.crv'),
     }
 
-    expect(() => renderPage(p, { ...ctx, includeRoots: [site] })).toThrow(/include-unresolved/)
+    expect(() => renderPage(p, { ...ctx, includeRoots: [site] })).toThrow(/include-outside-root/)
   })
 })
 

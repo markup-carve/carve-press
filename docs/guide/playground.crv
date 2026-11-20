@@ -16,7 +16,7 @@ The playground ships the Carve engine to the browser. CarvePress only copies tho
 ```carve
 # Try Carve
 
-/italic/, *bold*, _underline_, ~strike~, =highlight=.
+/italic/, *bold*, {_underline_}, {~strike~}, {=highlight=}.
 
 ::: details "Disclosure"
 Edit the source and the preview updates.

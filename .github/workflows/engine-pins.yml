@@ -104,13 +104,19 @@ jobs:
               exit 1
             fi
           fi
-          if ! git -C "${DIR}" merge-base --is-ancestor "${rev}" origin/main; then
-            echo "::error::${DIR} ${rev} is not on main, so the pin came from an unmerged or rewritten branch"
+          # A commit pin is the 0.2 engine before its release: it must sit on
+          # the engine's next2 branch. A version pin must be on main.
+          branch=main
+          if [ "${rev}" = "${spec##*#}" ] && git -C "${DIR}" rev-parse -q --verify origin/next2 >/dev/null; then
+            branch=next2
+          fi
+          if ! git -C "${DIR}" merge-base --is-ancestor "${rev}" "origin/${branch}"; then
+            echo "::error::${DIR} ${rev} is not on ${branch}, so the pin came from an unmerged or rewritten branch"
             exit 1
           fi
-          behind="$(git -C "${DIR}" rev-list --count "${rev}..origin/main")"
+          behind="$(git -C "${DIR}" rev-list --count "${rev}..origin/${branch}")"
           echo "pinned ${DEP}: ${spec} = ${rev} ($(git -C "${DIR}" log -1 --format=%s "${rev}"))"
-          echo "${DIR} main is ${behind} commit(s) ahead"
+          echo "${DIR} ${branch} is ${behind} commit(s) ahead"
           if [ "${behind}" -gt 0 ]; then
-            echo "::warning::${DEP} is ${behind} ${DIR} commit(s) behind main"
+            echo "::warning::${DEP} is ${behind} ${DIR} commit(s) behind ${branch}"
           fi

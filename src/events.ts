@@ -1,8 +1,8 @@
-import type { CarveExtension } from '@markup-carve/carve'
 import type { CarvePressConfig } from './config.js'
 import type { Page } from './content/discover.js'
 import { BuildError, SourceError } from './errors.js'
 import type { RenderedPage } from './render/page.js'
+import type { PressExtension } from './render/press-extension.js'
 
 export interface RedirectEntry {
   source: string
@@ -17,7 +17,7 @@ export interface BuildEvents {
   /** `redirects` is mutable: a handler may add redirect entries before validation. */
   redirectsCollected: { pages: Page[]; redirects: RedirectEntry[] }
   /** `extensions` is mutable: a handler may add Carve extensions before rendering. */
-  rendererCreated: { extensions: CarveExtension[] }
+  rendererCreated: { extensions: PressExtension[] }
   /** `html` is mutable: a handler may post-process a page's output. */
   pageRendered: { rendered: RenderedPage; html: string }
   pageWritten: { rendered: RenderedPage; outPath: string }

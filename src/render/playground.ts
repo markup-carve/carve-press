@@ -1,11 +1,18 @@
-import { carveToAstJson, carveToHtml, type Attrs, type CarveExtension } from '@markup-carve/carve'
+import {
+  encodeTree,
+  parse,
+  render,
+  type Attrs,
+  type BlockExtensionNode,
+  type CodeBlockNode,
+  type ExtensionClaim,
+  type ExtensionDefinition,
+  type ExtensionRenderHost,
+  type ExtensionRenderer,
+  type InlineExtensionNode,
+} from '@markup-carve/carve'
 import { fenceContent } from './fence.js'
-
-interface CodeBlockNode {
-  type: string
-  lang?: string
-  content: string
-}
+import type { PressExtension } from './press-extension.js'
 
 export interface PlaygroundAssetUrls {
   wasm?: string
@@ -13,90 +20,99 @@ export interface PlaygroundAssetUrls {
   chart?: string
 }
 
-const FALLBACK_SAMPLE = ['/italic/', '*bold*', '_underline_', '~strike~', '=highlight='].join('\n')
+const PLAYGROUND = 'carve-press.playground'
+const FALLBACK_SAMPLE = ['/italic/', '*bold*', '{_underline_}', '{~strike~}', '{=highlight=}'].join('\n')
 
-function withBaseClasses(attrs: Attrs | undefined, ...baseClasses: string[]): Attrs {
-  const classes = [...baseClasses, ...(attrs?.classes ?? [])]
-  const order = attrs?.order === undefined ? undefined : attrs.order.includes('.class') ? attrs.order : ['.class', ...attrs.order]
-  return { ...attrs, classes, ...(order === undefined ? {} : { order }) }
-}
-
-function withPlaygroundAssets(attrs: Attrs | undefined, assets: PlaygroundAssetUrls): Attrs | undefined {
-  const entries: Array<[string, string | undefined]> = [
+function withPlaygroundAttrs(attrs: Attrs | undefined, assets: PlaygroundAssetUrls): Attrs {
+  const configured: Array<[string, string | undefined]> = [
     ['data-playground-wasm', assets.wasm],
     ['data-playground-mermaid', assets.mermaid],
     ['data-playground-chart', assets.chart],
   ]
-  const configured = entries.filter((entry): entry is [string, string] => entry[1] !== undefined)
-  if (configured.length === 0) return attrs
-
-  const keyValues = { ...(attrs?.keyValues ?? {}) }
-  const order = [...(attrs?.order ?? [])]
+  const keyValues: [string, string][] = (attrs?.keyValues ?? []).map(([key, value]) => [
+    key,
+    configured.find(([name, url]) => name === key && url !== undefined)?.[1] ?? value,
+  ])
   for (const [key, value] of configured) {
-    keyValues[key] = value
-    if (!order.includes(key)) order.push(key)
+    if (value !== undefined && !keyValues.some(([name]) => name === key)) keyValues.push([key, value])
   }
-  return { ...attrs, keyValues, order }
-}
-
-function syntheticCarveBlock(content: string): CodeBlockNode {
-  return { type: 'code_block', lang: 'carve', content }
-}
-
-function renderSourceTemplate(source: string, escapeHtml: (value: string) => string): string {
-  return `<template data-carve-playground-source>${escapeHtml(source)}</template>`
-}
-
-export function playgroundExtension(assets: PlaygroundAssetUrls = {}): CarveExtension {
-  let counter = 0
-
   return {
-    name: 'carve-press-playground',
-    beforeRender(doc) {
-      counter = 0
-      return doc
-    },
-    blockRenderers: {
-      admonition(node, ctx) {
-        const adm = node as {
-          kind?: string
-          children?: unknown[]
-        }
-        if (adm.kind !== 'playground') return undefined
-
-        const children = (adm.children ?? []) as CodeBlockNode[]
-        const carve = children.find((child) => child.type === 'code_block' && child.lang === 'carve')
-        const source = carve === undefined ? FALLBACK_SAMPLE : fenceContent(carve.content)
-        const sourceBlock = carve ?? syntheticCarveBlock(source)
-        const rendered = carveToHtml(source)
-        const group = `playground-${++counter}`
-        const renderedId = ctx.uniqueId(`${group}-rendered`)
-        const htmlId = ctx.uniqueId(`${group}-html`)
-        const astId = ctx.uniqueId(`${group}-ast`)
-        const ast = JSON.stringify(carveToAstJson(source), null, 2)
-        const attrs = ctx.renderAttrs(withPlaygroundAssets(withBaseClasses(node.attrs, 'carve-playground'), assets))
-
-        const sourcePane = `<div class="carve-playground__source" data-carve-playground-source-view>${ctx.renderChildren(
-          [sourceBlock] as never,
-          ctx.level + 1,
-        )}</div>`
-        const output = [
-          `<input type="radio" name="${group}" id="${renderedId}" class="carve-playground__radio" checked>`,
-          `<label for="${renderedId}" class="carve-playground__label">Rendered</label>`,
-          `<input type="radio" name="${group}" id="${htmlId}" class="carve-playground__radio">`,
-          `<label for="${htmlId}" class="carve-playground__label">HTML</label>`,
-          `<input type="radio" name="${group}" id="${astId}" class="carve-playground__radio">`,
-          `<label for="${astId}" class="carve-playground__label">AST</label>`,
-          `<div class="carve-playground__pane carve-playground__live" data-carve-playground-rendered>${rendered}</div>`,
-          `<div class="carve-playground__pane carve-playground__pane--html"><pre><code data-carve-playground-html>${ctx.escapeHtml(rendered)}\n</code></pre></div>`,
-          `<div class="carve-playground__pane carve-playground__pane--ast"><pre><code data-carve-playground-ast>${ctx.escapeHtml(ast)}\n</code></pre></div>`,
-        ].join('')
-
-        return `<carve-playground${attrs}>${renderSourceTemplate(
-          source,
-          ctx.escapeHtml,
-        )}${sourcePane}<div class="carve-playground__output">${output}</div></carve-playground>`
-      },
-    },
+    ...attrs,
+    classes: ['carve-playground', ...(attrs?.classes ?? [])],
+    ...(keyValues.length === 0 ? {} : { keyValues }),
   }
+}
+
+function isCarveBlock(node: { type: string }): node is CodeBlockNode {
+  return node.type === 'code_block' && (node as CodeBlockNode).syntax === 'carve'
+}
+
+// The engine attaches the authored attrs itself, minus the `playground` name class.
+function playgroundTransform(claim: ExtensionClaim): BlockExtensionNode | null {
+  if (claim.form !== 'div') return null
+  const carve = claim.body.find(isCarveBlock)
+  return {
+    type: 'block_extension',
+    name: PLAYGROUND,
+    version: '1',
+    children: [],
+    slots: { source: carve === undefined ? [] : [carve] },
+    fallback: structuredClone(claim.body),
+  }
+}
+
+const playgroundDefinition: ExtensionDefinition = {
+  name: PLAYGROUND,
+  version: '1',
+  matcher: { form: 'div', name: 'playground' },
+  props: {},
+  children: 'none',
+  slots: { source: { kind: 'block', optional: true } },
+  transform: playgroundTransform,
+}
+
+function renderPlayground(
+  node: BlockExtensionNode | InlineExtensionNode,
+  host: ExtensionRenderHost,
+  assets: PlaygroundAssetUrls,
+): string {
+  if (node.type !== 'block_extension') return ''
+  const carve = node.slots?.['source']?.find(isCarveBlock)
+  const source = carve === undefined ? FALLBACK_SAMPLE : fenceContent(carve.value)
+  const sourceBlock: CodeBlockNode = carve ?? { type: 'code_block', value: `${source}\n`, syntax: 'carve' }
+  const rendered = render(source)
+  const ast = JSON.stringify(JSON.parse(encodeTree(parse(source))), null, 2)
+  const group = host.nextId('playground', ['-rendered', '-html', '-ast'])
+  const renderedId = `${group}-rendered`
+  const htmlId = `${group}-html`
+  const astId = `${group}-ast`
+  const attrs = host.attributes({ ...node, attrs: withPlaygroundAttrs(node.attrs, assets) }, { block: true })
+
+  const sourcePane = `<div class="carve-playground__source" data-carve-playground-source-view>${host.blocks(
+    [sourceBlock],
+    host.blockDepth + 1,
+  )}</div>`
+  const output = [
+    `<input type="radio" name="${group}" id="${renderedId}" class="carve-playground__radio" checked>`,
+    `<label for="${renderedId}" class="carve-playground__label">Rendered</label>`,
+    `<input type="radio" name="${group}" id="${htmlId}" class="carve-playground__radio">`,
+    `<label for="${htmlId}" class="carve-playground__label">HTML</label>`,
+    `<input type="radio" name="${group}" id="${astId}" class="carve-playground__radio">`,
+    `<label for="${astId}" class="carve-playground__label">AST</label>`,
+    `<div class="carve-playground__pane carve-playground__live" data-carve-playground-rendered>${rendered}</div>`,
+    `<div class="carve-playground__pane carve-playground__pane--html"><pre><code data-carve-playground-html>${host.escapeText(rendered)}\n</code></pre></div>`,
+    `<div class="carve-playground__pane carve-playground__pane--ast"><pre><code data-carve-playground-ast>${host.escapeText(ast)}\n</code></pre></div>`,
+  ].join('')
+
+  return `<carve-playground${attrs}><template data-carve-playground-source>${host.escapeText(
+    source,
+  )}</template>${sourcePane}<div class="carve-playground__output">${output}</div></carve-playground>`
+}
+
+export function playgroundExtension(assets: PlaygroundAssetUrls = {}): PressExtension {
+  const renderer: ExtensionRenderer = {
+    version: '1',
+    render: (node, host) => renderPlayground(node, host, assets),
+  }
+  return { name: 'carve-press-playground', extensions: [playgroundDefinition], renderers: { [PLAYGROUND]: renderer } }
 }
