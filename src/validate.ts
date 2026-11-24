@@ -10,6 +10,8 @@ import type { RenderedPage } from './render/page.js'
 // 0.1 refused a continuation marker and failed the build; 0.2 reports it as
 // deprecated, but the marker still renders as text, so it stays fatal here.
 const STILL_FATAL = new Set(['deprecated-continuation-marker'])
+// 0.2 lint runs the migration rules only on request (C2-W-156), so turn these on.
+const FATAL_RULES = Object.fromEntries([...STILL_FATAL].map((rule) => [rule, 'on' as const]))
 
 const RE_HREF = /<a\b[^>]*\bhref="([^"]*)"/g
 
@@ -201,7 +203,7 @@ export function lintFailures(pages: Page[], includeRoot?: string): string[] {
             resolver: fileSystemResolver(includeRoot),
             file: relative(includeRoot, page.srcPath).split(sep).join('/'),
           }
-    for (const diagnostic of lint(page.source, includes === undefined ? {} : { includes })) {
+    for (const diagnostic of lint(page.source, includes === undefined ? { rules: FATAL_RULES } : { includes, rules: FATAL_RULES })) {
       if (diagnostic.severity === 'hint') continue
       // Without an include root nothing is expanded on purpose, as with the 0.1 engine.
       if (includes === undefined && diagnostic.code === 'include-no-resolver') continue
