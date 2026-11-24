@@ -62,7 +62,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: markup-carve/carve
-          ref: 8e56382c0b983f486bf9c848bddf542e7791c9ff
+          ref: bbdf093ac88eae2d6dd4c9a800fb25771c6bf0ea
           path: carve-spec
 
       - uses: actions/setup-node@v5

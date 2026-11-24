@@ -8,7 +8,8 @@
  * The 0.2 corpus is `spec/0.2/conformance/` (examples.json, clause-cases.json),
  * not the 0.1 `tests/corpus` directory. A case runs when it renders HTML and
  * its options are plain data: a case whose options are host code (extensions,
- * renderers, a code block renderer, social resolvers) is counted as skipped.
+ * renderers, a code block renderer, social resolvers) or that needs a `host`
+ * (sample document transforms) is counted as skipped.
  *
  * Prints `key=value` lines for the workflow to read; exits 1 when a case that is
  * not in the baseline diverges, and warns for a recorded id that now passes.
@@ -52,14 +53,14 @@ for (const example of examples) {
 }
 for (const entry of clauseCases) {
   if ((entry.kind ?? 'render') !== 'render' || entry.tree !== undefined) continue
-  cases.push({ id: entry.id, input: entry.input, inputBytes: entry.inputBytes, files: entry.files, options: entry.options ?? {}, html: entry.expected?.html })
+  cases.push({ id: entry.id, input: entry.input, inputBytes: entry.inputBytes, files: entry.files, options: entry.options ?? {}, host: entry.host, html: entry.expected?.html })
 }
 
 let documents = 0
 let skipped = 0
 const wrong = []
 for (const entry of cases) {
-  if (typeof entry.html !== 'string' || Object.keys(entry.options).some((key) => HOST_CODE.has(key))) {
+  if (typeof entry.html !== 'string' || entry.host !== undefined || Object.keys(entry.options).some((key) => HOST_CODE.has(key))) {
     skipped++
     continue
   }
