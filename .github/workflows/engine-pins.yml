@@ -104,12 +104,8 @@ jobs:
               exit 1
             fi
           fi
-          # A commit pin is the 0.2 engine before its release: it must sit on
-          # the engine's next2 branch. A version pin must be on main.
+          # Commit pins and version pins must both be on main.
           branch=main
-          if [ "${rev}" = "${spec##*#}" ] && git -C "${DIR}" rev-parse -q --verify origin/next2 >/dev/null; then
-            branch=next2
-          fi
           if ! git -C "${DIR}" merge-base --is-ancestor "${rev}" "origin/${branch}"; then
             echo "::error::${DIR} ${rev} is not on ${branch}, so the pin came from an unmerged or rewritten branch"
             exit 1
