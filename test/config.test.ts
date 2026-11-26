@@ -90,13 +90,23 @@ describe('resolveConfig', () => {
   it('resolves supported carve profile names', () => {
     const c = resolveConfig({ title: 'Carve', carve: { profile: 'article' } })
 
-    expect(c.carve.profile?.getName()).toBe('article')
+    expect(c.carve.profile).toBe('article')
   })
 
   it('rejects unsupported carve profile names', () => {
     expect(() => resolveConfig({ title: 'Carve', carve: { profile: 'unknown' } })).toThrow(
       /unsupported carve\.profile/,
     )
+  })
+
+  it('rejects a 0.1 Profile object with a build error', () => {
+    const profile = { getLinkPolicy: () => null } as unknown as string
+    expect(() => resolveConfig({ title: 'Carve', carve: { profile } })).toThrow(/not a Profile object/)
+  })
+
+  it('keeps carve.linkPolicy as given', () => {
+    const c = resolveConfig({ title: 'Carve', carve: { linkPolicy: { allowExternal: false } } })
+    expect(c.carve.linkPolicy).toEqual({ allowExternal: false })
   })
 
   it('resolves configured playground paths relative to the site root', async () => {

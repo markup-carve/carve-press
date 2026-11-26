@@ -12,7 +12,7 @@ This page uses `::: compare` so the Carve source and rendered HTML stay beside e
 
 ::: compare
 ```carve
-/italic/, *bold*, _underline_, ~strike~, and =highlight=.
+/italic/, *bold*, {_underline_}, {~strike~}, and {=highlight=}.
 ```
 ```html
 <p><em>italic</em>, <strong>bold</strong>, <u>underline</u>, <s>strike</s>, and <mark>highlight</mark>.</p>
@@ -44,8 +44,10 @@ Attributes go on the line above the heading.
 See </#custom-id>.
 ```
 ```html
-<h2 id="custom-id" class="tracked">Addressable Heading</h2>
-<p>See <a href="#custom-id">Addressable Heading</a>.</p>
+<section id="custom-id">
+  <h2 class="tracked">Addressable Heading</h2>
+  <p>See <a href="#custom-id">Addressable Heading</a>.</p>
+</section>
 ```
 :::
 
@@ -64,28 +66,26 @@ Area is m{^2^}; water is H{,2,}O.
 
 ## Lists And Continuation
 
-Bullets are `-` and `*`. A lone `+` continues the current list item.
+Bullets are `-` and `*`, and a different bullet character starts a new list. A blank line and a paragraph indented to the item's text continue the item.
 
 ::: compare
 ```carve
 - first
-+ continued paragraph
+
+  continued paragraph
 - second
 
 * also a bullet
 ```
 ```html
 <ul>
-<li>
-<p>first</p>
-<p>continued paragraph</p>
-</li>
-<li>
-<p>second</p>
-</li>
-<li>
-<p>also a bullet</p>
-</li>
+  <li>first
+    <p>continued paragraph</p>
+  </li>
+  <li>second</li>
+</ul>
+<ul>
+  <li>also a bullet</li>
 </ul>
 ```
 :::
@@ -102,10 +102,10 @@ Bullets are `-` and `*`. A lone `+` continues the current list item.
 ```
 ```html
 <dl>
-<dt>Carve</dt>
-<dd>The source markup.</dd>
-<dt>CarvePress</dt>
-<dd>The static site generator.</dd>
+  <dt>Carve</dt>
+  <dd>The source markup.</dd>
+  <dt>CarvePress</dt>
+  <dd>The static site generator.</dd>
 </dl>
 ```
 :::
@@ -151,10 +151,10 @@ The docs preset renders `::: details` as a `<details>` widget.
 :::
 
 ::: tabs
-::: tab [Source]
+::: tab "Source"
 Tabs are Carve admonitions.
 :::
-::: tab [Rendered]
+::: tab "Rendered"
 The tabs extension turns them into CSS-only tab panels.
 :::
 :::

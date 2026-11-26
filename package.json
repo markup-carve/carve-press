@@ -60,7 +60,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@markup-carve/carve": "0.1.17",
+    "@markup-carve/carve": "github:markup-carve/carve-js#2003ec4327a736ee29fbb4e6ac108db7c108e50e",
     "@markup-carve/carve-grammars": "0.1.24",
     "@shikijs/themes": "^4.5.0",
     "@shikijs/transformers": "^1.29.0",

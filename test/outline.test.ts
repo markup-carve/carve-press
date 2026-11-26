@@ -1,6 +1,6 @@
 // test/outline.test.ts
 import { describe, it, expect } from 'vitest'
-import { carveToHtml, parse } from '@markup-carve/carve'
+import { parse, render } from '@markup-carve/carve'
 import { outlineFromAst } from '../src/outline.js'
 
 function headingIdsFromHtml(html: string): string[] {
@@ -64,7 +64,7 @@ describe('outlineFromAst', () => {
     ].join('\n')
 
     const slugs = outlineFromAst(parse(source), [2, 3]).map((e) => e.slug)
-    expect(slugs).toEqual(headingIdsFromHtml(carveToHtml(source)))
+    expect(slugs).toEqual(headingIdsFromHtml(render(source)))
   })
 
   it('returns an empty outline for a page with no qualifying headings', () => {

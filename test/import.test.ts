@@ -69,7 +69,7 @@ describe('convertPage', () => {
   it('reports what the HTML importer dropped', () => {
     const { diagnostics } = convertPage('<p>x</p><script>y()</script>', 'html')
     expect(diagnostics).toContainEqual(
-      expect.objectContaining({ code: 'element-dropped', fidelity: 'dropped' }),
+      expect.objectContaining({ code: 'import-element-dropped', fidelity: 'dropped' }),
     )
   })
 })
@@ -145,7 +145,7 @@ describe('importSite', () => {
     const root = await legacy()
     const report = await importSite({ root, source: 'old', out: 'old' })
     expect(report.pages.map((p) => p.output)).toEqual(['old/about.crv', 'old/guide/start.crv', 'old/index.crv'])
-    expect(await readFile(resolve(root, 'old/index.crv'), 'utf8')).toContain('# Home')
+    expect(await readFile(resolve(root, 'old/index.crv'), 'utf8')).toContain('= Home')
     const again = await importSite({ root, source: 'old', out: 'old' })
     expect(again.pages).toEqual([])
     expect(again.skipped.map((s) => s.reason)).toContain('already Carve')
@@ -160,7 +160,7 @@ describe('importSite', () => {
     expect(await readFile(resolve(root, 'docs/index.crv'), 'utf8')).toBe('MINE\n')
 
     await importSite({ root, source: 'old', out: 'docs', force: true })
-    expect(await readFile(resolve(root, 'docs/index.crv'), 'utf8')).toContain('# Home')
+    expect(await readFile(resolve(root, 'docs/index.crv'), 'utf8')).toContain('= Home')
   })
 
   it('skips a page that is not UTF-8 instead of importing replacement characters', async () => {

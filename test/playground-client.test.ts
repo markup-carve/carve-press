@@ -6,9 +6,14 @@ import { dirname, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import * as carveEngine from '@markup-carve/carve'
-import { carveToHtml } from '@markup-carve/carve'
+import * as carveExtensions from '@markup-carve/carve/extensions'
 import { afterEach, describe, expect, it } from 'vitest'
-import { playgroundExtension } from '../src/render/playground.js'
+import { playgroundExtension, type PlaygroundAssetUrls } from '../src/render/playground.js'
+
+function renderPlayground(source: string, assets?: PlaygroundAssetUrls): string {
+  const playground = playgroundExtension(assets)
+  return carveEngine.render(source, { extensions: playground.extensions, renderers: playground.renderers })
+}
 
 const execFileAsync = promisify(execFile)
 const chromeFlags = [
@@ -516,7 +521,8 @@ describe('playground client', () => {
     const classify = mod.classifyEngineExport as (name: string, value: unknown) => { kind: string; reason?: string }
     const build = mod.buildPlaygroundExtensions as (engine: Record<string, unknown>) => Array<{ name: string }>
     const exclusions = mod.PLAYGROUND_EXTENSION_EXCLUSIONS as Record<string, string>
-    const unclassified = Object.entries(carveEngine)
+    const engine = { ...carveEngine, ...carveExtensions } as Record<string, unknown>
+    const unclassified = Object.entries(engine)
       .filter(([name, value]) => {
         const result = classify(name, value)
         return result.kind === 'unclassified'
@@ -525,28 +531,25 @@ describe('playground client', () => {
 
     expect(unclassified).toEqual([])
     expect(exclusions.mermaid).toMatch(/Mermaid/)
-    expect(build(carveEngine as Record<string, unknown>).map((extension) => extension.name)).toEqual([
+    expect(build(engine).map((extension) => extension.name)).toEqual([
       'autolink',
       'citations',
       'codeCallouts',
-      'code-group',
-      'color',
+      'codeGroup',
+      'colorSwatch',
       'details',
-      'external-links',
+      'externalLinks',
       'glossary',
-      'heading-level-shift',
-      'headingNumbers',
-      'heading-permalinks',
-      'heading-reference',
-      'img-fence',
+      'headingPermalinks',
+      'headingReference',
+      'imgFence',
       'index',
-      'list-table',
-      'math-block',
-      'semantic-span',
+      'listTable',
+      'mathBlock',
+      'semanticSpan',
       'spoiler',
-      'table-of-contents',
       'tabs',
-      'toc',
+      'tocPlacement',
       'wikilinks',
     ])
   })
@@ -569,7 +572,7 @@ describe('playground client', () => {
 
     try {
       const extensions = build({
-        details: carveEngine.details,
+        details: carveExtensions.details,
         broken() {
           throw new Error('boom')
         },
@@ -585,9 +588,7 @@ describe('playground client', () => {
   it('seeds the editor from template content before replacing server-rendered children', async () => {
     const source = '*bold*'
     const rendered = '<p><strong>bold</strong></p>'
-    const playgroundMarkup = carveToHtml(['::: playground', '```carve', source, '```', ':::'].join('\n'), {
-      extensions: [playgroundExtension()],
-    })
+    const playgroundMarkup = renderPlayground(['::: playground', '```carve', source, '```', ':::'].join('\n'))
     expect(playgroundMarkup).toContain(`<template data-carve-playground-source>${source}</template>`)
 
     const registry = new Map<string, CustomElementConstructor>()
@@ -643,9 +644,7 @@ describe('playground client', () => {
     if (!bin) return
     if (!(await canDriveChrome(bin))) return
 
-    const playgroundMarkup = carveToHtml(['::: playground', '```carve', '*bold*', '```', ':::'].join('\n'), {
-      extensions: [playgroundExtension()],
-    })
+    const playgroundMarkup = renderPlayground(['::: playground', '```carve', '*bold*', '```', ':::'].join('\n'))
     const playgroundScript = await readFile(resolve(import.meta.dirname, '../theme/playground.js'), 'utf8')
     const userDataDir = await mkdtemp(resolve(tmpdir(), 'cp-chrome-'))
     const fixtureDir = await mkdtemp(resolve(tmpdir(), 'cp-playground-client-'))
@@ -659,20 +658,28 @@ describe('playground client', () => {
     await writeFile(
       enginePath,
       `
-export function carveToHtml(source, opts = {}) {
+export function render(source, opts = {}) {
   if (source === '*bold*') return '<p><strong>bold</strong></p>'
   if (source === '::: details\\nbody\\n:::') {
-    return opts.extensions?.some((extension) => extension.name === 'details')
+    return opts.extensions?.some((extension) => extension.name === 'carve.details')
       ? '<details>\\n  <summary>Details</summary>\\n  <p>body</p>\\n</details>'
       : '<div class="details">\\n  <p>body</p>\\n</div>'
   }
   return ''
 }
-export function carveToAstJson(source) {
+export function encodeTree(tree) {
+  return JSON.stringify(tree)
+}
+export function parse(source) {
   return { type: 'document', children: [{ type: 'text', value: source }] }
 }
+`,
+    )
+    await writeFile(
+      resolve(fixtureDir, 'assets/carve/extensions.js'),
+      `
 export function details() {
-  return { name: 'details', blockRenderers: {} }
+  return { extensions: [{ name: 'carve.details', version: '1', props: {}, slots: {} }], renderers: {} }
 }
 export function broken() {
   throw new Error('boom')
@@ -707,12 +714,15 @@ export function broken() {
 
   it('loads Mermaid only for configured previews with matching blocks and renders both emitted forms', async () => {
     const engineSource = `
-export function carveToHtml(source) {
+export function render(source) {
   if (source === 'none') return '<p>No diagram</p>'
   if (source === 'code') return '<pre><code class="language-mermaid">graph LR; A-->B</code></pre>'
   return '<pre class="mermaid">graph LR; A-->B</pre>'
 }
-export function carveToAstJson(source) {
+export function encodeTree(tree) {
+  return JSON.stringify(tree)
+}
+export function parse(source) {
   return { type: 'document', source }
 }
 `
@@ -726,7 +736,7 @@ globalThis.mermaid = {
   },
 }
 `
-    const configured = carveToHtml(
+    const configured = renderPlayground(
       [
         '::: playground',
         '```carve',
@@ -744,7 +754,7 @@ globalThis.mermaid = {
         '```',
         ':::',
       ].join('\n'),
-      { extensions: [playgroundExtension({ mermaid: './assets/mermaid.min.js' })] },
+      { mermaid: './assets/mermaid.min.js' },
     )
     const parsed = await runRuntimeFixture(
       configured,
@@ -774,9 +784,7 @@ globalThis.mermaid = {
     expect(parsed.third).toBe('<p>No diagram</p>')
     expect(parsed.theme).toBe('default')
 
-    const absent = carveToHtml(['::: playground', '```carve', 'pre', '```', ':::'].join('\n'), {
-      extensions: [playgroundExtension()],
-    })
+    const absent = renderPlayground(['::: playground', '```carve', 'pre', '```', ':::'].join('\n'))
     const absentParsed = await runRuntimeFixture(
       absent,
       `
@@ -802,10 +810,13 @@ globalThis.mermaid = {
 
   it('leaves Mermaid parse errors as readable source and discards stale async diagrams', async () => {
     const engineSource = `
-export function carveToHtml(source) {
+export function render(source) {
   return '<pre class="mermaid">' + source.replace(/</g, '&lt;') + '</pre>'
 }
-export function carveToAstJson(source) {
+export function encodeTree(tree) {
+  return JSON.stringify(tree)
+}
+export function parse(source) {
   return { type: 'document', source }
 }
 `
@@ -821,9 +832,10 @@ globalThis.mermaid = {
   },
 }
 `
-    const parseError = carveToHtml(['::: playground', '```carve', 'bad', '```', ':::'].join('\n'), {
-      extensions: [playgroundExtension({ mermaid: './assets/mermaid.min.js' })],
-    })
+    const parseError = renderPlayground(
+      ['::: playground', '```carve', 'bad', '```', ':::'].join('\n'),
+      { mermaid: './assets/mermaid.min.js' },
+    )
     const parseParsed = await runRuntimeFixture(
       parseError,
       `
@@ -840,9 +852,10 @@ globalThis.mermaid = {
     expect(parseParsed.loads).toBe(1)
     expect(parseParsed.html).toContain('<pre class="mermaid">bad</pre>')
 
-    const stale = carveToHtml(['::: playground', '```carve', 'old', '```', ':::'].join('\n'), {
-      extensions: [playgroundExtension({ mermaid: './assets/mermaid.min.js' })],
-    })
+    const stale = renderPlayground(
+      ['::: playground', '```carve', 'old', '```', ':::'].join('\n'),
+      { mermaid: './assets/mermaid.min.js' },
+    )
     const staleParsed = await runRuntimeFixture(
       stale,
       `
@@ -868,11 +881,14 @@ globalThis.mermaid = {
 
   it('renders Chart.js JSON configs, preserves invalid JSON, and destroys prior instances on re-render', async () => {
     const engineSource = `
-export function carveToHtml(source) {
+export function render(source) {
   if (source === 'invalid') return '<div class="chart"><script type="application/json">{bad</script></div>'
   return '<div class="chart"><script type="application/json">{"type":"bar","data":{"labels":["' + source + '"],"datasets":[{"data":[1]}]}}</script></div>'
 }
-export function carveToAstJson(source) {
+export function encodeTree(tree) {
+  return JSON.stringify(tree)
+}
+export function parse(source) {
   return { type: 'document', source }
 }
 `
@@ -886,9 +902,10 @@ globalThis.Chart = function Chart(canvas, config) {
   }
 }
 `
-    const valid = carveToHtml(['::: playground', '```carve', 'one', '```', ':::'].join('\n'), {
-      extensions: [playgroundExtension({ chart: './assets/chart.umd.js' })],
-    })
+    const valid = renderPlayground(
+      ['::: playground', '```carve', 'one', '```', ':::'].join('\n'),
+      { chart: './assets/chart.umd.js' },
+    )
     const validParsed = await runRuntimeFixture(
       valid,
       `
@@ -922,9 +939,10 @@ globalThis.Chart = function Chart(canvas, config) {
     expect(validParsed.destroys).toBe(1)
     expect(validParsed.canvasCount).toBe(1)
 
-    const invalid = carveToHtml(['::: playground', '```carve', 'invalid', '```', ':::'].join('\n'), {
-      extensions: [playgroundExtension({ chart: './assets/chart.umd.js' })],
-    })
+    const invalid = renderPlayground(
+      ['::: playground', '```carve', 'invalid', '```', ':::'].join('\n'),
+      { chart: './assets/chart.umd.js' },
+    )
     const invalidParsed = await runRuntimeFixture(
       invalid,
       `
@@ -950,9 +968,7 @@ globalThis.Chart = function Chart(canvas, config) {
     expect(invalidParsed.constructs).toEqual([])
     expect(invalidParsed.html).toContain('<script type="application/json">{bad</script>')
 
-    const absent = carveToHtml(['::: playground', '```carve', 'one', '```', ':::'].join('\n'), {
-      extensions: [playgroundExtension()],
-    })
+    const absent = renderPlayground(['::: playground', '```carve', 'one', '```', ':::'].join('\n'))
     const absentParsed = await runRuntimeFixture(
       absent,
       `
@@ -982,9 +998,10 @@ globalThis.Chart = function Chart(canvas, config) {
     if (!bin) return
     if (!(await canDriveChrome(bin))) return
 
-    const playgroundMarkup = carveToHtml(['::: playground', '```carve', '*bold*', '```', ':::'].join('\n'), {
-      extensions: [playgroundExtension({ wasm: './assets/carve-wasm/carve_wasm.js' })],
-    })
+    const playgroundMarkup = renderPlayground(
+      ['::: playground', '```carve', '*bold*', '```', ':::'].join('\n'),
+      { wasm: './assets/carve-wasm/carve_wasm.js' },
+    )
     const playgroundScript = await readFile(resolve(import.meta.dirname, '../theme/playground.js'), 'utf8')
     const userDataDir = await mkdtemp(resolve(tmpdir(), 'cp-chrome-'))
     const fixtureDir = await mkdtemp(resolve(tmpdir(), 'cp-playground-wasm-'))
@@ -1000,10 +1017,13 @@ globalThis.Chart = function Chart(canvas, config) {
     await writeFile(
       enginePath,
       `
-export function carveToHtml() {
+export function render() {
   return '<p><strong>bold</strong></p>'
 }
-export function carveToAstJson(source) {
+export function encodeTree(tree) {
+  return JSON.stringify(tree)
+}
+export function parse(source) {
   return { type: 'document', children: [{ type: 'text', value: source }] }
 }
 `,
@@ -1045,9 +1065,10 @@ export function toHtmlFull(source) {
     if (!bin) return
     if (!(await canDriveChrome(bin))) return
 
-    const playgroundMarkup = carveToHtml(['::: playground', '```carve', '*bold*', '```', ':::'].join('\n'), {
-      extensions: [playgroundExtension({ wasm: './assets/carve-wasm/carve_wasm.js' })],
-    })
+    const playgroundMarkup = renderPlayground(
+      ['::: playground', '```carve', '*bold*', '```', ':::'].join('\n'),
+      { wasm: './assets/carve-wasm/carve_wasm.js' },
+    )
     const playgroundScript = await readFile(resolve(import.meta.dirname, '../theme/playground.js'), 'utf8')
     const userDataDir = await mkdtemp(resolve(tmpdir(), 'cp-chrome-'))
     const fixtureDir = await mkdtemp(resolve(tmpdir(), 'cp-playground-wasm-fail-'))
@@ -1063,10 +1084,13 @@ export function toHtmlFull(source) {
     await writeFile(
       enginePath,
       `
-export function carveToHtml() {
+export function render() {
   return '<p><strong>bold</strong></p>'
 }
-export function carveToAstJson(source) {
+export function encodeTree(tree) {
+  return JSON.stringify(tree)
+}
+export function parse(source) {
   return { type: 'document', children: [{ type: 'text', value: source }] }
 }
 `,

@@ -11,10 +11,84 @@ import {
 } from '@shikijs/transformers'
 import { diffCodeTransformer } from '@markup-carve/carve-grammars/shiki/diff'
 import { carveLightTheme, carveDarkTheme, extendTheme } from '@markup-carve/carve-grammars/shiki/themes'
-import type { Attrs, BlockExtensionRenderContext, CarveExtension } from '@markup-carve/carve'
+import { AST_VERSION, render, type Attrs as EngineAttrs, type CodeBlockNode, type DocumentNode, type Node } from '@markup-carve/carve'
 import type { ShikiLanguage } from '../config.js'
 import { fenceContent } from './fence.js'
 import { syntaxPalette } from './syntax-palette.js'
+import type { PressExtension } from './press-extension.js'
+
+/** Attributes as this module reads them: key/value pairs keyed by name, in authored order. */
+export interface Attrs {
+  id?: string
+  classes?: string[]
+  keyValues?: Record<string, string>
+  order?: string[]
+}
+
+export interface ShikiRenderContext {
+  renderAttrs(attrs: Attrs | undefined): string
+  escapeHtml(value: string): string
+  escapeAttr(value: string): string
+}
+
+function toEngineAttrs(attrs: Attrs): EngineAttrs {
+  const keyValues = Object.entries(attrs.keyValues ?? {})
+  return {
+    ...(attrs.id === undefined ? {} : { id: attrs.id }),
+    ...(attrs.classes === undefined || attrs.classes.length === 0 ? {} : { classes: attrs.classes }),
+    ...(keyValues.length === 0 ? {} : { keyValues }),
+  }
+}
+
+/**
+ * The engine writes the attribute string, so its dangerous-name and URL-policy
+ * filtering stays the single source of truth for highlighted blocks too.
+ */
+const engineContext: ShikiRenderContext = {
+  renderAttrs(attrs) {
+    if (attrs === undefined) return ''
+    const engine = toEngineAttrs(attrs)
+    if (Object.keys(engine).length === 0) return ''
+    const doc = {
+      type: 'document',
+      astVersion: AST_VERSION,
+      children: [{ type: 'paragraph', attrs: engine, children: [{ type: 'text', value: 'x' }] }],
+    } as unknown as DocumentNode
+    return /^<p([^>]*)>/.exec(render(doc, { sections: false }))?.[1] ?? ''
+  },
+  escapeHtml: (value) => escapeHtml(value),
+  escapeAttr: (value) => escapeAttr(value),
+}
+
+function plainText(nodes: readonly Node[] | undefined): string {
+  let out = ''
+  for (const node of nodes ?? []) {
+    const value = (node as { value?: unknown }).value
+    if (typeof value === 'string') out += value
+    out += plainText((node as { children?: Node[] }).children)
+  }
+  return out
+}
+
+function localAttrs(attrs: EngineAttrs | undefined, title: string | undefined): Attrs | undefined {
+  const keyValues: Record<string, string> = {}
+  const order: string[] = []
+  if (title !== undefined) {
+    keyValues.title = title
+    order.push('title')
+  }
+  for (const [key, value] of attrs?.keyValues ?? []) {
+    if (!order.includes(key)) order.push(key)
+    keyValues[key] = value
+  }
+  if (attrs === undefined && title === undefined) return undefined
+  return {
+    ...(attrs?.id === undefined ? {} : { id: attrs.id }),
+    ...(attrs?.classes === undefined ? {} : { classes: attrs.classes }),
+    keyValues,
+    order,
+  }
+}
 
 function paletteRules(colors: typeof syntaxPalette.light | typeof syntaxPalette.dark) {
   const rule = (scope: string | string[], foreground: string, fontStyle?: 'bold' | 'italic') => ({
@@ -47,7 +121,7 @@ export type ShikiHighlightCallback = (
   code: string,
   lang: string | undefined,
   attrs?: Attrs,
-  ctx?: BlockExtensionRenderContext,
+  ctx?: ShikiRenderContext,
   figureAttrs?: Attrs,
 ) => string
 
@@ -229,7 +303,7 @@ function plainHighlightedBlockWithAttrs(
   lang: string | undefined,
   attrs: Attrs | undefined,
   highlightedLines: Set<number>,
-  ctx: BlockExtensionRenderContext | undefined,
+  ctx: ShikiRenderContext | undefined,
 ): string {
   const html = plainHighlightedBlock(content, lang, highlightedLines)
   return ctx === undefined ? html : mergeAttrsIntoPre(html, attrs, ctx)
@@ -264,7 +338,7 @@ function isCodeBlockWrapper(html: string): boolean {
  * or not found where expected, so an unexpected Shiki output shape mangles
  * formatting at worst, not silently loses authored metadata.
  */
-function mergeAttrsIntoPre(html: string, attrs: Attrs | undefined, ctx: BlockExtensionRenderContext): string {
+function mergeAttrsIntoPre(html: string, attrs: Attrs | undefined, ctx: ShikiRenderContext): string {
   const attrString = ctx.renderAttrs(attrs)
   if (attrString === '') return html
   const tagEnd = html.indexOf('>')
@@ -403,7 +477,7 @@ function wrapCodeBlock(opts: {
   lineStart?: number
   /** True only when the fence went through the transformers that consume them. */
   notationConsumed?: boolean
-  ctx?: BlockExtensionRenderContext
+  ctx?: ShikiRenderContext
 }): string {
   const escapeText = opts.ctx?.escapeHtml ?? escapeHtml
   const escapeValue = opts.ctx?.escapeAttr ?? escapeAttr
@@ -506,44 +580,56 @@ export async function createShikiHighlighter(opts: ShikiOptions): Promise<ShikiH
   }
 }
 
-export function createShikiExtensionFromHighlighter(highlight: ShikiHighlightCallback): CarveExtension {
-  // Core renders a figure's target through the block renderers but passes no
-  // parent, so the figure records its code block target on the way down.
-  const figureAttrsByTarget = new WeakMap<object, Attrs>()
-  type FigureNode = { type?: string; target?: { type?: string }; attrs?: Attrs }
-  const rememberFigure = (figure: FigureNode): void => {
-    if (figure.target?.type === 'code_block' && figure.attrs !== undefined) figureAttrsByTarget.set(figure.target, figure.attrs)
+export function createShikiExtensionFromHighlighter(highlight: ShikiHighlightCallback): PressExtension {
+  // The engine writes a captioned block's attributes on its <figure> and hands
+  // the renderer the bare block, so a transform queues them in document order.
+  const captioned = new Map<string, Attrs[]>()
+  const keyOf = (node: Readonly<CodeBlockNode>) => `${node.syntax ?? ''}\0${node.value}`
+  const collect = (value: unknown): void => {
+    if (value === null || typeof value !== 'object') return
+    if (Array.isArray(value)) {
+      for (const entry of value) collect(entry)
+      return
+    }
+    const node = value as Partial<CodeBlockNode> & { type?: string }
+    if (node.type === 'code_block' && node.caption !== undefined && node.attrs !== undefined) {
+      const key = keyOf(node as CodeBlockNode)
+      const list = captioned.get(key) ?? []
+      list.push(localAttrs(node.attrs, undefined)!)
+      captioned.set(key, list)
+    }
+    for (const [key, child] of Object.entries(value)) if (key !== 'pos' && key !== 'attrs') collect(child)
   }
   return {
     name: 'shiki',
-    blockRenderers: {
-      figure(node) {
-        rememberFigure(node as FigureNode)
-        return undefined
+    beginPage: () => captioned.clear(),
+    transforms: [
+      {
+        name: 'carve-press.shiki-captions',
+        transform(doc: DocumentNode): DocumentNode {
+          collect(doc.children)
+          return doc
+        },
       },
-      figure_group(node) {
-        for (const child of (node as { children?: FigureNode[] }).children ?? []) {
-          if (child.type === 'figure') rememberFigure(child)
-        }
-        return undefined
-      },
-      code_block(node, ctx) {
-        const lang = (node as { lang?: string }).lang
-        const content = fenceContent((node as { content: string }).content)
-        const attrs = (node as { attrs?: Attrs }).attrs
-        const html = highlight(content, lang, attrs, ctx, figureAttrsByTarget.get(node))
-        if (isCodeBlockWrapper(html)) return html
-        const title = attrsKeyValues(attrs).title
-        const renderedAttrs = cloneAttrsWithout(attrs, RENDER_DIRECTIVE_KEYS, RENDER_DIRECTIVE_CLASSES)
-        const pre = isShikiBlock(html)
-          ? mergeAttrsIntoPre(html, renderedAttrs, ctx)
-          : plainHighlightedBlockWithAttrs(content, lang, renderedAttrs, new Set(), ctx)
-        return wrapCodeBlock({ html: pre, content, lang, title, ctx })
-      },
+    ],
+    codeBlockRenderer(node: Readonly<CodeBlockNode>) {
+      const lang = node.syntax
+      const content = fenceContent(node.value)
+      const title = node.title === undefined ? undefined : plainText(node.title)
+      const figureAttrs = node.attrs === undefined ? captioned.get(keyOf(node))?.shift() : undefined
+      const own = localAttrs(node.attrs, title)
+      const ctx = engineContext
+      const html = highlight(content, lang, own, ctx, figureAttrs)
+      if (isCodeBlockWrapper(html)) return html
+      const renderedAttrs = cloneAttrsWithout(own, RENDER_DIRECTIVE_KEYS, RENDER_DIRECTIVE_CLASSES)
+      const pre = isShikiBlock(html)
+        ? mergeAttrsIntoPre(html, renderedAttrs, ctx)
+        : plainHighlightedBlockWithAttrs(content, lang, renderedAttrs, new Set(), ctx)
+      return wrapCodeBlock({ html: pre, content, lang, title: attrsKeyValues(own).title, ctx })
     },
   }
 }
 
-export async function createShikiExtension(opts: ShikiOptions): Promise<CarveExtension> {
+export async function createShikiExtension(opts: ShikiOptions): Promise<PressExtension> {
   return createShikiExtensionFromHighlighter(await createShikiHighlighter(opts))
 }

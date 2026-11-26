@@ -1,20 +1,21 @@
-import type { BlockNode, CarveExtension, Document, InlineNode, TableCell } from '@markup-carve/carve'
+import type { DocumentNode, Inline, Node, TextNode } from '@markup-carve/carve'
 import type { NormalizedSubstitution } from '../config.js'
+import type { PressExtension } from './press-extension.js'
 
 type SubstitutionMap = Record<string, NormalizedSubstitution>
 
 const TOKEN_RE = /\|([A-Za-z][A-Za-z0-9_-]*)\|/g
 
-function replacementNode(substitution: NormalizedSubstitution): InlineNode {
-  const text: InlineNode = { type: 'text', value: substitution.value }
+function replacementNode(substitution: NormalizedSubstitution): Inline {
+  const text: Inline = { type: 'text', value: substitution.value }
   if (substitution.format === 'bold') return { type: 'strong', children: [text] }
   if (substitution.format === 'italic') return { type: 'emphasis', children: [text] }
   if (substitution.format === 'code') return { type: 'code', value: substitution.value }
   return text
 }
 
-function substituteText(node: Extract<InlineNode, { type: 'text' }>, substitutions: SubstitutionMap, warned: Set<string>): InlineNode[] {
-  const out: InlineNode[] = []
+function substituteText(node: TextNode, substitutions: SubstitutionMap, warned: Set<string>): Inline[] {
+  const out: Inline[] = []
   let last = 0
   let changed = false
 
@@ -45,107 +46,47 @@ function substituteText(node: Extract<InlineNode, { type: 'text' }>, substitutio
   return out
 }
 
-function replaceInlines(nodes: InlineNode[], substitutions: SubstitutionMap, warned: Set<string>): InlineNode[] {
-  const out: InlineNode[] = []
+// Literal content: a token inside code, raw output, math or a comment is text the author meant verbatim.
+const VERBATIM = new Set(['code', 'code_block', 'raw_inline', 'raw_block', 'math', 'comment', 'frontmatter'])
+
+function isNode(value: unknown): value is Node {
+  return value !== null && typeof value === 'object' && typeof (value as { type?: unknown }).type === 'string'
+}
+
+function replaceList(nodes: unknown[], substitutions: SubstitutionMap, warned: Set<string>): unknown[] {
+  const out: unknown[] = []
   for (const node of nodes) {
-    if (node.type === 'text') {
-      out.push(...substituteText(node, substitutions, warned))
+    if (isNode(node) && node.type === 'text') {
+      out.push(...substituteText(node as TextNode, substitutions, warned))
       continue
     }
-    if (
-      node.type === 'code' ||
-      node.type === 'raw_inline' ||
-      node.type === 'literal_inline' ||
-      node.type === 'critic_comment'
-    ) {
-      out.push(node)
-      continue
-    }
-    if ('children' in node && Array.isArray(node.children)) {
-      node.children = replaceInlines(node.children, substitutions, warned)
-    }
-    if (node.type === 'inline_footnote') {
-      node.inline = replaceInlines(node.inline, substitutions, warned)
-    }
+    if (isNode(node)) replaceNode(node, substitutions, warned)
     out.push(node)
   }
   return out
 }
 
-/**
- * A cell holds inline content when it came from Carve source and block content
- * when it was imported from another format (carve 0.1.9), so either half can be
- * absent and the block half needs the block walk rather than the inline one.
- */
-function replaceCells(cells: TableCell[], substitutions: SubstitutionMap, warned: Set<string>): void {
-  for (const cell of cells) {
-    if (cell.children !== undefined) cell.children = replaceInlines(cell.children, substitutions, warned)
-    if (cell.blocks !== undefined) replaceBlocks(cell.blocks, substitutions, warned)
-  }
-}
-
-function replaceBlocks(blocks: BlockNode[], substitutions: SubstitutionMap, warned: Set<string>): void {
-  for (const block of blocks) {
-    switch (block.type) {
-      case 'heading':
-      case 'paragraph':
-        block.children = replaceInlines(block.children, substitutions, warned)
-        break
-      case 'block_quote':
-        // A quote carries no attribution of its own. A caption on a quote makes
-        // a FIGURE, and that caption is walked as a figure's (carve#1213).
-        replaceBlocks(block.children, substitutions, warned)
-        break
-      case 'list':
-        for (const item of block.items) replaceBlocks(item.children, substitutions, warned)
-        break
-      case 'table':
-        if (block.caption !== undefined) block.caption = replaceInlines(block.caption, substitutions, warned)
-        for (const row of block.rows) replaceCells(row.cells, substitutions, warned)
-        break
-      case 'admonition':
-        if (block.title !== undefined) block.title = replaceInlines(block.title, substitutions, warned)
-        replaceBlocks(block.children, substitutions, warned)
-        break
-      case 'div':
-      case 'line_block':
-        replaceBlocks(block.children, substitutions, warned)
-        break
-      case 'directive':
-        // A placement directive's body is generated, but the title beside the
-        // kind is authored, and `::: toc` reaches this repo's default preset.
-        if (block.title !== undefined) block.title = replaceInlines(block.title, substitutions, warned)
-        break
-      case 'definition_list':
-        for (const item of block.items) {
-          item.terms = item.terms.map((term) => replaceInlines(term, substitutions, warned))
-          for (const definition of item.definitions) replaceBlocks(definition, substitutions, warned)
-        }
-        break
-      case 'figure':
-        block.caption = replaceInlines(block.caption, substitutions, warned)
-        if (block.target.type === 'block_quote') replaceBlocks(block.target.children, substitutions, warned)
-        if (block.target.type === 'paragraph') {
-          block.target.children = replaceInlines(block.target.children, substitutions, warned)
-        }
-        if (block.target.type === 'table') {
-          for (const row of block.target.rows) replaceCells(row.cells, substitutions, warned)
-        }
-        break
+/** Every nested list, whatever key holds it: children, titles, captions, slots, terms. */
+function replaceNode(node: Node, substitutions: SubstitutionMap, warned: Set<string>): void {
+  if (VERBATIM.has(node.type)) return
+  const record = node as unknown as Record<string, unknown>
+  for (const [key, value] of Object.entries(record)) {
+    if (key === 'pos' || key === 'attrs' || key === 'data' || key === 'fallback') continue
+    if (Array.isArray(value)) record[key] = replaceList(value, substitutions, warned)
+    else if (isNode(value)) replaceNode(value, substitutions, warned)
+    else if (key === 'slots' && value !== null && typeof value === 'object') {
+      const slots = value as Record<string, unknown[]>
+      for (const [name, list] of Object.entries(slots)) slots[name] = replaceList(list, substitutions, warned) as Node[]
     }
   }
 }
 
-export function substitutionsExtension(substitutions: SubstitutionMap): CarveExtension {
+export function substitutionsExtension(substitutions: SubstitutionMap): PressExtension {
   const warned = new Set<string>()
-  const processed = new WeakSet<Document>()
   return {
     name: 'carve-press-substitutions',
-    beforeRender(doc) {
-      if (processed.has(doc)) return doc
-      processed.add(doc)
-      replaceBlocks(doc.children, substitutions, warned)
-      return doc
+    prepare(doc: DocumentNode) {
+      replaceNode(doc, substitutions, warned)
     },
   }
 }

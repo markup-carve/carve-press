@@ -1,0 +1,3 @@
+# Conformance cases of the pinned spec commit that the pinned engine renders differently.
+# One case id per line. Rewrite this file from a run of tools/conformance-through-engine.mjs
+# whenever the engine pin or the spec ref in ci.yml moves.

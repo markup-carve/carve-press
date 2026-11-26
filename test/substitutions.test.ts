@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { carveToHtml } from '@markup-carve/carve'
+import { renderWithStack } from '../src/render/press-extension.js'
 import { resolveConfig } from '../src/config.js'
 import { buildExtensionStack } from '../src/render/extensions.js'
 
@@ -22,7 +22,7 @@ describe('substitutions', () => {
       pkg: { value: 'carve-press', format: 'code' },
     })
 
-    const html = carveToHtml('Needs |phpversion|, at least |minphp|, from |pkg|.\n', { extensions })
+    const html = renderWithStack('Needs |phpversion|, at least |minphp|, from |pkg|.\n', extensions)
 
     expect(html).toContain('<strong>8.5</strong>')
     expect(html).toContain('at least 8.2')
@@ -33,8 +33,8 @@ describe('substitutions', () => {
   it('leaves tokens inside code alone', async () => {
     const extensions = await stack({ phpversion: '8.5' })
 
-    const fence = carveToHtml('```txt\nUse |phpversion| here.\n```\n', { extensions })
-    const inline = carveToHtml('Write `|phpversion|` to show the token.\n', { extensions })
+    const fence = renderWithStack('```txt\nUse |phpversion| here.\n```\n', extensions)
+    const inline = renderWithStack('Write `|phpversion|` to show the token.\n', extensions)
 
     // Scoped to the code itself: the copy icon's path data contains "8.5".
     const code = /<pre[\s\S]*?<\/pre>/.exec(fence)?.[0] ?? ''
@@ -48,7 +48,7 @@ describe('substitutions', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const extensions = await stack({ known: '1' })
 
-    const html = carveToHtml('First |missing|, then |missing| again.\n', { extensions })
+    const html = renderWithStack('First |missing|, then |missing| again.\n', extensions)
 
     expect(html).toContain('|missing|')
     expect(warn).toHaveBeenCalledTimes(1)
@@ -67,8 +67,8 @@ describe('substitutions', () => {
 
     // Output is untouched for a site that does not use the feature, tokens included.
     const source = 'A |phpversion| token and *bold*.\n'
-    expect(carveToHtml(source, { extensions: without })).toBe(carveToHtml(source, { extensions: withEmpty }))
-    expect(carveToHtml(source, { extensions: without })).toContain('|phpversion|')
+    expect(renderWithStack(source, without)).toBe(renderWithStack(source, withEmpty))
+    expect(renderWithStack(source, without)).toContain('|phpversion|')
   })
 
   it('reaches tokens in headings, lists, and admonitions', async () => {
@@ -84,7 +84,7 @@ describe('substitutions', () => {
       '',
     ].join('\n')
 
-    const html = carveToHtml(source, { extensions })
+    const html = renderWithStack(source, extensions)
 
     expect(html).not.toContain('|v|')
     expect(html).toContain('Version 9')
@@ -97,7 +97,7 @@ describe('substitutions', () => {
     const config = resolveConfig({ title: 'T', carve: { preset: 'docs' }, substitutions: { v: '9' } })
     const extensions = await buildExtensionStack(config, shiki)
 
-    const html = carveToHtml('# Head\n\n::: toc "Contents |v|"\n:::\n', { extensions })
+    const html = renderWithStack('# Head\n\n::: toc "Contents |v|"\n:::\n', extensions)
 
     expect(html).toContain('Contents 9')
     expect(html).not.toContain('|v|')
@@ -106,7 +106,7 @@ describe('substitutions', () => {
   it('does not reach into a table row, where pipes are cell delimiters', async () => {
     const extensions = await stack({ v: '9' })
 
-    const html = carveToHtml('|= Head |v| |\n| cell |v| |\n', { extensions })
+    const html = renderWithStack('|= Head |v| |\n| cell |v| |\n', extensions)
 
     // The parser splits on the pipes long before substitution runs, so the
     // token is two cell boundaries around a "v". Documented, not fixable here.

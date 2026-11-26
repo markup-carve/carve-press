@@ -26,6 +26,11 @@ jobs:
       # rejects the shape too, but it is the assertion a reviewer sees on the
       # pull request that matters, which is why this runs first and on every push.
       - name: No dependency is installed over git
+        # The 0.2 engine has no registry release yet, so a commit pin on a
+        # markup-carve repository is accepted; a tag stays strict.
+        env:
+          # accept the 0.2 commit pin on main until 0.2.0 is released
+          CARVE_PRERELEASE_PINS: ${{ !startsWith(github.ref, 'refs/tags/') && '1' || '' }}
         run: node tools/no-git-dependencies.mjs
 
       # Kept for TRANSITIVE git specs: nothing in this manifest resolves over git
@@ -39,117 +44,49 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
-  # The corpus, in the blocking path.
+  # The conformance corpus, in the blocking path.
   #
-  # engine-drift.yml has measured this since carve-press#19, and measures it
-  # correctly - but on `schedule` and `workflow_dispatch` only. It has never run
-  # on a pull request, so no pin bump has ever been checked before it merged,
-  # and it does not run at a release either. A gate that does not run at the cut
-  # does not gate the cut, and the pin this job would have caught was sitting 22
-  # commits back rendering 9 documents wrongly while every check on every pull
-  # request was green.
-  #
-  # This is the FAST half, and it is a different question from the scheduled
-  # one. It asks what the engine as installed does against a FIXED corpus, so it
-  # needs no second engine build: a checkout and one render pass. The
-  # attributable comparison against carve-js `main` needs that second build and
-  # stays in engine-drift.yml, where a few minutes do not sit in front of a
-  # merge - and where the corpus is deliberately left floating, because
-  # watching upstream move is that job's entire purpose and it subtracts
-  # carve-js `main` from its own result so growth alone cannot breach it.
-  #
-  # Everything else in CI asserts hand-written expectations, which a stale
-  # engine satisfies exactly as well as a current one. This is the only check
-  # here that can tell one from the other.
+  # Carve 0.2 has no `tests/corpus` directory: its corpus is the render cases of
+  # `spec/0.2/conformance/`. The ref is the spec commit the pinned carve-js
+  # names in its `spec` submodule, so the engine is held to the corpus it was
+  # written against. The ref, the engine pin in package.json and
+  # tools/conformance-divergences-at-pin.txt move together in one change.
   corpus:
-    name: The installed engine against the frozen spec corpus
+    name: The installed engine against the pinned 0.2 conformance corpus
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
 
-      # PINNED, not tracking carve `main`.
-      #
-      # This checkout used to float, which made the job measure the spec's pace
-      # rather than anything in this repository. A breach then said "if a pin
-      # moved in this pull request, it made rendering worse; if it did not, the
-      # engine did" - and in the case that actually fires, upstream growing a
-      # category overnight, both halves of that are wrong and it accuses a
-      # branch that changed nothing.
-      #
-      # How fast that end moves: the corpus freeze was declared three times in
-      # one night, 287b4b8 at 1239 documents, then 0490ae5 at 1241, then this
-      # one at 1245. Not one of those was anything a branch here did. That is
-      # the argument for pinning rather than one against it - a pin to a
-      # superseded freeze is still deterministic, it just measures against a
-      # corpus nobody else is using.
-      #
-      # 51c56315, 4631 documents. THE FREEZE IS THE SPEC COMMIT THE PINNED ENGINE
-      # PINS - carve-js 0.1.16's own `spec` submodule names it - and that is a
-      # rule rather than this bump's convenience. It makes this job ask what
-      # carve-go and carve-py ask of their artifacts: is the engine as
-      # conformant as the spec it was written against. Any other choice holds it
-      # to a corpus written for a different engine.
-      #
-      # The ref moves with the pin in the same change, because a freeze left
-      # behind its engine reports rulings as regressions. The previous ref,
-      # 21879d7 at 2508 documents, is the spec carve-js 0.1.11 pinned.
-      - name: Check out the corpus at the spec freeze
+      - name: Check out the conformance corpus at the engine's spec commit
         uses: actions/checkout@v5
         with:
           repository: markup-carve/carve
-          ref: 51c5631541efb60faad51f81ac7dbf881150b757
-          path: carve-freeze
+          ref: bbdf093ac88eae2d6dd4c9a800fb25771c6bf0ea
+          path: carve-spec
 
       - uses: actions/setup-node@v5
         with:
           node-version: 22
 
-      # The lockfile records the git dependencies as `git+ssh://`, so a runner
-      # without an SSH key cannot fetch them. Same step as the other jobs.
       - name: Prefer HTTPS for Git dependencies
         run: |
           git config --global url."https://github.com/".insteadOf ssh://git@github.com/
           git config --global url."https://github.com/".insteadOf git@github.com:
 
-      # `npm ci` and not `npm install`, so what is measured is the pin the
-      # lockfile records rather than whatever a loose resolution picks today.
       - run: npm ci
 
-      # BY NAME, not by count.
-      #
-      # With the corpus pinned and the engine pinned, the divergent set is a
-      # constant that only a change here can move, so it is recorded as a list
-      # of names in tools/corpus-divergences-at-freeze.txt. A ceiling could not
-      # carry that: one document regressing while another is fixed leaves the
-      # total unchanged, and the total is all a ceiling ever sees. The script
-      # returns three distinct verdicts - a name that is divergent now and was
-      # not fails and says it is this branch; a recorded name that renders
-      # correctly now warns and asks for the line to be deleted so the record
-      # ratchets; a recorded name the corpus does not hold at all is neither,
-      # and says the checkout is not the pinned freeze instead of returning a
-      # verdict about rendering.
-      #
-      # The corpus ref above, the engine revision in package.json and that file
-      # all move together in one change: bump the pin, re-measure through the
-      # installed engine, and rewrite the file from that run.
-      - name: Render every corpus document through the engine as installed
+      - name: Render every conformance case through the engine as installed
         run: |
           set -euo pipefail
-          node tools/corpus-through-engine.mjs \
+          node tools/conformance-through-engine.mjs \
             node_modules/@markup-carve/carve/dist/index.js \
-            carve-freeze/tests/corpus \
-            --list --baseline=tools/corpus-divergences-at-freeze.txt | tee "${RUNNER_TEMP}/corpus-run.txt"
-          documents="$(sed -n 's/^documents=//p' "${RUNNER_TEMP}/corpus-run.txt")"
-          wrong="$(sed -n 's/^wrong=//p' "${RUNNER_TEMP}/corpus-run.txt")"
-
-          # Reaching this line already means the population guard passed and the
-          # recorded set held. Guard the extraction anyway: an empty value would
-          # make the line below a claim about nothing, which is the failure
-          # shape this job exists to not have.
-          if [ -z "${documents}" ] || [ -z "${wrong}" ]; then
-            echo "::error::the run logged no documents=/wrong= counters, so nothing was measured and nothing here is a result"
+            carve-spec/spec/0.2/conformance \
+            --list --baseline=tools/conformance-divergences-at-pin.txt | tee "${RUNNER_TEMP}/conformance-run.txt"
+          documents="$(sed -n 's/^documents=//p' "${RUNNER_TEMP}/conformance-run.txt")"
+          wrong="$(sed -n 's/^wrong=//p' "${RUNNER_TEMP}/conformance-run.txt")"
+          if [ -z "${documents}" ] || [ "${documents}" = "0" ] || [ -z "${wrong}" ]; then
+            echo "::error::the run measured no conformance cases, so nothing here is a result"
             exit 1
           fi
-
-          echo "the residual against the frozen corpus is ${wrong} of ${documents} documents, the same set recorded at the freeze"
+          echo "${wrong} of ${documents} conformance cases render differently, the set recorded at the pin"
