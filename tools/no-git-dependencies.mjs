@@ -231,7 +231,7 @@ function offendingReason(spec) {
 }
 
 // Before a 0.2 engine is on the registry, the `next2` branch pins a carve-js
-// commit. CI sets CARVE_PRERELEASE_PINS only there, and only this exact shape
+// commit. CI sets CARVE_PRERELEASE_PINS off tags, and only this exact shape
 // passes: a markup-carve repository at a full commit hash.
 const PRERELEASE_PIN = /^github:markup-carve\/[a-z0-9-]+#[0-9a-f]{40}$/
 const allowPrerelease = process.env.CARVE_PRERELEASE_PINS === '1'

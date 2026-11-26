@@ -27,10 +27,10 @@ jobs:
       # pull request that matters, which is why this runs first and on every push.
       - name: No dependency is installed over git
         # The 0.2 engine has no registry release yet, so a commit pin on a
-        # markup-carve repository is accepted off `main`; a push to `main` and
-        # the release draft into it stay strict until the pin is a version.
+        # markup-carve repository is accepted; a tag stays strict.
         env:
-          CARVE_PRERELEASE_PINS: ${{ (github.ref != 'refs/heads/main' && github.base_ref != 'main' && !startsWith(github.ref, 'refs/tags/')) && '1' || '' }}
+          # accept the 0.2 commit pin on main until 0.2.0 is released
+          CARVE_PRERELEASE_PINS: ${{ !startsWith(github.ref, 'refs/tags/') && '1' || '' }}
         run: node tools/no-git-dependencies.mjs
 
       # Kept for TRANSITIVE git specs: nothing in this manifest resolves over git
