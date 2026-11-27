@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-27
+
+Sites build with the Carve 0.2 engine and its rules.
+
+### Breaking
+
+- Pages render with carve-js 0.2. Sources follow the Carve 0.2 syntax, and lint, format and Markdown import use the 0.2 engine calls (#122, #125).
+- `carve.extensions` takes `PressExtension` entries: the 0.2 extension bundle (`extensions`, `renderers`, `transforms`) as each factory of `@markup-carve/carve/extensions` returns it, plus an optional `codeBlockRenderer`. 0.1 `CarveExtension` objects no longer load, and an error a renderer throws fails the build (#122).
+- `carve.profile` takes only the names `full`, `article`, `comment` or `minimal`. A custom `Profile` object fails the build with an error that names the four profiles (#122, #124).
+
+### Improvements
+
+- `carve.linkPolicy` takes the options of the 0.2 `linkPolicy()` extension. Its base host is the host of `hostname`, as the 0.1 profile base host was (#124).
+- The playground preview no longer adds a table of contents, section numbers or shifted headings that the page itself does not have (#124).
+- A new guide page, Upgrading to Carve 0.2, covers the profile and link policy changes (#124).
+
+**Full Changelog**: https://github.com/markup-carve/carve-press/compare/v0.1.10...v0.2.0
+
 ## [0.1.10] - 2026-11-12
 
 A new project made with `npm init -y` builds on the first try.
