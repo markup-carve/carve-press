@@ -61,7 +61,7 @@
   },
   "dependencies": {
     "@markup-carve/carve": "github:markup-carve/carve-js#2003ec4327a736ee29fbb4e6ac108db7c108e50e",
-    "@markup-carve/carve-grammars": "^0.2.0",
+    "@markup-carve/carve-grammars": "0.1.24",
     "@shikijs/themes": "^4.5.0",
     "@shikijs/transformers": "^1.29.0",
     "minisearch": "^7.2.0",
